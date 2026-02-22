@@ -10,7 +10,6 @@ function App() {
   const [rol, setRol] = useState(null);
 
   const manejarLogin = async (dni) => {
-    // Buscamos los datos completos del operador en la DB
     const { data, error } = await supabase.from('personal').select('*').eq('dni', dni).single();
     
     if (error || !data) {
@@ -18,7 +17,6 @@ function App() {
       return;
     }
 
-    // Definimos el mando según el DNI de Jefatura
     if (dni === '22976371') { 
       setRol('admin');
     } else {
@@ -44,8 +42,11 @@ function App() {
           <header className="bg-slate-900 border-b border-blue-900 p-4 flex justify-between items-center shadow-2xl">
             <div>
               <h1 className="text-blue-500 font-black text-xs uppercase tracking-widest leading-none">Sentinel HNPM</h1>
-              <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">
-                {rol === 'admin' ? 'Jefatura de Hotelería' : 'Operativo de Pañol'}
+              <p className="text-[10px] text-slate-300 font-black uppercase mt-1 tracking-widest">
+                {/* Lógica de etiqueta de mando solicitada */}
+                {rol === 'admin' 
+                  ? `${datosUsuario?.jerarquia} ${datosUsuario?.apellido} ADMIN` 
+                  : 'Operativo de Pañol'}
               </p>
             </div>
             <button onClick={cerrarSesion} className="bg-red-950/30 text-red-500 border border-red-900/50 px-3 py-1 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">
@@ -65,7 +66,7 @@ function App() {
           </main>
           
           <footer className="p-4 text-center text-[9px] text-slate-600 uppercase tracking-widest bg-slate-950">
-            Sistema de Trazabilidad Hospitalaria - Sentinel AI Security Hub
+            Sistema de Trazabilidad Hospitalaria - HNPM Sentinel Hub
           </footer>
         </div>
       )}
