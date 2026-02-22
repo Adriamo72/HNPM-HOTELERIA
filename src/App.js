@@ -47,10 +47,13 @@ function App() {
           {/* VISTA SEGÚN ROL */}
           <main className="flex-grow">
             {rol === 'admin' ? (
-              <AdminDashboard />
-            ) : (
-              <FormularioPiso dniPañolero={usuarioLogueado} />
-            )}
+            <AdminDashboard />
+          ) : (
+            <FormularioPiso 
+              dniPañolero={usuarioLogueado} 
+              slugPiso={window.location.pathname.split('/')[2] || 'piso-1'} // Toma el slug de la URL
+            />
+          )}
           </main>
           
           <footer className="p-4 text-center text-[9px] text-slate-600 uppercase tracking-widest bg-slate-950">
