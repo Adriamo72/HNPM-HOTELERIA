@@ -6,21 +6,24 @@ import AdminDashboard from './components/AdminDashboard';
 function App() {
   const [usuarioLogueado, setUsuarioLogueado] = useState(null);
   const [rol, setRol] = useState(null);
+  const [datosUsuario, setDatosUsuario] = useState(null);
 
   // Detectamos si el usuario entró directamente a través de un código QR
   const path = window.location.pathname;
   const esEscaneoQR = path.includes('/piso/');
   const slugDelQR = esEscaneoQR ? path.split('/piso/')[1] : null;
 
-  const manejarLogin = (dni) => {
-    // Tu DNI de Administrador para control de Jefatura
-    if (dni === '22976371') { 
-      setRol('admin');
-    } else {
-      setRol('pañolero');
-    }
+  const manejarLogin = async (dni) => {
+  const { data } = await supabase.from('personal').select('*').eq('dni', dni).single();
+  
+  if (data) {
+    setRol(data.dni === '22976371' ? 'admin' : 'pañolero');
     setUsuarioLogueado(dni);
-  };
+    setDatosUsuario(data); // Guardamos Jerarquía, Nombre y Apellido
+  } else {
+    alert("DNI no registrado en la tripulación");
+  }
+};
 
   const cerrarSesion = () => {
     setUsuarioLogueado(null);
@@ -57,8 +60,8 @@ function App() {
             ) : (
               /* Si eres pañolero, o eres Admin pero escaneaste un QR en un piso, ves el formulario */
               <FormularioPiso 
-                dniPañolero={usuarioLogueado} 
-                slugPiso={slugDelQR || 'piso-1'} 
+                perfilUsuario={datosUsuario} 
+                slugPiso={window.location.pathname.split('/')[2] || 'piso-1'} 
               />
             )}
           </main>
