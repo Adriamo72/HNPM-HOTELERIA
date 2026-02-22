@@ -36,11 +36,7 @@ const AdminDashboard = () => {
   const formatearFecha = (fechaISO) => {
     const fecha = new Date(fechaISO);
     return fecha.toLocaleDateString('es-AR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      hour: '2-digit',
-      minute: '2-digit'
+      weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
     }) + ' hs';
   };
 
@@ -96,27 +92,13 @@ const AdminDashboard = () => {
 
       {/* SELECTOR DE PESTAÑAS */}
       <div className="flex gap-2 mb-8 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
-        <button 
-          onClick={() => setActiveTab('historial')}
-          className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          Monitor de Movimientos
-        </button>
-        <button 
-          onClick={() => setActiveTab('admin')}
-          className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          Administración
-        </button>
+        <button onClick={() => setActiveTab('historial')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Monitor de Movimientos</button>
+        <button onClick={() => setActiveTab('admin')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Administración</button>
       </div>
 
-      {/* VISTA: HISTORIAL MACRO (LO QUE YA FUNCIONABA BIEN) */}
       {activeTab === 'historial' && (
         <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-black text-blue-500 uppercase italic">Auditoría en Tiempo Real</h2>
-            <button onClick={cargarDatos} className="text-[9px] bg-slate-800 px-3 py-1.5 rounded-full font-black text-slate-400 border border-slate-700">Refrescar</button>
-          </div>
+          <h2 className="text-xl font-black text-blue-500 uppercase italic mb-6">Auditoría en Tiempo Real</h2>
           <div className="space-y-3">
             {movimientos.map((m) => (
               <div key={m.id} className="p-5 bg-slate-900 rounded-[2rem] border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
@@ -144,11 +126,8 @@ const AdminDashboard = () => {
         </section>
       )}
 
-      {/* VISTA: ADMINISTRACIÓN (RESTAURADA A VERSIÓN ORIGINAL) */}
       {activeTab === 'admin' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          
-          {/* GESTIÓN DE PERSONAL ORIGINAL */}
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800">
             <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Registrar Nuevo Pañolero / Enfermero</h3>
             <form onSubmit={agregarPersonal} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
@@ -176,7 +155,6 @@ const AdminDashboard = () => {
             </div>
           </section>
 
-          {/* GESTIÓN DE PISOS ORIGINAL */}
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800">
             <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Configurar Pisos y QRs</h3>
             <form onSubmit={agregarPiso} className="flex gap-2 mb-8">
@@ -195,7 +173,6 @@ const AdminDashboard = () => {
               ))}
             </div>
           </section>
-
         </div>
       )}
     </div>
