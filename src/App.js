@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import FormularioPiso from './components/FormularioPiso';
 import AdminDashboard from './components/AdminDashboard';
@@ -7,8 +7,13 @@ function App() {
   const [usuarioLogueado, setUsuarioLogueado] = useState(null);
   const [rol, setRol] = useState(null);
 
+  // Detectamos si el usuario entró directamente a través de un código QR
+  const path = window.location.pathname;
+  const esEscaneoQR = path.includes('/piso/');
+  const slugDelQR = esEscaneoQR ? path.split('/piso/')[1] : null;
+
   const manejarLogin = (dni) => {
-    // REEMPLAZA '12345678' por tu DNI real para entrar como Jefe
+    // Tu DNI de Administrador para control de Jefatura
     if (dni === '22976371') { 
       setRol('admin');
     } else {
@@ -44,16 +49,18 @@ function App() {
             </button>
           </header>
 
-          {/* VISTA SEGÚN ROL */}
+          {/* VISTA SEGÚN ROL Y CONTEXTO (QR O DASHBOARD) */}
           <main className="flex-grow">
-            {rol === 'admin' ? (
-            <AdminDashboard />
-          ) : (
-            <FormularioPiso 
-              dniPañolero={usuarioLogueado} 
-              slugPiso={window.location.pathname.split('/')[2] || 'piso-1'} // Toma el slug de la URL
-            />
-          )}
+            {rol === 'admin' && !esEscaneoQR ? (
+              /* Si eres Admin y entras por la URL principal, ves el Dashboard de control */
+              <AdminDashboard />
+            ) : (
+              /* Si eres pañolero, o eres Admin pero escaneaste un QR en un piso, ves el formulario */
+              <FormularioPiso 
+                dniPañolero={usuarioLogueado} 
+                slugPiso={slugDelQR || 'piso-1'} 
+              />
+            )}
           </main>
           
           <footer className="p-4 text-center text-[9px] text-slate-600 uppercase tracking-widest bg-slate-950">

@@ -48,15 +48,19 @@ const AdminDashboard = () => {
   };
 
   const descargarQR = (slug, nombre) => {
-    const urlApp = `https://tu-app.vercel.app/piso/${slug}`; // URL que escaneará el pañolero
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
-    
-    const link = document.createElement('a');
-    link.href = qrUrl;
-    link.download = `QR-${nombre}.png`;
-    link.target = "_blank";
-    link.click();
-  };
+  // window.location.origin detecta automáticamente si estás en 
+  // sentinel-laundry-hnpm o en hoteleria-hnpm
+  const urlBase = window.location.origin; 
+  const urlApp = `${urlBase}/piso/${slug}`; 
+  
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
+  
+  const link = document.createElement('a');
+  link.href = qrUrl;
+  link.download = `QR-${nombre}.png`;
+  link.target = "_blank";
+  link.click();
+};
 
   return (
     <div className="p-4 md:p-8 space-y-10 bg-slate-950 text-slate-100">
