@@ -43,10 +43,8 @@ function App() {
             <div>
               <h1 className="text-blue-500 font-black text-xs uppercase tracking-widest leading-none">Sentinel HNPM</h1>
               <p className="text-[10px] text-slate-300 font-black uppercase mt-1 tracking-widest">
-                {/* Lógica de etiqueta de mando solicitada */}
-                {rol === 'admin' 
-                  ? `${datosUsuario?.jerarquia} ${datosUsuario?.apellido} ADMIN` 
-                  : 'Operativo de Pañol'}
+                {/* Esto unirá CCTE + MORENO + ADMIN automáticamente */}
+                {`${datosUsuario?.jerarquia} ${datosUsuario?.apellido} ${datosUsuario?.rol}`}
               </p>
             </div>
             <button onClick={cerrarSesion} className="bg-red-950/30 text-red-500 border border-red-900/50 px-3 py-1 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">
