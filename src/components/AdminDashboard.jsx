@@ -72,6 +72,17 @@ const AdminDashboard = () => {
     window.open(qrUrl, '_blank');
   };
 
+  const formatearFecha = (fechaISO) => {
+  const fecha = new Date(fechaISO);
+  return fecha.toLocaleDateString('es-AR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) + ' hs';
+};
+
   return (
     <div className="p-4 md:p-8 space-y-10 bg-slate-950 text-slate-100 pb-20">
       {notificacion.visible && (
@@ -133,22 +144,51 @@ const AdminDashboard = () => {
         </div>
       </section>
 
-      {/* VISTA MACRO DE MOVIMIENTOS */}
-      <section className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl">
-        <h2 className="text-xs font-black text-slate-400 mb-6 uppercase tracking-widest">Auditoría en Tiempo Real (General)</h2>
-        <div className="space-y-2">
-          {movimientos.map(m => (
-            <div key={m.id} className="p-3 bg-slate-950 rounded-xl border-l-4 border-blue-600 flex justify-between items-center text-[10px]">
-              <div className="flex flex-col">
-                <span className="font-black uppercase text-blue-300">{m.pisos?.nombre_piso}</span>
-                <span className="text-slate-500 uppercase">{m.item}</span>
-              </div>
-              <span className="font-black text-white">+{m.entregado_limpio} L | -{m.retirado_sucio} S</span>
-              <span className="text-slate-600 font-mono italic">{new Date(m.created_at).toLocaleTimeString()}</span>
+      {/* VISTA MACRO DE MOVIMIENTOS - DISEÑO MEJORADO */}
+        <section className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl">
+        <h2 className="text-[10px] font-black text-slate-500 mb-6 uppercase tracking-[0.2em]">Auditoría de Movimientos</h2>
+        <div className="space-y-3">
+            {movimientos.map((m) => (
+            <div key={m.id} className="p-4 bg-slate-950 rounded-2xl border-l-4 border-blue-600 flex flex-col md:flex-row md:justify-between md:items-center gap-3">
+                <div className="flex flex-col">
+                <span className="text-xs font-black text-blue-400 uppercase tracking-tight">
+                    {m.pisos?.nombre_piso || "Piso no identificado"}
+                </span>
+                <span className="text-[14px] font-bold text-white mt-1">
+                    {m.item}
+                </span>
+                </div>
+
+                <div className="flex items-center gap-4 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                <div className="flex flex-col items-center">
+                    <span className="text-[8px] text-green-500 font-black uppercase">Limpio</span>
+                    <span className="text-sm font-black text-green-500">+{m.entregado_limpio}</span>
+                </div>
+                <div className="w-[1px] h-6 bg-slate-700"></div>
+                <div className="flex flex-col items-center">
+                    <span className="text-[8px] text-red-500 font-black uppercase">Sucio</span>
+                    <span className="text-sm font-black text-red-500">-{m.retirado_sucio}</span>
+                </div>
+                </div>
+
+                <div className="text-right">
+                <p className="text-[10px] text-slate-400 font-medium capitalize">
+                    {formatearFecha(m.created_at)}
+                </p>
+                <p className="text-[8px] text-slate-600 font-mono uppercase mt-1">
+                    ID Operación: {m.id.split('-')[0]}
+                </p>
+                </div>
             </div>
-          ))}
+            ))}
+            
+            {movimientos.length === 0 && (
+            <p className="text-center text-slate-600 text-xs py-10 uppercase tracking-widest font-bold">
+                Sin movimientos registrados en las últimas 24hs
+            </p>
+            )}
         </div>
-      </section>
+        </section>
     </div>
   );
 };
