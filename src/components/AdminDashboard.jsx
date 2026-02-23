@@ -31,8 +31,14 @@ const AdminDashboard = () => {
     const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
     setAuditoriaHabilitada(config?.valor === 'true');
 
+    // Consulta extendida para traer Nombres, Apellidos y Jerarquías de todas las relaciones
     const { data: movs } = await supabase.from('movimientos_stock')
-      .select('*, pisos(nombre_piso), pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)')
+      .select(`
+        *, 
+        pisos(nombre_piso), 
+        pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), 
+        enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)
+      `)
       .order('created_at', { ascending: false });
 
     const stockMap = {};
@@ -102,22 +108,31 @@ const AdminDashboard = () => {
     window.open(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`, '_blank');
   };
 
-  const formatearFecha = (fechaISO) => {
+  // FORMATO SOLICITADO: Lunes 23, 17:10 hs
+  const formatearFechaGuardia = (fechaISO) => {
     const fecha = new Date(fechaISO);
-    return fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs';
+    const opciones = { weekday: 'long', day: 'numeric' };
+    const diaYNumero = fecha.toLocaleDateString('es-AR', opciones);
+    const hora = fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    
+    // Capitalizar primera letra del día
+    const diaCapitalizado = diaYNumero.charAt(0).toUpperCase() + diaYNumero.slice(1);
+    return `${diaCapitalizado}, ${hora} hs`;
   };
 
   return (
     <div className="p-4 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
+      {/* Splash de Notificaciones */}
       {notificacion.visible && (
         <div className="fixed bottom-10 right-10 z-50 bg-blue-600 px-6 py-3 rounded-2xl shadow-2xl border border-blue-400">
           <p className="text-white font-black uppercase text-xs tracking-widest">{notificacion.mensaje}</p>
         </div>
       )}
 
+      {/* Selector de Pestañas */}
       <div className="flex gap-2 mb-8 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
-        <button onClick={() => setActiveTab('historial')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Monitor de Movimientos</button>
-        <button onClick={() => setActiveTab('admin')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Administración</button>
+        <button onClick={() => setActiveTab('historial')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Monitor de Movimientos</button>
+        <button onClick={() => setActiveTab('admin')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Administración</button>
       </div>
 
       {activeTab === 'historial' && (
@@ -127,7 +142,7 @@ const AdminDashboard = () => {
             <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700">Sincronizar Datos</button>
           </div>
 
-          {/* STOCK GLOBAL CONSOLIDADO */}
+          {/* Patrimonio Total Consolidado */}
           <div className="bg-blue-900/10 border-2 border-blue-900/30 rounded-[2.5rem] p-6 shadow-2xl">
             <p className="text-[11px] font-black text-blue-400 uppercase tracking-[0.3em] mb-4 text-center italic">Estado Mayor - Patrimonio Total Consolidado</p>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
@@ -146,6 +161,7 @@ const AdminDashboard = () => {
                 <span className="text-lg font-black text-blue-400 uppercase tracking-widest">{nombrePiso}</span>
               </div>
 
+              {/* Grilla de Stock con Alerta Roja en 0 */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 p-4 bg-slate-950/50 border-b border-slate-800">
                 {ITEMS_REQUERIDOS.map(item => {
                   const stock = resumenStock[nombrePiso][item];
@@ -153,20 +169,23 @@ const AdminDashboard = () => {
                   const esBajo = stock <= STOCK_CRITICO;
 
                   return (
-                    <div key={item} className={`p-4 rounded-3xl border transition-all ${esCero ? 'bg-red-600 border-red-400 animate-pulse' : esBajo ? 'bg-red-900/20 border-red-900/50' : 'bg-slate-900 border-slate-700'}`}>
-                      <span className={`text-[10px] font-black uppercase block mb-1 text-center ${esBajo ? 'text-red-200' : 'text-slate-500'}`}>{item}</span>
-                      <span className={`text-3xl font-black block text-center ${esBajo ? 'text-white' : 'text-blue-400'}`}>{stock}</span>
+                    <div key={item} className={`p-4 rounded-3xl border transition-all ${esCero ? 'bg-red-600 border-red-400 animate-pulse text-white' : esBajo ? 'bg-red-900/20 border-red-900/50' : 'bg-slate-900 border-slate-700'}`}>
+                      <span className={`text-[10px] font-black uppercase block mb-1 text-center ${esCero ? 'text-red-100' : esBajo ? 'text-red-200' : 'text-slate-500'}`}>{item}</span>
+                      <span className={`text-3xl font-black block text-center ${esCero ? 'text-white' : esBajo ? 'text-white' : 'text-blue-400'}`}>{stock}</span>
                     </div>
                   );
                 })}
               </div>
 
+              {/* Historial con Formato Detallado */}
               <div className="p-2 space-y-1">
                 {movimientosAgrupados[nombrePiso]?.map((m) => (
-                  <div key={m.id} className="bg-slate-950/50 px-5 py-2 rounded-2xl border border-slate-800/50 flex items-center justify-between group">
-                    <div className="w-1/4">
-                      <p className="text-xs font-black text-white uppercase">{m.item}</p>
-                      <p className="text-[9px] text-slate-500 font-bold uppercase">{formatearFecha(m.created_at)}</p>
+                  <div key={m.id} className="bg-slate-950/50 px-5 py-3 rounded-2xl border border-slate-800/50 flex items-center justify-between group">
+                    <div className="w-1/3">
+                      <p className="text-xs font-black text-white uppercase leading-none">{m.item}</p>
+                      <p className="text-[9px] text-blue-500 font-black uppercase mt-1 tracking-tighter">
+                        {formatearFechaGuardia(m.created_at)}
+                      </p>
                     </div>
 
                     <div className="flex items-center gap-10">
@@ -184,8 +203,15 @@ const AdminDashboard = () => {
                       </div>
                     </div>
 
-                    <div className="w-1/3 text-right text-[10px] uppercase font-black text-slate-400">
-                      {m.pañolero?.apellido} | REC: {m.enfermero?.apellido || '-'}
+                    <div className="w-1/3 text-right">
+                      <p className="text-[10px] text-slate-300 font-black uppercase leading-tight tracking-tighter">
+                        OP: {m.pañolero?.jerarquia} {m.pañolero?.apellido} {m.pañolero?.nombre}
+                      </p>
+                      {m.enfermero && (
+                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-1 tracking-tighter">
+                          REC: {m.enfermero?.jerarquia} {m.enfermero?.apellido} {m.enfermero?.nombre}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -195,8 +221,10 @@ const AdminDashboard = () => {
         </section>
       )}
 
+      {/* Pestaña de Administración */}
       {activeTab === 'admin' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
+          {/* Mando de Auditoría */}
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-yellow-600/30 flex justify-between items-center shadow-xl">
             <div className="max-w-[70%]">
               <h3 className="text-sm font-black text-yellow-500 uppercase italic">Mando de Auditoría</h3>
@@ -207,11 +235,12 @@ const AdminDashboard = () => {
             </button>
           </section>
 
+          {/* Configuración de Pisos */}
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
             <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Configurar Sectores / Pisos</h3>
             <form onSubmit={agregarPiso} className="flex gap-2 mb-8">
-              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Nombre del Piso..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
-              <button className="bg-blue-600 px-8 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-blue-900/20">Crear Piso</button>
+              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Nombre del Piso..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
+              <button className="bg-blue-600 px-8 rounded-2xl font-black text-[10px] uppercase">Crear Piso</button>
             </form>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {pisos.map(p => (
@@ -226,6 +255,7 @@ const AdminDashboard = () => {
             </div>
           </section>
 
+          {/* Personal de Guardia */}
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
             <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Personal de Guardia</h3>
             <form onSubmit={agregarPersonal} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
