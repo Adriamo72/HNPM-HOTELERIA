@@ -5,7 +5,7 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('historial');
   const [personal, setPersonal] = useState([]);
   const [pisos, setPisos] = useState([]);
-  const [movimientos, setMovimientos] = useState([]);
+  const [movimientosAgrupados, setMovimientosAgrupados] = useState({});
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   
   const [nuevoMiembro, setNuevoMiembro] = useState({
@@ -23,14 +23,29 @@ const AdminDashboard = () => {
   const cargarDatos = async () => {
     const resPers = await supabase.from('personal').select('*').order('apellido');
     const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
-    const resMov = await supabase.from('movimientos_stock')
-      .select('*, pisos(nombre_piso)')
-      .order('created_at', { ascending: false })
-      .limit(30);
+    
+    // Consulta avanzada: Trae movimientos + nombre de piso + datos de pañolero y enfermero
+    const { data: movs } = await supabase
+      .from('movimientos_stock')
+      .select(`
+        *,
+        pisos(nombre_piso),
+        pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido),
+        enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido)
+      `)
+      .order('created_at', { ascending: false });
+
+    // Agrupamiento lógico por nombre de piso
+    const agrupados = movs ? movs.reduce((acc, curr) => {
+      const nombrePiso = curr.pisos?.nombre_piso || "Sector sin nombre";
+      if (!acc[nombrePiso]) acc[nombrePiso] = [];
+      acc[nombrePiso].push(curr);
+      return acc;
+    }, {}) : {};
     
     setPersonal(resPers.data || []);
     setPisos(resPisos.data || []);
-    setMovimientos(resMov.data || []);
+    setMovimientosAgrupados(agrupados);
   };
 
   const formatearFecha = (fechaISO) => {
@@ -92,42 +107,85 @@ const AdminDashboard = () => {
 
       {/* SELECTOR DE PESTAÑAS */}
       <div className="flex gap-2 mb-8 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
-        <button onClick={() => setActiveTab('historial')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Monitor de Movimientos</button>
-        <button onClick={() => setActiveTab('admin')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Administración</button>
+        <button 
+          onClick={() => setActiveTab('historial')}
+          className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Monitor de Movimientos
+        </button>
+        <button 
+          onClick={() => setActiveTab('admin')}
+          className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Administración
+        </button>
       </div>
 
+      {/* VISTA: MONITOR DE MOVIMIENTOS ANIDADO */}
       {activeTab === 'historial' && (
-        <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h2 className="text-xl font-black text-blue-500 uppercase italic mb-6">Auditoría en Tiempo Real</h2>
-          <div className="space-y-3">
-            {movimientos.map((m) => (
-              <div key={m.id} className="p-5 bg-slate-900 rounded-[2rem] border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{m.pisos?.nombre_piso}</span>
-                  <span className="text-xl font-bold text-white mt-1 leading-none">{m.item}</span>
+        <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-black text-blue-500 uppercase italic">Estado Mayor - Situación por Piso</h2>
+            <button onClick={cargarDatos} className="text-[9px] bg-slate-800 px-3 py-1.5 rounded-full font-black text-slate-400 border border-slate-700">Refrescar</button>
+          </div>
+
+          {Object.keys(movimientosAgrupados).length > 0 ? (
+            Object.keys(movimientosAgrupados).map((nombrePiso) => (
+              <div key={nombrePiso} className="bg-slate-900 rounded-[2.5rem] border border-slate-800 overflow-hidden shadow-2xl">
+                {/* Encabezado del Bloque de Piso */}
+                <div className="bg-slate-800/50 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                  <span className="text-sm font-black text-blue-400 uppercase tracking-[0.2em]">{nombrePiso}</span>
+                  <span className="text-[9px] text-slate-500 font-bold uppercase italic">Eventos: {movimientosAgrupados[nombrePiso].length}</span>
                 </div>
-                <div className="flex items-center gap-6 bg-slate-950 px-6 py-3 rounded-2xl border border-slate-800 self-start md:self-center">
-                  <div className="text-center min-w-[60px]">
-                    <p className="text-[8px] text-green-500 font-black uppercase mb-1">Limpio</p>
-                    <p className="text-2xl font-black text-green-500">+{m.entregado_limpio}</p>
-                  </div>
-                  <div className="w-px h-10 bg-slate-800"></div>
-                  <div className="text-center min-w-[60px]">
-                    <p className="text-[8px] text-red-500 font-black uppercase mb-1">Sucio</p>
-                    <p className="text-2xl font-black text-red-500">-{m.retirado_sucio}</p>
-                  </div>
-                </div>
-                <div className="text-left md:text-right border-t md:border-t-0 border-slate-800 pt-3 md:pt-0">
-                  <p className="text-[11px] text-slate-400 font-bold capitalize italic">{formatearFecha(m.created_at)}</p>
+
+                {/* Lista de Acciones dentro del Piso */}
+                <div className="p-4 space-y-3">
+                  {movimientosAgrupados[nombrePiso].map((m) => (
+                    <div key={m.id} className="bg-slate-950 p-4 rounded-3xl border border-slate-800 flex flex-col md:flex-row justify-between gap-4">
+                      <div className="flex flex-col justify-center">
+                        <span className="text-sm font-bold text-white uppercase">{m.item}</span>
+                        <span className="text-[10px] text-slate-500 mt-1 italic">{formatearFecha(m.created_at)}</span>
+                      </div>
+
+                      <div className="flex items-center gap-6 bg-slate-900 px-6 py-3 rounded-2xl border border-slate-800/50 self-start md:self-center">
+                        <div className="text-center min-w-[60px]">
+                          <p className="text-[8px] text-green-500 font-black uppercase mb-1">Limpio</p>
+                          <p className="text-xl font-black text-green-500">+{m.entregado_limpio}</p>
+                        </div>
+                        <div className="w-px h-10 bg-slate-800"></div>
+                        <div className="text-center min-w-[60px]">
+                          <p className="text-[8px] text-red-500 font-black uppercase mb-1">Sucio</p>
+                          <p className="text-xl font-black text-red-500">-{m.retirado_sucio}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col text-[10px] justify-center md:text-right border-t md:border-t-0 border-slate-800 pt-3 md:pt-0">
+                        <p className="text-blue-400 font-black uppercase tracking-tighter">
+                          PAÑOLERO: <span className="text-slate-300 font-bold">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</span>
+                        </p>
+                        {m.enfermero && (
+                          <p className="text-emerald-500 font-black uppercase mt-1 tracking-tighter">
+                            RECEPTOR: <span className="text-slate-300 font-bold">{m.enfermero?.jerarquia} {m.enfermero?.apellido}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
+            ))
+          ) : (
+            <div className="p-20 text-center bg-slate-900 rounded-[2.5rem] border border-dashed border-slate-800">
+              <p className="text-slate-600 font-black uppercase tracking-widest text-xs">Sin registros para procesar</p>
+            </div>
+          )}
         </section>
       )}
 
+      {/* VISTA: ADMINISTRACIÓN (SE MANTIENE INTACTA SEGÚN TU SOLICITUD) */}
       {activeTab === 'admin' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800">
             <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Registrar Nuevo Pañolero / Enfermero</h3>
             <form onSubmit={agregarPersonal} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
