@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 
 const ITEMS_HOTELERIA = [
   'SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 
-  'SALEA HULE', 'SALEA TELA', 'FUNDAS', 'CUBRECAMAS'
+  'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'
 ];
 
 const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
