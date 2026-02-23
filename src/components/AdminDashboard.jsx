@@ -35,7 +35,6 @@ const AdminDashboard = () => {
       `)
       .order('created_at', { ascending: false });
 
-    // 1. Agrupar movimientos por Piso
     const agrupados = movs ? movs.reduce((acc, curr) => {
       const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
       if (!acc[nombrePiso]) acc[nombrePiso] = [];
@@ -43,14 +42,12 @@ const AdminDashboard = () => {
       return acc;
     }, {}) : {};
 
-    // 2. Calcular Stock Disponible por Item por Piso (Último recuento físico o balance)
     const stockMap = {};
     if (movs) {
       movs.forEach(m => {
         const p = m.pisos?.nombre_piso;
         const it = m.item;
         if (!stockMap[p]) stockMap[p] = {};
-        // Tomamos el primer registro encontrado (el más reciente) como stock actual
         if (!stockMap[p][it]) {
           stockMap[p][it] = m.stock_fisico_piso || 0;
         }
@@ -61,6 +58,18 @@ const AdminDashboard = () => {
     setPisos(resPisos.data || []);
     setMovimientosAgrupados(agrupados);
     setResumenStock(stockMap);
+  };
+
+  const eliminarMovimiento = async (id) => {
+    if (window.confirm("¿CONFIRMA ELIMINAR ESTE REGISTRO? Esta acción es irreversible y afectará el balance de stock.")) {
+      const { error } = await supabase.from('movimientos_stock').delete().eq('id', id);
+      if (error) {
+        mostrarSplash("Error al eliminar registro");
+      } else {
+        mostrarSplash("REGISTRO ELIMINADO");
+        cargarDatos();
+      }
+    }
   };
 
   const formatearFecha = (fechaISO) => {
@@ -130,18 +139,16 @@ const AdminDashboard = () => {
         <section className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-end">
             <h2 className="text-2xl font-black text-blue-500 uppercase italic">Control de Activos por Sector</h2>
-            <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700 hover:bg-slate-700 transition-colors">Sincronizar Datos</button>
+            <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700 hover:bg-slate-700 transition-colors">Sincronizar</button>
           </div>
 
           {Object.keys(movimientosAgrupados).map((nombrePiso) => (
             <div key={nombrePiso} className="bg-slate-900 rounded-[2.5rem] border border-slate-800 overflow-hidden shadow-2xl">
-              {/* CABECERA DEL PISO */}
               <div className="bg-slate-800/40 px-8 py-5 border-b border-slate-800 flex justify-between items-center">
                 <span className="text-lg font-black text-blue-400 uppercase tracking-widest">{nombrePiso}</span>
-                <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Sentinel Security Status: OK</span>
               </div>
 
-              {/* RESUMEN DE STOCK ACTUAL DEL PISO */}
+              {/* STOCK ACTUAL DEL PISO */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 p-4 bg-slate-950/50 border-b border-slate-800">
                 {Object.keys(resumenStock[nombrePiso] || {}).map(item => (
                   <div key={item} className="bg-slate-900 p-3 rounded-2xl border border-slate-800 flex flex-col items-center">
@@ -151,10 +158,9 @@ const AdminDashboard = () => {
                 ))}
               </div>
 
-              {/* HISTORIAL DETALLADO */}
               <div className="p-4 space-y-3">
                 {movimientosAgrupados[nombrePiso].map((m) => (
-                  <div key={m.id} className="bg-slate-950 p-4 rounded-[2rem] border border-slate-800 flex flex-col md:flex-row justify-between gap-4 items-center">
+                  <div key={m.id} className="bg-slate-950 p-4 rounded-[2rem] border border-slate-800 flex flex-col md:flex-row justify-between gap-4 items-center group relative">
                     <div className="w-full md:w-1/4">
                       <p className="text-sm font-black text-white uppercase">{m.item}</p>
                       <p className="text-[9px] text-slate-500 font-medium italic">{formatearFecha(m.created_at)}</p>
@@ -163,12 +169,12 @@ const AdminDashboard = () => {
                     <div className="flex items-center gap-4 bg-slate-900 px-6 py-3 rounded-2xl border border-slate-800/50">
                       <div className="text-center min-w-[45px]">
                         <span className="text-[7px] text-green-500 font-black uppercase">Ingreso</span>
-                        <p className="text-sm font-black text-green-500">+{m.ingreso_limpio || m.entregado_limpio}</p>
+                        <p className="text-sm font-black text-green-500">+{m.entregado_limpio || 0}</p>
                       </div>
                       <div className="w-px h-8 bg-slate-800"></div>
                       <div className="text-center min-w-[45px]">
-                        <span className="text-[7px] text-red-500 font-black uppercase">Egreso</span>
-                        <p className="text-sm font-black text-red-500">-{m.egreso_limpio || 0}</p>
+                        <span className="text-[7px] text-red-500 font-black uppercase">Sucio</span>
+                        <p className="text-sm font-black text-red-500">-{m.retirado_sucio || 0}</p>
                       </div>
                       <div className="w-px h-8 bg-slate-800"></div>
                       <div className="text-center min-w-[50px]">
@@ -177,15 +183,27 @@ const AdminDashboard = () => {
                       </div>
                     </div>
 
-                    <div className="w-full md:w-1/3 text-right">
-                      <p className="text-[9px] text-blue-500 font-black uppercase">
-                        Pañolero: <span className="text-slate-300 font-bold">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</span>
-                      </p>
-                      {m.enfermero && (
-                        <p className="text-[9px] text-emerald-500 font-black uppercase mt-1">
-                          Receptor: <span className="text-slate-300 font-bold">{m.enfermero?.jerarquia} {m.enfermero?.apellido}</span>
+                    <div className="w-full md:w-1/3 flex justify-between md:justify-end items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-[9px] text-blue-500 font-black uppercase">
+                          {m.pañolero?.jerarquia} {m.pañolero?.apellido}
                         </p>
-                      )}
+                        {m.enfermero && (
+                          <p className="text-[9px] text-emerald-500 font-black uppercase mt-1">
+                            Recibe: {m.enfermero?.jerarquia} {m.enfermero?.apellido}
+                          </p>
+                        )}
+                      </div>
+                      {/* BOTÓN DE ELIMINACIÓN DE REGISTRO */}
+                      <button 
+                        onClick={() => eliminarMovimiento(m.id)}
+                        className="bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white p-2 rounded-xl transition-all opacity-0 group-hover:opacity-100 border border-red-900/30"
+                        title="Eliminar Registro"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -195,7 +213,7 @@ const AdminDashboard = () => {
         </section>
       )}
 
-      {/* PESTAÑA ADMIN: SE MANTIENE INTACTA SEGÚN TU SOLICITUD */}
+      {/* VISTA ADMIN INTACTA */}
       {activeTab === 'admin' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
