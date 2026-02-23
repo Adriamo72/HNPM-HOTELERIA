@@ -204,13 +204,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
                 </div>
               )}
             </div>
-            <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none" placeholder="0" value={datos.entrega_piso} onChange={e => setDatos({...datos, entrega_piso: e.target.value})} />
+            <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none" placeholder="CANTIDAD" value={datos.entrega_piso} onChange={e => setDatos({...datos, entrega_piso: e.target.value})} />
           </div>
         ) : !auditoriaHabilitada ? (
           <div className="space-y-4">
             <div className="bg-green-900/10 p-5 rounded-[2rem] border border-green-900/30 text-center">
               <label className="text-[10px] font-black text-green-500 uppercase block mb-1">Carga Limpia</label>
-              <input type="number" className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" value={datos.carga_lavadero} onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} />
+              <input type="number" className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" placeholder="CANTIDAD" value={datos.carga_lavadero} onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} />
             </div>
             <div className="bg-red-900/10 p-5 rounded-[2rem] border border-red-900/30 text-center">
               <label className="text-[10px] font-black text-red-500 uppercase block mb-1">Ropa Sucia</label>
