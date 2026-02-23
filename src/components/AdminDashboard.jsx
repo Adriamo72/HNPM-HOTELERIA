@@ -198,10 +198,17 @@ const AdminDashboard = () => {
                       <p className="text-[9px] text-slate-500 italic">{formatearFecha(m.created_at)}</p>
                     </div>
 
-                    <div className="flex items-center gap-4 bg-slate-900 px-6 py-3 rounded-2xl border border-slate-800/50">
+                    <div className="flex items-center gap-6 bg-slate-900 px-6 py-3 rounded-2xl border border-slate-800/50">
                       <div className="text-center min-w-[45px]">
                         <span className="text-[7px] text-green-500 font-black uppercase">Ingreso</span>
+                        {/* Corregido: Muestra ingreso_limpio o entregado_limpio (carga lavadero) */}
                         <p className="text-sm font-black text-green-500">+{m.entregado_limpio || 0}</p>
+                      </div>
+                      <div className="w-px h-8 bg-slate-800"></div>
+                      <div className="text-center min-w-[45px]">
+                        <span className="text-[7px] text-red-400 font-black uppercase">Entrega</span>
+                        {/* NUEVO: Muestra lo que salió hacia el piso */}
+                        <p className="text-sm font-black text-red-400">-{m.egreso_limpio || 0}</p>
                       </div>
                       <div className="w-px h-8 bg-slate-800"></div>
                       <div className="text-center min-w-[45px]">
