@@ -5,17 +5,27 @@ const ITEMS_HOTELERIA = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS 
 
 const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   const [piso, setPiso] = useState(null);
-  const [enfermeros, setEnfermeros] = useState([]);
   const [modo, setModo] = useState('piso'); 
   const [stockActual, setStockActual] = useState(0);
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
-  const [registrosSesion, setRegistrosSesion] = useState([]);
+  
+  // PERSISTENCIA: Cargamos el manifiesto del almacenamiento local al iniciar
+  const [registrosSesion, setRegistrosSesion] = useState(() => {
+    const guardado = localStorage.getItem(`manifiesto_${slugPiso}`);
+    return guardado ? JSON.parse(guardado) : [];
+  });
+
+  const [busquedaDni, setBusquedaDni] = useState('');
+  const [enfermeroEncontrado, setEnfermeroEncontrado] = useState(null);
   
   const [datos, setDatos] = useState({
-    item: 'SABANAS', carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0, stock_fisico_piso: 0,
-    dni_enfermero: ''
+    item: 'SABANAS', carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0, stock_fisico_piso: 0
   });
+
+  useEffect(() => {
+    localStorage.setItem(`manifiesto_${slugPiso}`, JSON.stringify(registrosSesion));
+  }, [registrosSesion, slugPiso]);
 
   useEffect(() => {
     cargarContexto();
@@ -25,37 +35,40 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
     const { data: dataPiso } = await supabase.from('pisos').select('*').eq('slug', slugPiso).single();
     if (dataPiso) {
       setPiso(dataPiso);
-      const { data: dataEnf } = await supabase.from('personal').select('*').eq('rol', 'enfermero').order('apellido');
-      setEnfermeros(dataEnf || []);
-      
       const { data: mov } = await supabase.from('movimientos_stock').select('stock_fisico_piso').eq('piso_id', dataPiso.id).eq('item', datos.item).order('created_at', { ascending: false }).limit(1).single();
       setStockActual(mov ? mov.stock_fisico_piso : 0);
-
       const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
       setAuditoriaHabilitada(config?.valor === 'true');
     }
   };
 
-  const mostrarSplash = (mensaje) => {
-    setNotificacion({ visible: true, mensaje });
-    setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
+  const buscarEnfermero = async () => {
+    if (busquedaDni.length < 7) return;
+    const { data } = await supabase.from('personal').select('*').eq('dni', busquedaDni).eq('rol', 'enfermero').single();
+    if (data) setEnfermeroEncontrado(data);
+    else {
+      setEnfermeroEncontrado(null);
+      alert("Personal no encontrado o no es enfermero.");
+    }
   };
 
   const enviarRegistro = async (e) => {
     e.preventDefault();
-    
-    // Lógica Automática de Stock
+    if (modo === 'piso' && !enfermeroEncontrado) {
+      alert("Debe validar un enfermero receptor por DNI");
+      return;
+    }
+
     let nuevoStock = stockActual;
     if (modo === 'piso') nuevoStock -= parseInt(datos.entrega_piso || 0);
     if (modo === 'lavadero') nuevoStock += parseInt(datos.carga_lavadero || 0);
 
-    // Ajuste Manual (Solo si Auditoría está ON)
     const stockFinal = (auditoriaHabilitada && datos.stock_fisico_piso > 0) ? parseInt(datos.stock_fisico_piso) : nuevoStock;
 
     const { error } = await supabase.from('movimientos_stock').insert([{
       piso_id: piso.id,
       dni_pañolero: perfilUsuario.dni,
-      dni_enfermero: modo === 'piso' ? datos.dni_enfermero : null,
+      dni_enfermero: modo === 'piso' ? enfermeroEncontrado.dni : null,
       item: datos.item,
       entregado_limpio: modo === 'lavadero' ? parseInt(datos.carga_lavadero) : 0,
       egreso_limpio: modo === 'piso' ? parseInt(datos.entrega_piso) : 0,
@@ -64,31 +77,48 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
     }]);
 
     if (!error) {
-      const nuevoMov = { ...datos, hora: new Date().toLocaleTimeString(), enfermero_nom: enfermeros.find(en => en.dni === datos.dni_enfermero)?.apellido || 'LAVADERO' };
+      const nuevoMov = {
+        item: datos.item,
+        hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+        operador: `${perfilUsuario.jerarquia} ${perfilUsuario.apellido}`,
+        receptor: modo === 'piso' ? `${enfermeroEncontrado.jerarquia} ${enfermeroEncontrado.apellido} ${enfermeroEncontrado.nombre}` : 'LAVADERO (CARGA)',
+        limpio: modo === 'lavadero' ? datos.carga_lavadero : 0,
+        entrega: modo === 'piso' ? datos.entrega_piso : 0,
+        sucio: modo === 'lavadero' ? datos.retirado_sucio : 0
+      };
       setRegistrosSesion([nuevoMov, ...registrosSesion]);
       setDatos({ ...datos, carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0, stock_fisico_piso: 0 });
+      setBusquedaDni('');
+      setEnfermeroEncontrado(null);
       cargarContexto();
-      mostrarSplash('REGISTRO EXITOSO');
     }
   };
 
-  if (!piso) return <div className="p-10 text-white text-center italic">Sincronizando con Sentinel DB...</div>;
+  const bajarPDF = () => {
+    const fecha = new Date().toLocaleDateString();
+    let contenido = `SENTINEL HNPM - REPORTE DE GUARDIA\nFECHA: ${fecha}\nSECTOR: ${piso.nombre_piso}\n${'-'.repeat(50)}\n`;
+    registrosSesion.forEach(r => {
+      contenido += `[${r.hora}] ${r.item}\n OP: ${r.operador}\n REC: ${r.receptor}\n L:${r.limpio} E:${r.entrega} S:${r.sucio}\n${'-'.repeat(30)}\n`;
+    });
+    const blob = new Blob([contenido], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Guardia_${piso.slug}_${fecha}.txt`;
+    link.click();
+  };
+
+  if (!piso) return <div className="p-10 text-white text-center italic">Cargando Sentinel...</div>;
 
   return (
     <div className="p-4 bg-slate-950 min-h-screen text-slate-200 pb-20 font-sans">
-      {notificacion.visible && (
-        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-50 bg-blue-600 px-8 py-4 rounded-2xl shadow-2xl border-2 border-blue-400">
-          <p className="text-white font-black uppercase text-center text-xs tracking-widest">{notificacion.mensaje}</p>
-        </div>
-      )}
-
-      <div className="mb-6 bg-slate-900/50 p-4 rounded-3xl border border-blue-900/30 flex justify-between items-center shadow-lg">
+      {/* Header Identidad */}
+      <div className="mb-6 bg-slate-900/50 p-4 rounded-3xl border border-blue-900/30 flex justify-between items-center">
         <div>
-          <p className="text-[9px] text-blue-500 font-black uppercase tracking-widest leading-none">Operador</p>
+          <p className="text-[9px] text-blue-500 font-black uppercase tracking-widest leading-none">Puesto de Control</p>
           <h3 className="text-sm font-black uppercase mt-1">{perfilUsuario?.jerarquia} {perfilUsuario?.apellido}</h3>
         </div>
         <div className="text-right">
-          <p className="text-xs font-bold text-white uppercase italic tracking-tighter">{piso?.nombre_piso}</p>
+          <p className="text-xs font-bold text-white uppercase italic">{piso?.nombre_piso}</p>
         </div>
       </div>
 
@@ -102,57 +132,81 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
           {ITEMS_HOTELERIA.map(i => <option key={i} value={i}>{i}</option>)}
         </select>
 
-        <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800 text-center shadow-inner">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 italic">Stock Disponible en Estante</p>
+        <div className="bg-slate-900 p-4 rounded-3xl border border-slate-800 text-center shadow-inner">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Stock Disponible</p>
           <p className="text-4xl font-black text-white">{stockActual}</p>
         </div>
 
         {modo === 'piso' ? (
-          <div className="bg-blue-900/10 p-6 rounded-[2.5rem] border border-blue-900/30 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
-            <select className="w-full bg-slate-800 p-3 rounded-xl text-sm border border-slate-700 font-bold" value={datos.dni_enfermero} onChange={e => setDatos({...datos, dni_enfermero: e.target.value})} required>
-              <option value="">Enfermero Receptor...</option>
-              {enfermeros.map(enf => <option key={enf.dni} value={enf.dni}>{enf.apellido}</option>)}
-            </select>
-            <label className="text-[9px] font-black text-blue-500 uppercase block text-center mb-1">Cantidad entregada</label>
+          <div className="bg-blue-900/10 p-5 rounded-[2rem] border border-blue-900/30 space-y-4 shadow-2xl">
+            <div className="flex gap-2">
+              <input type="number" className="flex-grow bg-slate-800 p-3 rounded-xl text-sm border border-slate-700 font-bold outline-none" placeholder="DNI Receptor..." value={busquedaDni} onChange={e => setBusquedaDni(e.target.value)} />
+              <button type="button" onClick={buscarEnfermero} className="bg-blue-700 px-4 rounded-xl text-[10px] font-black uppercase">Validar</button>
+            </div>
+            {enfermeroEncontrado && (
+              <div className="bg-blue-600/20 p-3 rounded-xl border border-blue-500/50">
+                <p className="text-[10px] font-black text-blue-300 uppercase tracking-tighter">
+                  {enfermeroEncontrado.jerarquia} {enfermeroEncontrado.apellido}, {enfermeroEncontrado.nombre}
+                </p>
+              </div>
+            )}
             <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none" placeholder="0" value={datos.entrega_piso} onChange={e => setDatos({...datos, entrega_piso: e.target.value})} required />
           </div>
         ) : (
-          <div className="space-y-4 animate-in fade-in zoom-in-95">
-            <div className="bg-green-900/10 p-6 rounded-[2.5rem] border border-green-900/30">
-              <label className="text-[10px] font-black text-green-500 uppercase block text-center mb-2 italic">Carga Limpia (Entra al Pañol)</label>
+          <div className="space-y-4">
+            <div className="bg-green-900/10 p-5 rounded-[2rem] border border-green-900/30">
+              <label className="text-[10px] font-black text-green-500 uppercase block text-center mb-2 italic tracking-widest">Carga Limpia (Lavadero)</label>
               <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-green-400 outline-none" value={datos.carga_lavadero} onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} />
             </div>
-            <div className="bg-red-900/10 p-6 rounded-[2.5rem] border border-red-900/30">
-              <label className="text-[10px] font-black text-red-500 uppercase block text-center mb-2 italic">Ropa Sucia (Sale al Lavadero)</label>
+            <div className="bg-red-900/10 p-5 rounded-[2rem] border border-red-900/30">
+              <label className="text-[10px] font-black text-red-500 uppercase block text-center mb-2 italic tracking-widest">Ropa Sucia (Salida)</label>
               <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-red-400 outline-none" value={datos.retirado_sucio} onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} />
             </div>
             {auditoriaHabilitada && (
-              <div className="bg-yellow-600/10 p-6 rounded-[2.5rem] border border-yellow-600/50 shadow-2xl border-dashed">
-                <label className="text-[10px] font-black text-yellow-500 uppercase block text-center mb-2 tracking-tighter">⚠️ Auditoría: Sincronización Manual</label>
-                <input type="number" className="w-full bg-transparent text-3xl text-center font-black text-yellow-200 outline-none" placeholder="Ingresar Stock Real..." value={datos.stock_fisico_piso} onChange={e => setDatos({...datos, stock_fisico_piso: e.target.value})} />
+              <div className="bg-yellow-600/10 p-4 rounded-2xl border border-yellow-600/50 border-dashed">
+                <label className="text-[10px] font-black text-yellow-500 uppercase block text-center mb-2">Ajuste Manual Jefe</label>
+                <input type="number" className="w-full bg-transparent text-2xl text-center font-black text-yellow-200 outline-none" placeholder="Sincronizar..." value={datos.stock_fisico_piso} onChange={e => setDatos({...datos, stock_fisico_piso: e.target.value})} />
               </div>
             )}
           </div>
         )}
-        <button type="submit" className={`w-full p-5 rounded-3xl font-black uppercase text-sm shadow-2xl transition-all active:scale-95 ${modo === 'piso' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'}`}>Confirmar Movimiento</button>
+        <button type="submit" className="w-full p-5 rounded-3xl font-black uppercase text-sm shadow-2xl bg-blue-600 text-white">Confirmar Movimiento</button>
       </form>
 
+      {/* MANIFIESTO COMPACTO CON SCROLL */}
       {registrosSesion.length > 0 && (
-        <div className="mt-10 space-y-3">
-          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-2">Manifiesto de Guardia</p>
-          {registrosSesion.map((reg, idx) => (
-            <div key={idx} className="bg-slate-900/50 p-4 rounded-3xl border border-slate-800 flex justify-between items-center">
-              <div>
-                <p className="text-xs font-black text-white uppercase">{reg.item}</p>
-                <p className="text-[8px] text-slate-500 uppercase font-bold tracking-tighter">{reg.hora} - {reg.enfermero_nom}</p>
-              </div>
-              <div className="flex gap-4">
-                {reg.carga_lavadero > 0 && <span className="text-[10px] font-black text-green-500">+{reg.carga_lavadero}</span>}
-                {reg.entrega_piso > 0 && <span className="text-[10px] font-black text-blue-400">-{reg.entrega_piso}</span>}
-                {reg.retirado_sucio > 0 && <span className="text-[10px] font-black text-red-500">S:{reg.retirado_sucio}</span>}
-              </div>
-            </div>
-          ))}
+        <div className="mt-8 space-y-3">
+          <div className="flex justify-between items-center px-2">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Manifiesto de Guardia (Persistente)</p>
+            <button onClick={bajarPDF} className="text-[9px] font-black text-blue-400 uppercase border-b border-blue-400">Descargar Registro</button>
+          </div>
+          
+          <div className="overflow-y-auto max-h-[350px] pr-1 custom-scroll">
+            <table className="w-full text-left border-separate border-spacing-y-2">
+              <tbody>
+                {registrosSesion.map((reg, idx) => (
+                  <tr key={idx} className="bg-slate-900/80 rounded-2xl border border-slate-800">
+                    <td className="p-3 rounded-l-2xl">
+                      <p className="text-[10px] font-black text-white uppercase">{reg.item}</p>
+                      <p className="text-[8px] text-slate-500 font-bold">{reg.hora} hs</p>
+                    </td>
+                    <td className="p-3">
+                      <p className="text-[8px] text-blue-500 font-black uppercase leading-tight">OP: {reg.operador}</p>
+                      <p className="text-[8px] text-emerald-500 font-black uppercase leading-tight mt-1">REC: {reg.receptor}</p>
+                    </td>
+                    <td className="p-3 rounded-r-2xl text-right">
+                      <div className="flex flex-col gap-1">
+                        {reg.limpio > 0 && <span className="text-[9px] font-black text-green-500">+{reg.limpio}L</span>}
+                        {reg.entrega > 0 && <span className="text-[9px] font-black text-blue-400">-{reg.entrega}E</span>}
+                        {reg.sucio > 0 && <span className="text-[9px] font-black text-red-500">S:{reg.sucio}</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-center text-[8px] text-slate-600 uppercase font-black">Fin del manifiesto actual</p>
         </div>
       )}
     </div>
