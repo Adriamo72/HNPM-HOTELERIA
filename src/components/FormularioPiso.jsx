@@ -181,17 +181,17 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
               <button type="button" onClick={buscarEnfermero} className="bg-blue-700 px-4 rounded-xl text-[10px] font-black">VALIDAR</button>
             </div>
             {enfermeroEncontrado && <p className="text-[9px] font-black text-blue-300 uppercase text-center">{enfermeroEncontrado.jerarquia} {enfermeroEncontrado.apellido}</p>}
-            <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none" placeholder="0" value={datos.entrega_piso} onChange={e => setDatos({...datos, entrega_piso: e.target.value})} />
+            <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none" placeholder="CANTIDAD" value={datos.entrega_piso} onChange={e => setDatos({...datos, entrega_piso: e.target.value})} />
           </div>
         ) : !auditoriaHabilitada ? (
           <div className="space-y-4">
             <div className="bg-green-900/10 p-5 rounded-[2rem] border border-green-900/30 text-center">
               <label className="text-[10px] font-black text-green-500 uppercase block mb-1">Carga Limpia</label>
-              <input type="number" className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" value={datos.carga_lavadero} onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} />
+              <input type="number" className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" placeholder="CANTIDAD" value={datos.carga_lavadero} onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} />
             </div>
             <div className="bg-red-900/10 p-5 rounded-[2rem] border border-red-900/30 text-center">
               <label className="text-[10px] font-black text-red-500 uppercase block mb-1">Ropa Sucia</label>
-              <input type="number" className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center" value={datos.retirado_sucio} onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} />
+              <input type="number" className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center" placeholder="CANTIDAD" value={datos.retirado_sucio} onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} />
             </div>
           </div>
         ) : null}
