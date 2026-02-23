@@ -27,7 +27,7 @@ const AdminDashboard = () => {
     const resPers = await supabase.from('personal').select('*').order('apellido');
     const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
     
-    // Cargar estado de auditoría
+    // Cargar estado de auditoría desde la tabla de configuración
     const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
     setAuditoriaHabilitada(config?.valor === 'true');
 
@@ -77,25 +77,18 @@ const AdminDashboard = () => {
     else { mostrarSplash("Piso Creado"); setNuevoPiso({ nombre_piso: '' }); cargarDatos(); }
   };
 
-  const agregarPersonal = async (e) => {
-    e.preventDefault();
-    const { error } = await supabase.from('personal').insert([nuevoMiembro]);
-    if (error) mostrarSplash("Error: DNI duplicado");
-    else { mostrarSplash("Personal Registrado"); setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' }); cargarDatos(); }
-  };
-
   const eliminarMovimiento = async (id) => {
-    if (window.confirm("¿Eliminar registro?")) {
+    if (window.confirm("¿Eliminar este registro de la auditoría?")) {
       await supabase.from('movimientos_stock').delete().eq('id', id);
       cargarDatos();
     }
   };
 
-  const eliminarPiso = async (id) => {
-    if (window.confirm("¿Eliminar sector?")) {
-      await supabase.from('pisos').delete().eq('id', id);
-      cargarDatos();
-    }
+  const agregarPersonal = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('personal').insert([nuevoMiembro]);
+    if (error) mostrarSplash("Error: DNI ya existe");
+    else { mostrarSplash("Personal Registrado"); setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' }); cargarDatos(); }
   };
 
   const eliminarPersonal = async (dni) => {
@@ -105,9 +98,21 @@ const AdminDashboard = () => {
     }
   };
 
+  const eliminarPiso = async (id) => {
+    if (window.confirm("¿Eliminar sector y todos sus registros?")) {
+      await supabase.from('pisos').delete().eq('id', id);
+      cargarDatos();
+    }
+  };
+
   const descargarQR = (slug) => {
     const urlApp = `${window.location.origin}/piso/${slug}`; 
     window.open(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`, '_blank');
+  };
+
+  const formatearFecha = (fechaISO) => {
+    const fecha = new Date(fechaISO);
+    return fecha.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' hs';
   };
 
   return (
@@ -119,14 +124,14 @@ const AdminDashboard = () => {
       )}
 
       <div className="flex gap-2 mb-8 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
-        <button onClick={() => setActiveTab('historial')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Monitor de Movimientos</button>
-        <button onClick={() => setActiveTab('admin')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Administración</button>
+        <button onClick={() => setActiveTab('historial')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Monitor de Movimientos</button>
+        <button onClick={() => setActiveTab('admin')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Administración</button>
       </div>
 
       {activeTab === 'historial' && (
         <section className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-black text-blue-500 uppercase italic leading-none">Control de Activos</h2>
+            <h2 className="text-2xl font-black text-blue-500 uppercase italic">Control de Activos</h2>
             <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700">Actualizar</button>
           </div>
 
@@ -135,7 +140,7 @@ const AdminDashboard = () => {
               <div className="bg-slate-800/40 px-8 py-5 border-b border-slate-800 flex justify-between items-center">
                 <span className="text-lg font-black text-blue-400 uppercase tracking-widest">{nombrePiso}</span>
                 {Object.values(resumenStock[nombrePiso]).some(qty => qty > 0 && qty < STOCK_CRITICO) && (
-                  <span className="text-[9px] bg-red-600 text-white px-3 py-1 rounded-full font-black animate-pulse uppercase">Alerta Crítica</span>
+                  <span className="text-[9px] bg-red-600 text-white px-3 py-1 rounded-full font-black animate-pulse uppercase tracking-tighter">Alerta de Stock</span>
                 )}
               </div>
 
@@ -145,7 +150,7 @@ const AdminDashboard = () => {
                   const esCritico = stock > 0 && stock < STOCK_CRITICO;
                   return (
                     <div key={item} className={`p-3 rounded-2xl border flex flex-col items-center transition-all ${esCritico ? 'bg-red-950/40 border-red-600 animate-pulse' : stock > 0 ? 'bg-blue-900/20 border-blue-900/50' : 'bg-slate-900 border-slate-800 opacity-40'}`}>
-                      <span className="text-[7px] text-slate-500 font-black uppercase mb-1">{item}</span>
+                      <span className="text-[7px] text-slate-500 font-black uppercase mb-1 tracking-tighter">{item}</span>
                       <span className={`text-sm font-black ${esCritico ? 'text-red-500' : stock > 0 ? 'text-blue-300' : 'text-slate-600'}`}>{stock}</span>
                     </div>
                   );
@@ -156,8 +161,8 @@ const AdminDashboard = () => {
                 {movimientosAgrupados[nombrePiso]?.map((m) => (
                   <div key={m.id} className="bg-slate-950 p-4 rounded-[2rem] border border-slate-800 flex flex-col md:flex-row justify-between gap-4 items-center group relative">
                     <div className="w-full md:w-1/4">
-                      <p className="text-sm font-black text-white uppercase">{m.item}</p>
-                      <p className="text-[9px] text-slate-500 italic">{formatearFecha(m.created_at)}</p>
+                      <p className="text-sm font-black text-white uppercase leading-none">{m.item}</p>
+                      <p className="text-[9px] text-slate-500 italic mt-1">{formatearFecha(m.created_at)}</p>
                     </div>
                     <div className="flex items-center gap-4 bg-slate-900 px-6 py-3 rounded-2xl border border-slate-800/50">
                       <div className="text-center min-w-[50px]">
@@ -166,8 +171,13 @@ const AdminDashboard = () => {
                       </div>
                       <div className="w-px h-8 bg-slate-800"></div>
                       <div className="text-center min-w-[50px]">
-                        <span className="text-[7px] text-blue-400 font-black uppercase">Egreso</span>
+                        <span className="text-[7px] text-blue-400 font-black uppercase">Entrega</span>
                         <p className="text-sm font-black text-blue-400">-{m.egreso_limpio || 0}</p>
+                      </div>
+                      <div className="w-px h-8 bg-slate-800"></div>
+                      <div className="text-center min-w-[50px]">
+                        <span className="text-[7px] text-red-500 font-black uppercase">Sucio</span>
+                        <p className="text-sm font-black text-red-500">S:{m.retirado_sucio || 0}</p>
                       </div>
                     </div>
                     <div className="w-full md:w-1/3 flex justify-between md:justify-end items-center gap-4">
@@ -188,25 +198,27 @@ const AdminDashboard = () => {
       {activeTab === 'admin' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-yellow-600/30 flex justify-between items-center shadow-xl">
-            <div>
+            <div className="max-w-[70%]">
               <h3 className="text-sm font-black text-yellow-500 uppercase italic">Mando de Auditoría</h3>
-              <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase">Habilita ajuste manual de stock para pañoleros</p>
+              <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase">Habilita ajuste manual de stock para pañoleros durante recuentos físicos</p>
             </div>
-            <button onClick={toggleAuditoria} className={`px-8 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${auditoriaHabilitada ? 'bg-red-600 animate-pulse text-white' : 'bg-green-600 text-white'}`}>{auditoriaHabilitada ? 'Desactivar Ajuste' : 'Activar Ajuste'}</button>
+            <button onClick={toggleAuditoria} className={`px-8 py-3 rounded-xl font-black text-[10px] uppercase transition-all shadow-lg ${auditoriaHabilitada ? 'bg-red-600 animate-pulse text-white' : 'bg-green-600 text-white'}`}>
+              {auditoriaHabilitada ? 'Desactivar Ajuste' : 'Activar Ajuste'}
+            </button>
           </section>
 
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800">
-            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Configurar Sectores</h3>
+            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Configurar Sectores / Pisos</h3>
             <form onSubmit={agregarPiso} className="flex gap-2 mb-8">
-              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm" placeholder="Nombre del Piso..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
-              <button className="bg-blue-600 px-8 rounded-2xl font-black text-[10px] uppercase">Crear Piso</button>
+              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm" placeholder="Nombre del Piso (Ej: PISO 2)..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
+              <button className="bg-blue-600 px-8 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-blue-900/20">Crear Piso</button>
             </form>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {pisos.map(p => (
                 <div key={p.id} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex justify-between items-center">
-                  <span className="text-xs font-black text-blue-400 uppercase">{p.nombre_piso}</span>
+                  <span className="text-xs font-black text-blue-400 uppercase tracking-widest">{p.nombre_piso}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => descargarQR(p.slug)} className="p-2 bg-slate-800 rounded-lg text-xs font-bold uppercase text-blue-400">QR</button>
+                    <button onClick={() => descargarQR(p.slug)} className="p-2 bg-slate-800 rounded-lg text-xs font-bold uppercase text-blue-500">QR</button>
                     <button onClick={() => eliminarPiso(p.id)} className="p-2 text-red-500 text-lg font-black">×</button>
                   </div>
                 </div>
@@ -227,7 +239,7 @@ const AdminDashboard = () => {
               </select>
               <button className="bg-blue-600 p-3 rounded-xl font-black uppercase text-xs">Registrar</button>
             </form>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
               {personal.map(p => (
                 <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center group">
                   <span className="text-xs font-bold uppercase">{p.jerarquia} {p.apellido} <small className="text-blue-500 ml-2">[{p.rol}]</small></span>

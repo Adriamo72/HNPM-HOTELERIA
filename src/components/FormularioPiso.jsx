@@ -44,10 +44,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   const enviarRegistro = async (e) => {
     e.preventDefault();
     
+    // Lógica Automática de Stock
     let nuevoStock = stockActual;
     if (modo === 'piso') nuevoStock -= parseInt(datos.entrega_piso || 0);
     if (modo === 'lavadero') nuevoStock += parseInt(datos.carga_lavadero || 0);
 
+    // Ajuste Manual (Solo si Auditoría está ON)
     const stockFinal = (auditoriaHabilitada && datos.stock_fisico_piso > 0) ? parseInt(datos.stock_fisico_piso) : nuevoStock;
 
     const { error } = await supabase.from('movimientos_stock').insert([{
@@ -70,7 +72,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
     }
   };
 
-  if (!piso) return <div className="p-10 text-white text-center italic">Sincronizando...</div>;
+  if (!piso) return <div className="p-10 text-white text-center italic">Sincronizando con Sentinel DB...</div>;
 
   return (
     <div className="p-4 bg-slate-950 min-h-screen text-slate-200 pb-20 font-sans">
@@ -86,7 +88,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
           <h3 className="text-sm font-black uppercase mt-1">{perfilUsuario?.jerarquia} {perfilUsuario?.apellido}</h3>
         </div>
         <div className="text-right">
-          <p className="text-xs font-bold text-white uppercase italic">{piso?.nombre_piso}</p>
+          <p className="text-xs font-bold text-white uppercase italic tracking-tighter">{piso?.nombre_piso}</p>
         </div>
       </div>
 
@@ -96,7 +98,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
       </div>
 
       <form onSubmit={enviarRegistro} className="space-y-4">
-        <select className="w-full bg-slate-900 p-4 rounded-2xl border border-slate-800 font-black text-blue-400" value={datos.item} onChange={e => setDatos({...datos, item: e.target.value})}>
+        <select className="w-full bg-slate-900 p-4 rounded-2xl border border-slate-800 font-black text-blue-400 outline-none" value={datos.item} onChange={e => setDatos({...datos, item: e.target.value})}>
           {ITEMS_HOTELERIA.map(i => <option key={i} value={i}>{i}</option>)}
         </select>
 
@@ -111,22 +113,22 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
               <option value="">Enfermero Receptor...</option>
               {enfermeros.map(enf => <option key={enf.dni} value={enf.dni}>{enf.apellido}</option>)}
             </select>
-            <label className="text-[9px] font-black text-blue-500 uppercase block text-center mb-1">Cantidad a entregar</label>
+            <label className="text-[9px] font-black text-blue-500 uppercase block text-center mb-1">Cantidad entregada</label>
             <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none" placeholder="0" value={datos.entrega_piso} onChange={e => setDatos({...datos, entrega_piso: e.target.value})} required />
           </div>
         ) : (
           <div className="space-y-4 animate-in fade-in zoom-in-95">
             <div className="bg-green-900/10 p-6 rounded-[2.5rem] border border-green-900/30">
-              <label className="text-[10px] font-black text-green-500 uppercase block text-center mb-2 italic">Carga Limpia (Lavadero → Pañol)</label>
+              <label className="text-[10px] font-black text-green-500 uppercase block text-center mb-2 italic">Carga Limpia (Entra al Pañol)</label>
               <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-green-400 outline-none" value={datos.carga_lavadero} onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} />
             </div>
             <div className="bg-red-900/10 p-6 rounded-[2.5rem] border border-red-900/30">
-              <label className="text-[10px] font-black text-red-500 uppercase block text-center mb-2 italic">Recuento Sucio (Pañol → Lavadero)</label>
+              <label className="text-[10px] font-black text-red-500 uppercase block text-center mb-2 italic">Ropa Sucia (Sale al Lavadero)</label>
               <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-red-400 outline-none" value={datos.retirado_sucio} onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} />
             </div>
             {auditoriaHabilitada && (
-              <div className="bg-yellow-600/10 p-6 rounded-[2.5rem] border border-yellow-600/50 shadow-2xl animate-bounce">
-                <label className="text-[10px] font-black text-yellow-500 uppercase block text-center mb-2 tracking-tighter">⚠️ Mando de Auditoría: Sincronización Manual</label>
+              <div className="bg-yellow-600/10 p-6 rounded-[2.5rem] border border-yellow-600/50 shadow-2xl border-dashed">
+                <label className="text-[10px] font-black text-yellow-500 uppercase block text-center mb-2 tracking-tighter">⚠️ Auditoría: Sincronización Manual</label>
                 <input type="number" className="w-full bg-transparent text-3xl text-center font-black text-yellow-200 outline-none" placeholder="Ingresar Stock Real..." value={datos.stock_fisico_piso} onChange={e => setDatos({...datos, stock_fisico_piso: e.target.value})} />
               </div>
             )}
@@ -137,12 +139,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
 
       {registrosSesion.length > 0 && (
         <div className="mt-10 space-y-3">
-          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-2">Manifiesto de esta Guardia</p>
+          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-2">Manifiesto de Guardia</p>
           {registrosSesion.map((reg, idx) => (
-            <div key={idx} className="bg-slate-900/50 p-4 rounded-3xl border border-slate-800 flex justify-between items-center animate-in slide-in-from-left-4">
+            <div key={idx} className="bg-slate-900/50 p-4 rounded-3xl border border-slate-800 flex justify-between items-center">
               <div>
                 <p className="text-xs font-black text-white uppercase">{reg.item}</p>
-                <p className="text-[8px] text-slate-500 uppercase font-bold">{reg.hora} - {reg.enfermero_nom}</p>
+                <p className="text-[8px] text-slate-500 uppercase font-bold tracking-tighter">{reg.hora} - {reg.enfermero_nom}</p>
               </div>
               <div className="flex gap-4">
                 {reg.carga_lavadero > 0 && <span className="text-[10px] font-black text-green-500">+{reg.carga_lavadero}</span>}
