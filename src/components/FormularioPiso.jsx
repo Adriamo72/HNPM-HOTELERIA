@@ -8,7 +8,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   const [modo, setModo] = useState('piso'); 
   const [stockActual, setStockActual] = useState(0);
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
-  const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
+  const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '', tipo: 'exito' });
   
   const [registrosSesion, setRegistrosSesion] = useState(() => {
     try {
@@ -34,6 +34,24 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
     cargarContexto();
   }, [slugPiso, datos.item]);
 
+  // Búsqueda automática de DNI al escribir
+  useEffect(() => {
+    const buscarEnfermeroAuto = async () => {
+      if (busquedaDni.length >= 7) {
+        const { data } = await supabase.from('personal').select('*').eq('dni', busquedaDni).eq('rol', 'enfermero').single();
+        if (data) {
+          setEnfermeroEncontrado(data);
+          mostrarSplash(`VALIDADO: ${data.jerarquia} ${data.apellido}`, 'exito');
+        } else {
+          setEnfermeroEncontrado(null);
+        }
+      } else {
+        setEnfermeroEncontrado(null);
+      }
+    };
+    buscarEnfermeroAuto();
+  }, [busquedaDni]);
+
   const cargarContexto = async () => {
     const { data: dataPiso } = await supabase.from('pisos').select('*').eq('slug', slugPiso).single();
     if (dataPiso) {
@@ -48,29 +66,30 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
     }
   };
 
-  const mostrarSplash = (mensaje) => {
-    setNotificacion({ visible: true, mensaje });
-    setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
+  const mostrarSplash = (mensaje, tipo = 'exito') => {
+    setNotificacion({ visible: true, mensaje, tipo });
+    setTimeout(() => setNotificacion({ visible: false, mensaje: '', tipo: 'exito' }), 2200);
   };
 
-  const buscarEnfermero = async () => {
-    if (busquedaDni.length < 7) return;
-    const { data } = await supabase.from('personal').select('*').eq('dni', busquedaDni).eq('rol', 'enfermero').single();
-    if (data) {
-      setEnfermeroEncontrado(data);
-      mostrarSplash(`VALIDADO: ${data.jerarquia} ${data.apellido}`);
-    } else {
-      alert("DNI no registrado.");
-    }
+  const limpiarManifiesto = () => {
+    mostrarSplash("LIMPIANDO MANIFIESTO...", "error");
+    setTimeout(() => {
+      setRegistrosSesion([]);
+      localStorage.removeItem(`sentinel_manifiesto_${slugPiso}`);
+    }, 500);
   };
 
   const enviarRegistro = async (e) => {
     e.preventDefault();
     const hayMov = parseInt(datos.carga_lavadero) > 0 || parseInt(datos.entrega_piso) > 0 || parseInt(datos.retirado_sucio) > 0;
     
-    if (!hayMov && !auditoriaHabilitada) return;
+    if (!hayMov && !auditoriaHabilitada) {
+      mostrarSplash("INGRESE CANTIDADES", "error");
+      return;
+    }
+
     if (modo === 'piso' && !enfermeroEncontrado && !auditoriaHabilitada) {
-      alert("Falta validar DNI receptor");
+      mostrarSplash("DNI RECEPTOR REQUERIDO", "error");
       return;
     }
 
@@ -96,14 +115,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
         item: datos.item,
         hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
         operador: `${perfilUsuario.jerarquia} ${perfilUsuario.apellido} ${perfilUsuario.nombre}`,
-        receptor: auditoriaHabilitada ? `SINC: ${stockFinal}` : (modo === 'piso' ? `${enfermeroEncontrado.jerarquia} ${enfermeroEncontrado.apellido} ${enfermeroEncontrado.nombre}` : 'LAVADERO'),
-        // Lógica de signos solicitada
+        receptor: auditoriaHabilitada ? `SINC: ${stockFinal}` : (modo === 'piso' ? `${enfermeroEncontrado.jerarquia} ${enfermeroEncontrado.apellido}` : 'LAVADERO'),
         valor: auditoriaHabilitada ? stockFinal : (parseInt(datos.carga_lavadero) || -parseInt(datos.entrega_piso) || -parseInt(datos.retirado_sucio)),
         esSincro: auditoriaHabilitada
       };
       
       setRegistrosSesion(prev => [nuevoMov, ...prev]);
-      mostrarSplash(auditoriaHabilitada ? "STOCK SINCRONIZADO" : "REGISTRO EXITOSO");
+      mostrarSplash(auditoriaHabilitada ? "SINCRO EXITOSA" : "REGISTRO EXITOSO", "exito");
       setDatos({ ...datos, carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
       setBusquedaDni(''); setEnfermeroEncontrado(null); cargarContexto();
     }
@@ -127,14 +145,16 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   return (
     <div className="p-4 bg-slate-950 min-h-screen text-slate-200 pb-20 font-sans">
       
-      {/* SPLASH DE CONFIRMACIÓN */}
+      {/* SPLASH DE NOTIFICACIÓN GLOBAL */}
       {notificacion.visible && (
         <div className="fixed inset-0 flex items-center justify-center z-[100] bg-slate-950/60 backdrop-blur-sm">
-          <div className="bg-blue-600 border-2 border-blue-400 p-8 rounded-[3rem] shadow-2xl animate-in zoom-in duration-300 text-center max-w-xs w-full">
+          <div className={`${notificacion.tipo === 'exito' ? 'bg-blue-600 border-blue-400' : 'bg-red-900 border-red-700'} border-2 p-8 rounded-[3rem] shadow-2xl animate-in zoom-in duration-300 text-center max-w-xs w-full`}>
             <div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-              </svg>
+              {notificacion.tipo === 'exito' ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              )}
             </div>
             <p className="text-white font-black uppercase text-xs tracking-widest">{notificacion.mensaje}</p>
           </div>
@@ -169,48 +189,54 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
 
         {!auditoriaHabilitada && (
           <div className="flex gap-2 bg-slate-900 p-1 rounded-2xl border border-slate-800">
-            <button type="button" onClick={() => setModo('piso')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase ${modo === 'piso' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Entrega en Piso</button>
-            <button type="button" onClick={() => setModo('lavadero')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase ${modo === 'lavadero' ? 'bg-green-600 text-white' : 'text-slate-500'}`}>Recuento Lavadero</button>
+            <button type="button" onClick={() => setModo('piso')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase ${modo === 'piso' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>Entrega en Piso</button>
+            <button type="button" onClick={() => setModo('lavadero')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase ${modo === 'lavadero' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500'}`}>Recuento Lavadero</button>
           </div>
         )}
 
         {modo === 'piso' && !auditoriaHabilitada ? (
           <div className="bg-blue-900/10 p-5 rounded-[2rem] border border-blue-900/30 space-y-4">
-            <div className="flex gap-2">
-              <input type="number" className="flex-grow bg-slate-800 p-3 rounded-xl text-sm border border-slate-700 outline-none" placeholder="DNI Receptor..." value={busquedaDni} onChange={e => setBusquedaDni(e.target.value)} />
-              <button type="button" onClick={buscarEnfermero} className="bg-blue-700 px-4 rounded-xl text-[10px] font-black">VALIDAR</button>
+            <div className="relative">
+              <input type="number" className="w-full bg-slate-800 p-4 rounded-2xl text-sm border border-slate-700 outline-none font-bold" placeholder="DNI Receptor (Búsqueda automática)..." value={busquedaDni} onChange={e => setBusquedaDni(e.target.value)} />
+              {enfermeroEncontrado && (
+                <div className="mt-2 p-3 bg-blue-600/20 rounded-xl border border-blue-500/50 animate-in fade-in">
+                  <p className="text-[10px] font-black text-blue-300 uppercase text-center">{enfermeroEncontrado.jerarquia} {enfermeroEncontrado.apellido} {enfermeroEncontrado.nombre}</p>
+                </div>
+              )}
             </div>
-            {enfermeroEncontrado && <p className="text-[9px] font-black text-blue-300 uppercase text-center">{enfermeroEncontrado.jerarquia} {enfermeroEncontrado.apellido}</p>}
-            <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none" placeholder="CANTIDAD" value={datos.entrega_piso} onChange={e => setDatos({...datos, entrega_piso: e.target.value})} />
+            <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none" placeholder="0" value={datos.entrega_piso} onChange={e => setDatos({...datos, entrega_piso: e.target.value})} />
           </div>
         ) : !auditoriaHabilitada ? (
           <div className="space-y-4">
             <div className="bg-green-900/10 p-5 rounded-[2rem] border border-green-900/30 text-center">
               <label className="text-[10px] font-black text-green-500 uppercase block mb-1">Carga Limpia</label>
-              <input type="number" className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" placeholder="CANTIDAD" value={datos.carga_lavadero} onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} />
+              <input type="number" className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" value={datos.carga_lavadero} onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} />
             </div>
             <div className="bg-red-900/10 p-5 rounded-[2rem] border border-red-900/30 text-center">
               <label className="text-[10px] font-black text-red-500 uppercase block mb-1">Ropa Sucia</label>
-              <input type="number" className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center" placeholder="CANTIDAD" value={datos.retirado_sucio} onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} />
+              <input type="number" className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center" value={datos.retirado_sucio} onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} />
             </div>
           </div>
         ) : null}
 
-        <button type="submit" className={`w-full p-5 rounded-3xl font-black uppercase text-sm ${auditoriaHabilitada ? 'bg-yellow-600' : modo === 'piso' ? 'bg-blue-600' : 'bg-green-600'}`}>
+        <button type="submit" className={`w-full p-5 rounded-3xl font-black uppercase text-sm shadow-2xl transition-all ${auditoriaHabilitada ? 'bg-yellow-600' : modo === 'piso' ? 'bg-blue-600' : 'bg-green-600'}`}>
           {auditoriaHabilitada ? 'Sincronizar Stock' : 'Confirmar Movimiento'}
         </button>
       </form>
 
-      {/* MANIFIESTO MATEMÁTICO SIMPLIFICADO */}
+      {/* MANIFIESTO */}
       {registrosSesion.length > 0 && (
         <div className="mt-10 space-y-3">
           <div className="flex justify-between items-center px-2">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Manifiesto de Guardia</p>
-            <button onClick={bajarPDF} className="p-2 bg-slate-900 rounded-full border border-slate-800 text-blue-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </button>
+            <div className="flex gap-3">
+              <button onClick={bajarPDF} className="p-2 bg-slate-900 rounded-full border border-slate-800 text-blue-400">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              </button>
+              <button onClick={limpiarManifiesto} className="p-2 bg-slate-900 rounded-full border border-red-900/50 text-red-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </div>
           </div>
           <div className="overflow-y-auto max-h-[300px] space-y-2 pr-1 custom-scroll">
             {registrosSesion.map((reg, idx) => (
@@ -223,7 +249,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
                   <p className={`text-xl font-black ${reg.valor > 0 ? 'text-green-500' : reg.esSincro ? 'text-yellow-500' : 'text-red-500'}`}>
                     {reg.valor > 0 ? '+' : ''}{reg.valor}
                   </p>
-                  <p className="text-[7px] text-slate-600 font-black uppercase">REC: {reg.receptor.split(' ').slice(0, 2).join(' ')}</p>
+                  <p className="text-[7px] text-slate-600 font-black uppercase">REC: {reg.receptor}</p>
                 </div>
               </div>
             ))}
