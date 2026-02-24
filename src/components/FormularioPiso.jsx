@@ -222,8 +222,35 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
 
       {/* Manifiesto Compacto */}
       {registrosSesion.length > 0 && (
-        <div className="mt-8 overflow-y-auto max-h-[300px]">
-           {/* ... Estructura de tabla idéntica ... */}
+        <div className="mt-8 space-y-3">
+          <div className="flex justify-between items-center px-2">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Manifiesto de Guardia</p>
+          </div>
+          <div className="overflow-y-auto max-h-[350px] pr-1">
+            <table className="w-full text-left border-separate border-spacing-y-2">
+              <tbody>
+                {registrosSesion.map((reg, idx) => (
+                  <tr key={idx} className="bg-slate-900/80 rounded-2xl border border-slate-800">
+                    <td className="p-3 rounded-l-2xl">
+                      <p className="text-[10px] font-black text-white uppercase">{reg.item}</p>
+                      <p className="text-[8px] text-slate-500 font-bold">{reg.hora} hs</p>
+                    </td>
+                    <td className="p-3">
+                      <p className="text-[8px] text-blue-500 font-black uppercase leading-tight">OP: {reg.operador}</p>
+                      <p className="text-[8px] text-emerald-500 font-black uppercase leading-tight mt-1">REC: {reg.receptor}</p>
+                    </td>
+                    <td className="p-3 rounded-r-2xl text-right">
+                      <div className="flex flex-col gap-1">
+                        {reg.limpio > 0 && <span className="text-[9px] font-black text-green-500">+{reg.limpio}L</span>}
+                        {reg.entrega > 0 && <span className="text-[9px] font-black text-blue-400">-{reg.entrega}E</span>}
+                        {reg.sucio > 0 && <span className="text-[9px] font-black text-red-500">S:{reg.sucio}</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
