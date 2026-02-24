@@ -31,7 +31,7 @@ const AdminDashboard = () => {
     const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
     setAuditoriaHabilitada(config?.valor === 'true');
 
-    // IMPORTANTE: Cargamos en orden cronológico ASCENDENTE para reconstruir el ciclo patrimonial correctamente
+    // Procesamos cronológicamente para reconstruir el flujo histórico
     const { data: movs } = await supabase.from('movimientos_stock')
       .select(`
         *, 
@@ -44,9 +44,9 @@ const AdminDashboard = () => {
     const stockMap = {};
     const globalAcc = {};
     
-    // Inicializamos el acumulador patrimonial por ítem
     ITEMS_REQUERIDOS.forEach(it => {
-      globalAcc[it] = { pañol: 0, en_piso: 0, en_lavadero: 0, total: 0 };
+      // pañol: stock en estante, en_piso: uso actual, en_lavadero: proceso de lavado
+      globalAcc[it] = { pañol: 0, en_piso: 0, en_lavadero: 0 };
     });
 
     if (resPisos.data) {
@@ -59,47 +59,54 @@ const AdminDashboard = () => {
         movs.forEach(m => {
           const it = m.item;
           const pNombre = m.pisos?.nombre_piso;
-
-          // DETERMINACIÓN DE LÓGICA PATRIMONIAL
           const esSincro = !m.entregado_limpio && !m.egreso_limpio && !m.retirado_sucio;
 
           if (esSincro) {
-            // Un ajuste manual define el stock en estante. 
-            // Esto se suma al patrimonio si es una inyección inicial o corrige el valor actual.
+            // El ajuste manual resetea el estante (pañol)
             globalAcc[it].pañol = m.stock_fisico_piso;
           } else {
-            // FLUJO CÍCLICO: Los movimientos desplazan stock, no lo crean ni destruyen
+            // LÓGICA DE FLUJO DINÁMICO (Autodescubrimiento de stock circulante)
             
-            // 1. Ingreso desde Lavadero: Sale de Lavadero -> Entra al Pañol
-            if (m.entregado_limpio > 0) {
-              globalAcc[it].en_lavadero = Math.max(0, globalAcc[it].en_lavadero - m.entregado_limpio);
-              globalAcc[it].pañol += m.entregado_limpio;
-            }
-            // 2. Entrega al Piso: Sale del Pañol -> Entra al Piso
+            // 1. ENTREGA AL PISO (Sale del estante)
             if (m.egreso_limpio > 0) {
               globalAcc[it].pañol = Math.max(0, globalAcc[it].pañol - m.egreso_limpio);
               globalAcc[it].en_piso += m.egreso_limpio;
             }
-            // 3. Retiro de Sucio: Sale del Piso -> Entra al Lavadero (Circuito de Lavandería)
+
+            // 2. RETIRO DE SUCIO (Piso -> Lavadero)
             if (m.retirado_sucio > 0) {
-              globalAcc[it].en_piso = Math.max(0, globalAcc[it].en_piso - m.retirado_sucio);
-              globalAcc[it].en_lavadero += m.retirado_sucio;
+              // Si el piso no tiene stock suficiente registrado, "descubrimos" stock oculto
+              if (globalAcc[it].en_piso < m.retirado_sucio) {
+                globalAcc[it].en_lavadero += m.retirado_sucio;
+              } else {
+                globalAcc[it].en_piso -= m.retirado_sucio;
+                globalAcc[it].en_lavadero += m.retirado_sucio;
+              }
+            }
+
+            // 3. INGRESO LIMPIO (Lavadero -> Pañol)
+            if (m.entregado_limpio > 0) {
+              // Si el lavadero no tiene "deuda" registrada, descubrimos stock limpio nuevo
+              if (globalAcc[it].en_lavadero < m.entregado_limpio) {
+                globalAcc[it].pañol += m.entregado_limpio;
+              } else {
+                globalAcc[it].en_lavadero -= m.entregado_limpio;
+                globalAcc[it].pañol += m.entregado_limpio;
+              }
             }
           }
 
-          // Para la grilla visual de cada piso, siempre mostramos el último stock físico registrado
           if (stockMap[pNombre]) stockMap[pNombre][it] = m.stock_fisico_piso || 0;
         });
       }
     }
 
-    // Calculamos el total consolidado final
+    // El Stock Global Consolidado es la sumatoria de todas las ubicaciones
     const globalFinal = {};
     ITEMS_REQUERIDOS.forEach(it => {
       globalFinal[it] = globalAcc[it].pañol + globalAcc[it].en_piso + globalAcc[it].en_lavadero;
     });
 
-    // Re-ordenamos para la visualización del historial (más reciente primero)
     const agrupados = movs ? [...movs].reverse().reduce((acc, curr) => {
       const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
       if (!acc[nombrePiso]) acc[nombrePiso] = [];
@@ -115,13 +122,9 @@ const AdminDashboard = () => {
   };
 
   const eliminarMovimiento = async (id) => {
-    if (window.confirm("¿Confirma la eliminación de este registro del manifiesto?")) {
+    if (window.confirm("¿Confirma la eliminación del registro?")) {
       const { error } = await supabase.from('movimientos_stock').delete().eq('id', id);
-      if (error) mostrarSplash("Error al eliminar");
-      else {
-        mostrarSplash("Registro eliminado");
-        cargarDatos();
-      }
+      if (!error) { mostrarSplash("Registro eliminado"); cargarDatos(); }
     }
   };
 
@@ -135,16 +138,15 @@ const AdminDashboard = () => {
   const agregarPiso = async (e) => {
     e.preventDefault();
     const slug = nuevoPiso.nombre_piso.toLowerCase().replace(/ /g, '-');
-    const { error } = await supabase.from('pisos').insert([{ nombre_piso: nuevoPiso.nombre_piso, slug }]);
-    if (error) mostrarSplash("Error al crear piso");
-    else { mostrarSplash("Piso Creado"); setNuevoPiso({ nombre_piso: '' }); cargarDatos(); }
+    await supabase.from('pisos').insert([{ nombre_piso: nuevoPiso.nombre_piso, slug }]);
+    setNuevoPiso({ nombre_piso: '' }); cargarDatos();
   };
 
   const agregarPersonal = async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('personal').insert([nuevoMiembro]);
-    if (error) mostrarSplash("Error: DNI ya registrado");
-    else { mostrarSplash("Personal Registrado"); setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' }); cargarDatos(); }
+    await supabase.from('personal').insert([nuevoMiembro]);
+    setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
+    cargarDatos();
   };
 
   const descargarQR = (slug) => {
@@ -164,7 +166,7 @@ const AdminDashboard = () => {
   return (
     <div className="p-4 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
       {notificacion.visible && (
-        <div className="fixed bottom-10 right-10 z-50 bg-blue-600 px-6 py-3 rounded-2xl shadow-2xl border border-blue-400 animate-in slide-in-from-right">
+        <div className="fixed bottom-10 right-10 z-50 bg-blue-600 px-6 py-3 rounded-2xl shadow-2xl border border-blue-400">
           <p className="text-white font-black uppercase text-xs tracking-widest">{notificacion.mensaje}</p>
         </div>
       )}
@@ -178,7 +180,7 @@ const AdminDashboard = () => {
         <section className="space-y-8 animate-in fade-in">
           <div className="flex justify-between items-center px-2">
             <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter">Control de Activos</h2>
-            <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700">Actualizar</button>
+            <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700">Sincronizar Datos</button>
           </div>
 
           <div className="bg-blue-900/10 border-2 border-blue-900/30 rounded-[2.5rem] p-6 shadow-2xl">
@@ -254,7 +256,6 @@ const AdminDashboard = () => {
                               REC: {m.enfermero?.jerarquia} {m.enfermero?.apellido}
                             </p>
                           )}
-                          {esSincro && <p className="text-[8px] text-yellow-500 font-black uppercase mt-1">Ajuste de Auditoría</p>}
                         </div>
                         <button onClick={() => eliminarMovimiento(m.id)} className="p-2 bg-red-950/30 text-red-500 rounded-lg border border-red-900/30 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 hover:text-white shadow-lg">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -279,22 +280,22 @@ const AdminDashboard = () => {
               <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase italic tracking-tighter leading-tight">Habilita ajuste manual de stock para pañoleros</p>
             </div>
             <button onClick={toggleAuditoria} className={`px-8 py-3 rounded-xl font-black text-[10px] uppercase transition-all shadow-lg ${auditoriaHabilitada ? 'bg-red-600 animate-pulse text-white' : 'bg-green-600 text-white'}`}>
-              {auditoriaHabilitada ? 'Desactivar Ajuste' : 'Activar Ajuste'}
+              {auditoriaHabilitada ? 'Desactivar' : 'Activar'}
             </button>
           </section>
 
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
             <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Configurar Sectores / Pisos</h3>
             <form onSubmit={agregarPiso} className="flex gap-2 mb-8">
-              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Nombre del Piso..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
-              <button className="bg-blue-600 px-8 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-blue-900/20">Crear Piso</button>
+              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm outline-none" placeholder="Nombre del Piso..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
+              <button className="bg-blue-600 px-8 rounded-2xl font-black text-[10px] uppercase">Crear Piso</button>
             </form>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {pisos.map(p => (
-                <div key={p.id} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex justify-between items-center shadow-lg group">
+                <div key={p.id} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex justify-between items-center group shadow-lg">
                   <span className="text-xs font-black text-blue-400 uppercase tracking-widest">{p.nombre_piso}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => descargarQR(p.slug)} className="p-2 bg-slate-800 rounded-lg text-[9px] font-bold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/20 transition-all">QR</button>
+                    <button onClick={() => descargarQR(p.slug)} className="p-2 bg-slate-800 rounded-lg text-[9px] font-bold uppercase text-blue-500 border border-blue-900/30">QR</button>
                     <button onClick={async () => { if(window.confirm(`¿Eliminar ${p.nombre_piso}?`)) { await supabase.from('pisos').delete().eq('id', p.id); cargarDatos(); } }} className="p-2 text-red-500 text-lg font-black hover:scale-110 transition-transform">×</button>
                   </div>
                 </div>
