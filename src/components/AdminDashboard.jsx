@@ -149,9 +149,34 @@ const AdminDashboard = () => {
     cargarDatos();
   };
 
-  const descargarQR = (slug) => {
-    const urlApp = `${window.location.origin}/piso/${slug}`; 
-    window.open(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`, '_blank');
+  const descargarQR = (piso) => {
+    const urlApp = `${window.location.origin}/piso/${piso.slug}`; 
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
+    
+    // Creamos una ventana nueva para imprimir con formato
+    const win = window.open('', '_blank');
+    win.document.write(`
+      <html>
+        <head>
+          <title>QR - ${piso.nombre_piso}</title>
+          <style>
+            body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+            h1 { text-transform: uppercase; font-size: 24px; margin-bottom: 10px; font-weight: 900; }
+            img { width: 300px; height: 300px; border: 1px solid #eee; padding: 10px; }
+            p { margin-top: 15px; font-size: 14px; font-weight: bold; color: #444; }
+          </style>
+        </head>
+        <body>
+          <h1>${piso.nombre_piso}</h1>
+          <img src="${qrUrl}" alt="QR" />
+          <p>Dpto. Hotelería<br/>(Subdirección Administrativa)</p>
+          <script>
+            setTimeout(() => { window.print(); window.close(); }, 500);
+          </script>
+        </body>
+      </html>
+    `);
+    win.document.close();
   };
 
   const formatearFechaGuardia = (fechaISO) => {
@@ -295,7 +320,12 @@ const AdminDashboard = () => {
                 <div key={p.id} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex justify-between items-center group shadow-lg">
                   <span className="text-xs font-black text-blue-400 uppercase tracking-widest">{p.nombre_piso}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => descargarQR(p.slug)} className="p-2 bg-slate-800 rounded-lg text-[9px] font-bold uppercase text-blue-500 border border-blue-900/30">QR</button>
+                    <button 
+                      onClick={() => descargarQR(p)} 
+                      className="p-2 bg-slate-800 rounded-lg text-[9px] font-bold uppercase text-blue-500 border border-blue-900/30"
+                    >
+                      QR
+                    </button>
                     <button onClick={async () => { if(window.confirm(`¿Eliminar ${p.nombre_piso}?`)) { await supabase.from('pisos').delete().eq('id', p.id); cargarDatos(); } }} className="p-2 text-red-500 text-lg font-black hover:scale-110 transition-transform">×</button>
                   </div>
                 </div>
