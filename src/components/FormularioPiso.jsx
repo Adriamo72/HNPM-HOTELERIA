@@ -79,39 +79,47 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   };
 
   // FUNCIÓN PARA DESCARGAR MANIFIESTO EN PDF
-  const descargarPDF = () => {
+ const descargarPDF = () => {
     const win = window.open('', '_blank');
     const fecha = new Date().toLocaleDateString('es-AR');
     
     let filas = registrosSesion.map(r => `
       <tr>
-        <td>${r.item}</td>
-        <td>${r.hora}</td>
-        <td>${r.valor > 0 ? '+' : ''}${r.valor}</td>
-        <td>${r.receptor}</td>
-        <td>${r.operador}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${r.item}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${r.hora}</td>
+        <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${r.valor > 0 ? '+' : ''}${r.valor}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${r.receptor}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${r.operador}</td>
       </tr>
     `).join('');
 
     win.document.write(`
       <html>
         <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Manifiesto - ${piso.nombre_piso}</title>
           <style>
-            body { font-family: sans-serif; padding: 40px; color: #333; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; color: #333; }
             .header { text-align: center; border-bottom: 2px solid #000; margin-bottom: 20px; padding-bottom: 10px; }
-            .header h1 { margin: 0; font-size: 18px; text-transform: uppercase; }
-            .header p { margin: 5px 0; font-size: 12px; font-weight: bold; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 11px; }
-            th { background-color: #f4f4f4; text-transform: uppercase; }
-            .footer { margin-top: 50px; font-size: 10px; text-align: center; color: #777; }
+            .header h1 { margin: 0; font-size: 16px; text-transform: uppercase; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background: #f0f0f0; padding: 8px; border: 1px solid #ddd; font-size: 10px; text-transform: uppercase; text-align: left; }
+            td { font-size: 10px; }
+            .btn-print { 
+              background: #2563eb; color: white; border: none; padding: 10px 20px; 
+              border-radius: 8px; font-weight: bold; margin-bottom: 20px; width: 100%;
+            }
+            @media print { .btn-print { display: none; } body { padding: 0; } }
           </style>
         </head>
         <body>
+          <button class="btn-print" onclick="window.print()">IMPRIMIR MANIFIESTO</button>
           <div class="header">
-            <h1>Manifiesto de Movimientos - ${piso.nombre_piso}</h1>
-            <p>Dpto. Hotelería (Subdirección Administrativa) - Fecha: ${fecha}</p>
+            <h1>${piso.nombre_piso}</h1>
+            <p style="font-size: 10px; font-weight: bold; margin: 5px 0;">
+              Dpto. Hotelería (Subdirección Administrativa)<br>
+              Fecha: ${fecha}
+            </p>
           </div>
           <table>
             <thead>
@@ -119,17 +127,22 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
                 <th>Ítem</th>
                 <th>Hora</th>
                 <th>Cant.</th>
-                <th>Receptor / Destino</th>
-                <th>Operador Pañol</th>
+                <th>Receptor</th>
+                <th>Operador</th>
               </tr>
             </thead>
             <tbody>${filas}</tbody>
           </table>
-          <div class="footer">
-            Generado por Sistema Sentinel HNPM - Documento de Control Interno
-          </div>
           <script>
-            setTimeout(() => { window.print(); window.close(); }, 500);
+            // Esperamos a que todo cargue antes de intentar imprimir
+            window.onload = function() {
+              setTimeout(() => { 
+                // Si no es un dispositivo móvil, intentamos el print automático
+                if(!/Mobi|Android/i.test(navigator.userAgent)) {
+                  window.print(); 
+                }
+              }, 1000);
+            };
           </script>
         </body>
       </html>
