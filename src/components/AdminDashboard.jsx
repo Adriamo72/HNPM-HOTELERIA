@@ -31,7 +31,6 @@ const AdminDashboard = () => {
     const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
     setAuditoriaHabilitada(config?.valor === 'true');
 
-    // IMPORTANTE: Orden ASCENDENTE para que el Patrimonio sume cronológicamente
     const { data: movs } = await supabase.from('movimientos_stock')
       .select(`
         *, 
@@ -63,15 +62,11 @@ const AdminDashboard = () => {
           if (esSincro) {
             globalAcc[it].pañol = m.stock_fisico_piso;
           } else {
-            // LÓGICA DE SUMA PATRIMONIAL (Si aparece ropa nueva, el total sube)
-            
             if (m.egreso_limpio > 0) {
               globalAcc[it].pañol = Math.max(0, globalAcc[it].pañol - m.egreso_limpio);
               globalAcc[it].en_piso += m.egreso_limpio;
             }
-            
             if (m.retirado_sucio > 0) {
-              // Si el piso no tiene stock para dar, es "Ropa Nueva Descubierta" -> Sube el Patrimonio
               if (globalAcc[it].en_piso < m.retirado_sucio) {
                 globalAcc[it].en_lavadero += m.retirado_sucio;
               } else {
@@ -79,9 +74,7 @@ const AdminDashboard = () => {
                 globalAcc[it].en_lavadero += m.retirado_sucio;
               }
             }
-
             if (m.entregado_limpio > 0) {
-              // Si el lavadero no tiene deuda, es "Ropa Limpia Nueva" -> Sube el Patrimonio
               if (globalAcc[it].en_lavadero < m.entregado_limpio) {
                 globalAcc[it].pañol += m.entregado_limpio;
               } else {
@@ -193,7 +186,7 @@ const AdminDashboard = () => {
             <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700">Sincronizar Datos</button>
           </div>
 
-          {/* Patrimonio Consolidado */}
+          {/* Patrimonio Consolidado (Grande y Estético) */}
           <div className="bg-blue-900/10 border-2 border-blue-900/30 rounded-[2.5rem] p-6 shadow-2xl">
             <p className="text-[11px] font-black text-blue-400 uppercase tracking-[0.3em] mb-4 text-center italic font-bold">Patrimonio Total Consolidado (HNPM)</p>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
@@ -208,26 +201,26 @@ const AdminDashboard = () => {
 
           {Object.keys(resumenStock).map((nombrePiso) => (
             <div key={nombrePiso} className="bg-slate-900 rounded-[3.5rem] border border-slate-800 overflow-hidden shadow-2xl mt-8">
-              <div className="bg-slate-800/40 px-8 py-5 border-b border-slate-800">
-                <span className="text-xl font-black text-blue-400 uppercase tracking-widest">{nombrePiso}</span>
+              <div className="bg-slate-800/40 px-8 py-4 border-b border-slate-800">
+                <span className="text-lg font-black text-blue-400 uppercase tracking-widest">{nombrePiso}</span>
               </div>
 
-              {/* Grilla Stock por Piso */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 p-5 bg-slate-950/50 border-b border-slate-800">
+              {/* Grilla Stock por Piso (REDIMENSIONADA - MÁS PEQUEÑA) */}
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 p-3 bg-slate-950/50 border-b border-slate-800">
                 {ITEMS_REQUERIDOS.map(item => {
                   const stock = resumenStock[nombrePiso][item];
                   const esCero = stock === 0;
                   const esBajo = stock <= STOCK_CRITICO;
                   return (
-                    <div key={item} className={`p-4 rounded-3xl border transition-all ${esCero ? 'bg-red-600 border-red-400 animate-pulse text-white' : esBajo ? 'bg-red-900/20 border-red-900/50' : 'bg-slate-900 border-slate-700'}`}>
-                      <span className={`text-[10px] font-black uppercase block mb-1 text-center ${esBajo ? 'text-red-100' : 'text-slate-500'}`}>{item}</span>
-                      <span className={`text-3xl font-black block text-center ${esBajo ? 'text-white' : 'text-blue-400'}`}>{stock}</span>
+                    <div key={item} className={`p-2.5 rounded-2xl border transition-all ${esCero ? 'bg-red-600 border-red-400 animate-pulse text-white' : esBajo ? 'bg-red-900/20 border-red-900/50' : 'bg-slate-900 border-slate-700'}`}>
+                      <span className={`text-[8px] font-black uppercase block mb-0.5 text-center ${esBajo ? 'text-red-100' : 'text-slate-500'}`}>{item}</span>
+                      <span className={`text-xl font-black block text-center ${esBajo ? 'text-white' : 'text-blue-400'}`}>{stock}</span>
                     </div>
                   );
                 })}
               </div>
 
-              {/* MANIFIESTO COMPACTO */}
+              {/* Manifiesto Compacto */}
               <div className="p-2 space-y-1 overflow-y-auto max-h-[450px] custom-scroll bg-slate-950/20">
                 {movimientosAgrupados[nombrePiso]?.map((m) => {
                   const esSincro = !m.entregado_limpio && !m.egreso_limpio && !m.retirado_sucio;
