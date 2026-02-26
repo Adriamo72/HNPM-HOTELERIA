@@ -90,7 +90,7 @@ const AdminDashboard = () => {
 
     const globalFinal = {};
     ITEMS_REQUERIDOS.forEach(it => {
-      globalFinal[it] = globalAcc[it].pañol + globalAcc[it].en_piso + globalAcc[it].en_lavadero;
+      globalFinal[it] = (globalAcc[it].pañol || 0) + (globalAcc[it].en_piso || 0) + (globalAcc[it].en_lavadero || 0);
     });
 
     const agrupados = movs ? [...movs].reverse().reduce((acc, curr) => {
@@ -186,7 +186,6 @@ const AdminDashboard = () => {
             <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700">Sincronizar Datos</button>
           </div>
 
-          {/* Patrimonio Consolidado (Grande y Estético) */}
           <div className="bg-blue-900/10 border-2 border-blue-900/30 rounded-[2.5rem] p-6 shadow-2xl">
             <p className="text-[11px] font-black text-blue-400 uppercase tracking-[0.3em] mb-4 text-center italic font-bold">Patrimonio Total Consolidado (HNPM)</p>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
@@ -205,7 +204,6 @@ const AdminDashboard = () => {
                 <span className="text-lg font-black text-blue-400 uppercase tracking-widest">{nombrePiso}</span>
               </div>
 
-              {/* Grilla Stock por Piso (REDIMENSIONADA - MÁS PEQUEÑA) */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 p-3 bg-slate-950/50 border-b border-slate-800">
                 {ITEMS_REQUERIDOS.map(item => {
                   const stock = resumenStock[nombrePiso][item];
@@ -220,7 +218,6 @@ const AdminDashboard = () => {
                 })}
               </div>
 
-              {/* Manifiesto Compacto */}
               <div className="p-2 space-y-1 overflow-y-auto max-h-[450px] custom-scroll bg-slate-950/20">
                 {movimientosAgrupados[nombrePiso]?.map((m) => {
                   const esSincro = !m.entregado_limpio && !m.egreso_limpio && !m.retirado_sucio;
@@ -294,6 +291,37 @@ const AdminDashboard = () => {
             </button>
           </section>
 
+          {/* Personal con campo Celular */}
+          <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
+            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Personal de Guardia</h3>
+            <form onSubmit={agregarPersonal} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+              <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Jerarquía" value={nuevoMiembro.jerarquia} onChange={e => setNuevoMiembro({...nuevoMiembro, jerarquia: e.target.value})} required />
+              <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Nombre" value={nuevoMiembro.nombre} onChange={e => setNuevoMiembro({...nuevoMiembro, nombre: e.target.value})} required />
+              <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Apellido" value={nuevoMiembro.apellido} onChange={e => setNuevoMiembro({...nuevoMiembro, apellido: e.target.value})} required />
+              <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm font-mono" placeholder="DNI" value={nuevoMiembro.dni} onChange={e => setNuevoMiembro({...nuevoMiembro, dni: e.target.value})} required />
+              <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm font-mono" placeholder="Celular" value={nuevoMiembro.celular} onChange={e => setNuevoMiembro({...nuevoMiembro, celular: e.target.value})} />
+              <select className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm font-bold text-blue-400" value={nuevoMiembro.rol} onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}>
+                <option value="pañolero">Pañolero</option>
+                <option value="enfermero">Enfermero</option>
+                <option value="admin">Administrador</option>
+              </select>
+              <button className="bg-blue-600 p-3 rounded-xl font-black uppercase text-xs">Registrar</button>
+            </form>
+            
+            {/* Tabla Personal con DNI y Celular */}
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scroll">
+              {personal.map(p => (
+                <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center group">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold uppercase">{p.jerarquia} {p.apellido}, {p.nombre} <small className="text-blue-500 ml-2">[{p.rol}]</small></span>
+                    <span className="text-[9px] text-slate-500 font-mono">DNI: {p.dni} | CEL: {p.celular || 'N/A'}</span>
+                  </div>
+                  <button onClick={async () => { if(window.confirm("¿Dar de baja?")) { await supabase.from('personal').delete().eq('dni', p.dni); cargarDatos(); } }} className="text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity uppercase">Eliminar</button>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
             <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Sectores / Pisos</h3>
             <form onSubmit={agregarPiso} className="flex gap-2 mb-8">
@@ -302,36 +330,12 @@ const AdminDashboard = () => {
             </form>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {pisos.map(p => (
-                <div key={p.id} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex justify-between items-center shadow-lg group">
+                <div key={p.id} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex justify-between items-center group shadow-lg">
                   <span className="text-xs font-black text-blue-400 uppercase tracking-widest">{p.nombre_piso}</span>
                   <div className="flex gap-2">
                     <button onClick={() => descargarQR(p)} className="p-2 bg-slate-800 rounded-lg text-[9px] font-bold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/20 transition-all">QR</button>
                     <button onClick={async () => { if(window.confirm(`¿Eliminar ${p.nombre_piso}?`)) { await supabase.from('pisos').delete().eq('id', p.id); cargarDatos(); } }} className="p-2 text-red-500 text-lg font-black hover:scale-110 transition-transform">×</button>
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
-            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Personal</h3>
-            <form onSubmit={agregarPersonal} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-              <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Jerarquía" value={nuevoMiembro.jerarquia} onChange={e => setNuevoMiembro({...nuevoMiembro, jerarquia: e.target.value})} required />
-              <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Nombre" value={nuevoMiembro.nombre} onChange={e => setNuevoMiembro({...nuevoMiembro, nombre: e.target.value})} required />
-              <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Apellido" value={nuevoMiembro.apellido} onChange={e => setNuevoMiembro({...nuevoMiembro, apellido: e.target.value})} required />
-              <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm font-mono" placeholder="DNI" value={nuevoMiembro.dni} onChange={e => setNuevoMiembro({...nuevoMiembro, dni: e.target.value})} required />
-              <select className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm font-bold text-blue-400" value={nuevoMiembro.rol} onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}>
-                <option value="pañolero">Pañolero</option>
-                <option value="enfermero">Enfermero</option>
-                <option value="admin">Administrador</option>
-              </select>
-              <button className="bg-blue-600 p-3 rounded-xl font-black uppercase text-xs">Registrar</button>
-            </form>
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scroll">
-              {personal.map(p => (
-                <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center group">
-                  <span className="text-xs font-bold uppercase">{p.jerarquia} {p.apellido} <small className="text-blue-500 ml-2">[{p.rol}]</small></span>
-                  <button onClick={async () => { if(window.confirm("¿Dar de baja?")) { await supabase.from('personal').delete().eq('dni', p.dni); cargarDatos(); } }} className="text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity uppercase">Eliminar</button>
                 </div>
               ))}
             </div>
