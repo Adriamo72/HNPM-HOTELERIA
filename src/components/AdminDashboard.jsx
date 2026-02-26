@@ -31,6 +31,7 @@ const AdminDashboard = () => {
     const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
     setAuditoriaHabilitada(config?.valor === 'true');
 
+    // IMPORTANTE: Orden ASCENDENTE para que el Patrimonio sume cronológicamente
     const { data: movs } = await supabase.from('movimientos_stock')
       .select(`
         *, 
@@ -62,11 +63,15 @@ const AdminDashboard = () => {
           if (esSincro) {
             globalAcc[it].pañol = m.stock_fisico_piso;
           } else {
+            // LÓGICA DE SUMA PATRIMONIAL (Si aparece ropa nueva, el total sube)
+            
             if (m.egreso_limpio > 0) {
               globalAcc[it].pañol = Math.max(0, globalAcc[it].pañol - m.egreso_limpio);
               globalAcc[it].en_piso += m.egreso_limpio;
             }
+            
             if (m.retirado_sucio > 0) {
+              // Si el piso no tiene stock para dar, es "Ropa Nueva Descubierta" -> Sube el Patrimonio
               if (globalAcc[it].en_piso < m.retirado_sucio) {
                 globalAcc[it].en_lavadero += m.retirado_sucio;
               } else {
@@ -74,7 +79,9 @@ const AdminDashboard = () => {
                 globalAcc[it].en_lavadero += m.retirado_sucio;
               }
             }
+
             if (m.entregado_limpio > 0) {
+              // Si el lavadero no tiene deuda, es "Ropa Limpia Nueva" -> Sube el Patrimonio
               if (globalAcc[it].en_lavadero < m.entregado_limpio) {
                 globalAcc[it].pañol += m.entregado_limpio;
               } else {
@@ -114,6 +121,32 @@ const AdminDashboard = () => {
     }
   };
 
+  const descargarQR = (piso) => {
+    const urlApp = `${window.location.origin}/piso/${piso.slug}`; 
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
+    const win = window.open('', '_blank');
+    win.document.write(`
+      <html>
+        <head>
+          <title>QR - ${piso.nombre_piso}</title>
+          <style>
+            body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+            h1 { text-transform: uppercase; font-size: 24px; margin-bottom: 10px; font-weight: 900; }
+            img { width: 300px; height: 300px; border: 1px solid #eee; padding: 10px; }
+            p { margin-top: 15px; font-size: 14px; font-weight: bold; color: #444; }
+          </style>
+        </head>
+        <body>
+          <h1>${piso.nombre_piso}</h1>
+          <img src="${qrUrl}" alt="QR" />
+          <p>Dpto. Hotelería<br/>(Subdirección Administrativa)</p>
+          <script>setTimeout(() => { window.print(); window.close(); }, 500);</script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  };
+
   const toggleAuditoria = async () => {
     const nuevoEstado = !auditoriaHabilitada;
     await supabase.from('configuracion_sistema').update({ valor: nuevoEstado.toString() }).eq('clave', 'MODO_AUDITORIA');
@@ -135,35 +168,6 @@ const AdminDashboard = () => {
     cargarDatos();
   };
 
-  const descargarQR = (piso) => {
-    const urlApp = `${window.location.origin}/piso/${piso.slug}`; 
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
-    
-    const win = window.open('', '_blank');
-    win.document.write(`
-      <html>
-        <head>
-          <title>QR - ${piso.nombre_piso}</title>
-          <style>
-            body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
-            h1 { text-transform: uppercase; font-size: 24px; margin-bottom: 10px; font-weight: 900; }
-            img { width: 300px; height: 300px; border: 1px solid #eee; padding: 10px; }
-            p { margin-top: 15px; font-size: 14px; font-weight: bold; color: #444; }
-          </style>
-        </head>
-        <body>
-          <h1>${piso.nombre_piso}</h1>
-          <img src="${qrUrl}" alt="QR" />
-          <p>Dpto. Hotelería<br/>(Subdirección Administrativa)</p>
-          <script>
-            setTimeout(() => { window.print(); window.close(); }, 500);
-          </script>
-        </body>
-      </html>
-    `);
-    win.document.close();
-  };
-
   const formatearFechaGuardia = (fechaISO) => {
     const fecha = new Date(fechaISO);
     const opciones = { weekday: 'long', day: 'numeric' };
@@ -175,12 +179,8 @@ const AdminDashboard = () => {
 
   return (
     <div className="p-4 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
-      {notificacion.visible && (
-        <div className="fixed bottom-10 right-10 z-50 bg-blue-600 px-6 py-3 rounded-2xl shadow-2xl border border-blue-400">
-          <p className="text-white font-black uppercase text-xs tracking-widest">{notificacion.mensaje}</p>
-        </div>
-      )}
-
+      
+      {/* Selector de Pestañas */}
       <div className="flex gap-2 mb-8 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
         <button onClick={() => setActiveTab('historial')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Monitor</button>
         <button onClick={() => setActiveTab('admin')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-500 hover:text-slate-300'}`}>Administración</button>
@@ -193,13 +193,14 @@ const AdminDashboard = () => {
             <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700">Sincronizar Datos</button>
           </div>
 
+          {/* Patrimonio Consolidado */}
           <div className="bg-blue-900/10 border-2 border-blue-900/30 rounded-[2.5rem] p-6 shadow-2xl">
             <p className="text-[11px] font-black text-blue-400 uppercase tracking-[0.3em] mb-4 text-center italic font-bold">Patrimonio Total Consolidado (HNPM)</p>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               {ITEMS_REQUERIDOS.map(item => (
                 <div key={item} className="bg-slate-900/80 p-4 rounded-3xl border border-blue-800/40 text-center">
                   <span className="text-[9px] text-slate-500 font-black uppercase block mb-1 tracking-tighter">{item}</span>
-                  <span className="text-3xl font-black text-blue-400">{stockGlobal[item]?.total || 0}</span>
+                  <span className="text-3xl font-black text-blue-400">{stockGlobal[item] || 0}</span>
                 </div>
               ))}
             </div>
@@ -211,6 +212,7 @@ const AdminDashboard = () => {
                 <span className="text-xl font-black text-blue-400 uppercase tracking-widest">{nombrePiso}</span>
               </div>
 
+              {/* Grilla Stock por Piso */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 p-5 bg-slate-950/50 border-b border-slate-800">
                 {ITEMS_REQUERIDOS.map(item => {
                   const stock = resumenStock[nombrePiso][item];
@@ -225,6 +227,7 @@ const AdminDashboard = () => {
                 })}
               </div>
 
+              {/* MANIFIESTO COMPACTO */}
               <div className="p-2 space-y-1 overflow-y-auto max-h-[450px] custom-scroll bg-slate-950/20">
                 {movimientosAgrupados[nombrePiso]?.map((m) => {
                   const esSincro = !m.entregado_limpio && !m.egreso_limpio && !m.retirado_sucio;
@@ -262,7 +265,7 @@ const AdminDashboard = () => {
                             OP: {m.pañolero?.jerarquia} {m.pañolero?.apellido} {m.pañolero?.nombre}
                           </p>
                           {m.enfermero && (
-                            <p className="text-[8px] text-slate-500 font-bold uppercase mt-1 tracking-tighter">
+                            <p className="text-[8px] text-slate-500 font-bold uppercase mt-1 tracking-tighter italic">
                               REC: {m.enfermero?.jerarquia} {m.enfermero?.apellido} {m.enfermero?.nombre}
                             </p>
                           )}
@@ -285,12 +288,13 @@ const AdminDashboard = () => {
         </section>
       )}
 
+      {/* Administración */}
       {activeTab === 'admin' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-yellow-600/30 flex justify-between items-center shadow-xl">
             <div className="max-w-[70%] text-yellow-500">
                <h3 className="text-sm font-black uppercase italic">Mando de Auditoría</h3>
-               <p className="text-[10px] text-slate-500 uppercase font-bold">Habilita ajuste manual de stock en pañoles</p>
+               <p className="text-[10px] text-slate-500 uppercase font-bold">Ajuste manual de stock en pañoles</p>
             </div>
             <button onClick={toggleAuditoria} className={`px-8 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg ${auditoriaHabilitada ? 'bg-red-600 text-white animate-pulse' : 'bg-green-600 text-white'}`}>
               {auditoriaHabilitada ? 'Desactivar' : 'Activar'}
@@ -298,22 +302,17 @@ const AdminDashboard = () => {
           </section>
 
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
-            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Configurar Sectores / Pisos</h3>
+            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Sectores / Pisos</h3>
             <form onSubmit={agregarPiso} className="flex gap-2 mb-8">
-              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm outline-none" placeholder="Nombre del Piso..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
-              <button className="bg-blue-600 px-8 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-blue-900/20">Crear Piso</button>
+              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm outline-none" placeholder="Nombre..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
+              <button className="bg-blue-600 px-8 rounded-2xl font-black text-[10px] uppercase shadow-lg">Crear</button>
             </form>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {pisos.map(p => (
-                <div key={p.id} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex justify-between items-center group shadow-lg">
+                <div key={p.id} className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex justify-between items-center shadow-lg group">
                   <span className="text-xs font-black text-blue-400 uppercase tracking-widest">{p.nombre_piso}</span>
                   <div className="flex gap-2">
-                    <button 
-                      onClick={() => descargarQR(p)} 
-                      className="p-2 bg-slate-800 rounded-lg text-[9px] font-bold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/20 transition-all"
-                    >
-                      QR
-                    </button>
+                    <button onClick={() => descargarQR(p)} className="p-2 bg-slate-800 rounded-lg text-[9px] font-bold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/20 transition-all">QR</button>
                     <button onClick={async () => { if(window.confirm(`¿Eliminar ${p.nombre_piso}?`)) { await supabase.from('pisos').delete().eq('id', p.id); cargarDatos(); } }} className="p-2 text-red-500 text-lg font-black hover:scale-110 transition-transform">×</button>
                   </div>
                 </div>
@@ -322,7 +321,7 @@ const AdminDashboard = () => {
           </section>
 
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
-            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Personal de Guardia</h3>
+            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest">Personal</h3>
             <form onSubmit={agregarPersonal} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
               <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Jerarquía" value={nuevoMiembro.jerarquia} onChange={e => setNuevoMiembro({...nuevoMiembro, jerarquia: e.target.value})} required />
               <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Nombre" value={nuevoMiembro.nombre} onChange={e => setNuevoMiembro({...nuevoMiembro, nombre: e.target.value})} required />
