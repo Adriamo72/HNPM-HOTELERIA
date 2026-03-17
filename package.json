@@ -1,6 +1,6 @@
 {
   "name": "sentinel-laundry",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "private": true,
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
