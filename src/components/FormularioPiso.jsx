@@ -24,14 +24,29 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
     if (slugPiso) cargarContexto();
   }, [slugPiso, datos.item]);
 
-  const cargarContexto = async () => {
-    const { data: dataPiso } = await supabase.from('pisos').select('*').eq('slug', slugPiso).single();
-    if (dataPiso) {
-      setPiso(dataPiso);
-      const { data: mov } = await supabase.from('movimientos_stock').select('stock_fisico_piso').eq('piso_id', dataPiso.id).eq('item', datos.item).order('created_at', { ascending: false }).limit(1).single();
-      setStockActual(mov ? mov.stock_fisico_piso : 0);
-    }
-  };
+const cargarContextoPiso = async () => {
+  let slugBuscar = slugPiso;
+  
+  // Si es habitación, el slug es "piso-1-medico", tenemos que sacar el piso
+  if (window.location.pathname.includes('/habitacion/')) {
+    // Esto toma "piso-1" del slug "piso-1-medico"
+    const partes = slugPiso.split('-');
+    slugBuscar = `${partes[0]}-${partes[1]}`; 
+  }
+
+  const { data, error } = await supabase
+    .from('pisos')
+    .select('*')
+    .eq('slug', slugBuscar)
+    .single();
+
+  if (data) {
+    setPiso(data);
+    // Cargar stock...
+  } else {
+    console.error("No se encontró el sector para el slug:", slugBuscar);
+  }
+};
 
   const mostrarSplash = (msj) => {
     setNotificacion({ visible: true, mensaje: msj });

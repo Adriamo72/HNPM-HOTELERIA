@@ -57,9 +57,14 @@ function App() {
               <AdminDashboard />
             ) : (
               <FormularioPiso 
-                perfilUsuario={datosUsuario} 
-                slugPiso={window.location.pathname.split('/piso/')[1] || 'piso-1'} 
-              />
+              perfilUsuario={datosUsuario} 
+              slugPiso={
+                window.location.pathname.split('/piso/')[1] || 
+                window.location.pathname.split('/lavadero/')[1] || 
+                window.location.pathname.split('/habitacion/')[1] || 
+                'piso-1'
+              } 
+            />
             )}
           </main>
           
