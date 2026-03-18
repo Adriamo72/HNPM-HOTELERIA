@@ -28,20 +28,13 @@ const AdminDashboard = () => {
   };
 
   const cargarDatos = async () => {
-    // 1. Cargar Personal con roles originales
     const resPers = await supabase.from('personal').select('*').order('apellido');
-    
-    // 2. Cargar Sectores/Pisos
     const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
-    
-    // 3. Cargar Habitaciones Especiales desde la nueva tabla
     const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
     
-    // 4. Cargar Configuración de Auditoría
     const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
     setAuditoriaHabilitada(config?.valor === 'true');
 
-    // 5. Cargar Movimientos Históricos (Monitor)
     const { data: movs } = await supabase.from('movimientos_stock')
       .select(`
         *, 
@@ -51,7 +44,7 @@ const AdminDashboard = () => {
       `)
       .order('created_at', { ascending: true });
 
-    // --- LÓGICA DE CÁLCULO DE STOCK (RECONSTRUIDA LÍNEA POR LÍNEA) ---
+    // --- LÓGICA DE CÁLCULO DE STOCK INTEGRAL ---
     const stockMap = {};
     const globalAcc = {};
     
@@ -126,42 +119,26 @@ const AdminDashboard = () => {
     const win = window.open('', '_blank');
     win.document.write(`
       <html>
-        <head>
-          <title>IMPRESIÓN QR - SENTINEL</title>
-          <style>
-            body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; background: white; }
-            h1 { text-transform: uppercase; font-size: 26px; margin-bottom: 20px; font-weight: 900; }
-            img { width: 350px; height: 350px; }
-            p { margin-top: 20px; font-size: 16px; font-weight: bold; text-transform: uppercase; }
-          </style>
-        </head>
-        <body>
-          <h1>${titulo}</h1>
-          <img src="${qrUrl}" onload="window.print();" />
-          <p>Departamento Hotelería - HNPM</p>
-          <script>setTimeout(() => { window.close(); }, 1000);</script>
-        </body>
+        <head><title>QR - ${titulo}</title><style>body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}h1{text-transform:uppercase;font-size:24px;margin-bottom:10px;font-weight:900}img{width:300px}p{margin-top:15px;font-size:14px;font-weight:bold;color:#444}</style></head>
+        <body><h1>${titulo}</h1><img src="${qrUrl}" onload="window.print();" /><p>HNPM - Hotelería</p><script>setTimeout(()=>{window.close()},1000)</script></body>
       </html>
     `);
     win.document.close();
   };
 
-  const grabarHabitacionEspecial = async (pisoId, pisoSlug) => {
-    const nombre = prompt("Nombre de la Habitación (Ej: Medico Interno):");
+  const agregarHabitacionDB = async (pisoId, pisoSlug) => {
+    const nombre = prompt("Nombre de la Habitación (Ej: Medico de Guardia):");
     if(nombre) {
       const slugH = `${pisoSlug}-${nombre.toLowerCase().replace(/ /g, '-')}`;
       const { error } = await supabase.from('habitaciones_especiales').insert([{ piso_id: pisoId, nombre, slug: slugH }]);
-      if(!error) {
-        mostrarSplash("Habitación Grabada");
-        cargarDatos();
-      }
+      if(!error) { mostrarSplash("Habitación Guardada"); cargarDatos(); }
     }
   };
 
   const eliminarMovimiento = async (id) => {
     if (window.confirm("¿Confirma la eliminación?")) {
       const { error } = await supabase.from('movimientos_stock').delete().eq('id', id);
-      if (!error) { mostrarSplash("Registro eliminado"); cargarDatos(); }
+      if (!error) { mostrarSplash("Eliminado"); cargarDatos(); }
     }
   };
 
@@ -169,7 +146,7 @@ const AdminDashboard = () => {
     const nuevoEstado = !auditoriaHabilitada;
     await supabase.from('configuracion_sistema').update({ valor: nuevoEstado.toString() }).eq('clave', 'MODO_AUDITORIA');
     setAuditoriaHabilitada(nuevoEstado);
-    mostrarSplash(nuevoEstado ? "AUDITORÍA ACTIVADA" : "AUDITORÍA CERRADA");
+    mostrarSplash(nuevoEstado ? "MODO AUDITORÍA ACTIVADO" : "MODO AUDITORÍA CERRADO");
   };
 
   const agregarPiso = async (e) => {
@@ -196,11 +173,9 @@ const AdminDashboard = () => {
 
   return (
     <div className="p-4 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans relative text-left">
-      
-      {/* Pestañas de Navegación */}
       <div className="flex gap-2 mb-8 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
-        <button onClick={() => setActiveTab('historial')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Monitor</button>
-        <button onClick={() => setActiveTab('admin')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Administración</button>
+        <button onClick={() => setActiveTab('historial')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>Monitor</button>
+        <button onClick={() => setActiveTab('admin')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>Administración</button>
       </div>
 
       {activeTab === 'historial' && (
@@ -210,12 +185,11 @@ const AdminDashboard = () => {
             <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700">Sincronizar</button>
           </div>
 
-          {/* Patrimonio Consolidado (Original) */}
           <div className="bg-blue-900/10 border-2 border-blue-900/30 rounded-[2.5rem] p-6 shadow-2xl">
             <p className="text-[11px] font-black text-blue-400 uppercase tracking-[0.3em] mb-4 text-center italic font-bold">Patrimonio Total Consolidado (HNPM)</p>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               {ITEMS_REQUERIDOS.map(item => (
-                <div key={item} className="bg-slate-900/80 p-4 rounded-3xl border border-blue-800/40 text-center shadow-inner">
+                <div key={item} className="bg-slate-900/80 p-4 rounded-3xl border border-blue-800/40 text-center">
                   <span className="text-[9px] text-slate-500 font-black uppercase block mb-1 tracking-tighter">{item}</span>
                   <span className={`text-3xl font-black ${stockGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>{stockGlobal[item] || 0}</span>
                 </div>
@@ -240,20 +214,14 @@ const AdminDashboard = () => {
                 {movimientosAgrupados[nombrePiso]?.map((m) => {
                   const esSincro = !m.entregado_limpio && !m.egreso_limpio && !m.retirado_sucio;
                   return (
-                    <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-2xl border border-slate-800/50 flex items-center group hover:bg-slate-800 transition-all text-left">
-                      <div className="w-[22%] shrink-0">
-                        <p className="text-[11px] font-black text-white uppercase leading-none">{m.item}</p>
-                        <p className="text-[8px] text-blue-500 font-black uppercase mt-1 tracking-tighter italic">{formatearFechaGuardia(m.created_at)}</p>
-                      </div>
-                      <div className="flex-1 flex justify-around items-center px-4 text-center">
-                        <div className="min-w-[50px]"><span className="text-[7px] text-green-500 font-black uppercase block tracking-widest text-center">Ingreso</span><p className="text-lg font-black text-green-500">{esSincro ? `SINC: ${m.stock_fisico_piso}` : m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '--'}</p></div>
-                        <div className="min-w-[50px]"><span className="text-[7px] text-blue-400 font-black uppercase block tracking-widest text-center">Entrega</span><p className="text-lg font-black text-blue-400">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '--'}</p></div>
-                        <div className="min-w-[50px]"><span className="text-[7px] text-red-500 font-black uppercase block tracking-widest text-center">Sucio</span><p className="text-lg font-black text-red-500">{m.retirado_sucio > 0 ? `-${m.retirado_sucio}` : '--'}</p></div>
-                      </div>
-                      <div className="w-[32%] flex items-center justify-end gap-3 border-l border-slate-800 pl-3">
-                        <p className="text-[9px] text-slate-300 font-black uppercase truncate">OP: {m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
-                        <button onClick={() => eliminarMovimiento(m.id)} className="p-1.5 bg-red-950/30 text-red-500 rounded-lg border border-red-900/30 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                      </div>
+                    <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-2xl border border-slate-800/50 flex items-center group hover:bg-slate-800 transition-all text-left text-[10px]">
+                       <div className="w-[20%] font-black uppercase">{m.item}</div>
+                       <div className="flex-1 flex justify-around font-black">
+                         <span className="text-green-500">{esSincro ? `SINC: ${m.stock_fisico_piso}` : m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '--'}</span>
+                         <span className="text-blue-400">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '--'}</span>
+                         <span className="text-red-500">{m.retirado_sucio > 0 ? `-${m.retirado_sucio}` : '--'}</span>
+                       </div>
+                       <div className="w-[30%] text-right text-[8px] text-slate-500 uppercase">OP: {m.pañolero?.apellido} | {formatearFechaGuardia(m.created_at)}</div>
                     </div>
                   );
                 })}
@@ -265,72 +233,68 @@ const AdminDashboard = () => {
 
       {activeTab === 'admin' && (
         <div className="space-y-10 animate-in fade-in">
-          {/* MANDO DE AUDITORÍA */}
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-yellow-600/30 flex justify-between items-center shadow-xl">
             <div className="max-w-[70%] text-yellow-500">
                <h3 className="text-sm font-black uppercase italic">Mando de Auditoría</h3>
-               <p className="text-[10px] text-slate-500 uppercase font-bold text-left">Ajuste manual de stock habilitado</p>
+               <p className="text-[10px] text-slate-500 uppercase font-bold text-left">Ajuste manual de stock</p>
             </div>
             <button onClick={toggleAuditoria} className={`px-8 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg ${auditoriaHabilitada ? 'bg-red-600 text-white animate-pulse' : 'bg-green-600 text-white'}`}>
               {auditoriaHabilitada ? 'Desactivar' : 'Activar'}
             </button>
           </section>
 
-          {/* GESTIÓN DE PERSONAL (RECUPERADO ÍNTEGRO) */}
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
-            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest text-left">Tripulación y Guardia</h3>
+            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest text-left">Personal de Guardia</h3>
             <form onSubmit={agregarPersonal} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
               <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Jerarquía" value={nuevoMiembro.jerarquia} onChange={e => setNuevoMiembro({...nuevoMiembro, jerarquia: e.target.value})} required />
               <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Nombre" value={nuevoMiembro.nombre} onChange={e => setNuevoMiembro({...nuevoMiembro, nombre: e.target.value})} required />
               <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm" placeholder="Apellido" value={nuevoMiembro.apellido} onChange={e => setNuevoMiembro({...nuevoMiembro, apellido: e.target.value})} required />
               <input className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm font-mono" placeholder="DNI" value={nuevoMiembro.dni} onChange={e => setNuevoMiembro({...nuevoMiembro, dni: e.target.value})} required />
               <select className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-sm font-bold text-blue-400 uppercase" value={nuevoMiembro.rol} onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}>
-                <option value="pañolero">Pañolero / Operador</option>
+                <option value="pañolero">Pañolero</option>
                 <option value="enfermero">Encargado de Piso</option>
                 <option value="ADMIN">Administrador</option>
               </select>
-              <button className="bg-blue-600 p-3 rounded-xl font-black uppercase text-xs">Registrar en DB</button>
+              <button className="bg-blue-600 p-3 rounded-xl font-black uppercase text-xs">Registrar</button>
             </form>
             <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scroll text-left">
               {personal.map(p => (
-                <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center group shadow-md">
-                   <span className="text-xs font-bold uppercase">{p.jerarquia} {p.apellido}, {p.nombre} <span className="text-blue-500 opacity-50">[{p.rol}]</span></span>
-                   <button onClick={async () => { if(window.confirm("¿Eliminar?")) { await supabase.from('personal').delete().eq('dni', p.dni); cargarDatos(); } }} className="text-red-500 text-[10px] font-bold uppercase md:opacity-0 md:group-hover:opacity-100 transition-opacity">Eliminar</button>
+                <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center group shadow-md text-xs font-bold uppercase">
+                   <span>{p.jerarquia} {p.apellido}, {p.nombre} <span className="text-blue-500">[{p.rol}]</span></span>
+                   <button onClick={async () => { if(window.confirm("¿Eliminar?")) { await supabase.from('personal').delete().eq('dni', p.dni); cargarDatos(); } }} className="text-red-500 text-[10px] font-bold uppercase">Eliminar</button>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* GESTIÓN DE SECTORES Y QR (CON PERSISTENCIA) */}
           <section className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-2xl">
-            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest text-left">Sectores y Generador de QRs</h3>
-            <form onSubmit={agregarPiso} className="flex gap-2 mb-8">
-              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm outline-none" placeholder="Nuevo Sector..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
+            <h3 className="text-xs font-black text-slate-500 mb-6 uppercase tracking-widest text-left">Sectores y QRs</h3>
+            <form onSubmit={agregarPiso} className="flex gap-2 mb-8 text-left">
+              <input className="flex-grow bg-slate-800 p-4 rounded-2xl border border-slate-700 text-sm outline-none" placeholder="Nombre..." value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
               <button className="bg-blue-600 px-8 rounded-2xl font-black text-[10px] uppercase shadow-lg">Crear</button>
             </form>
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 gap-6 text-left">
               {pisos.map(p => (
-                <div key={p.id} className="bg-slate-950 p-6 rounded-3xl border border-slate-800 shadow-lg text-left">
+                <div key={p.id} className="bg-slate-950 p-6 rounded-3xl border border-slate-800 shadow-lg">
                   <div className="flex justify-between items-center mb-6">
                     <span className="text-sm font-black text-blue-400 uppercase tracking-widest italic">{p.nombre_piso}</span>
                     <div className="flex gap-2">
                       <button onClick={() => generarQRImpresion(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} className="px-4 py-2 bg-slate-800 rounded-lg text-[9px] font-bold uppercase text-blue-500 border border-blue-900/30">QR Pañol</button>
                       <button onClick={() => generarQRImpresion(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} className="px-4 py-2 bg-slate-800 rounded-lg text-[9px] font-bold uppercase text-green-500 border border-green-900/30">QR Lavadero</button>
-                      <button onClick={async () => { if(window.confirm(`¿Eliminar ${p.nombre_piso}?`)) { await supabase.from('pisos').delete().eq('id', p.id); cargarDatos(); } }} className="text-red-500 text-xl font-black ml-4 hover:scale-125 transition-all">×</button>
+                      <button onClick={async () => { if(window.confirm(`¿Eliminar sector ${p.nombre_piso}?`)) { await supabase.from('pisos').delete().eq('id', p.id); cargarDatos(); } }} className="text-red-500 text-xl font-black ml-4">×</button>
                     </div>
                   </div>
-                  {/* HABITACIONES ESPECIALES CON BOTÓN BORRAR Y QR */}
                   <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800/50">
                     <div className="flex justify-between items-center mb-4">
                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">Habitaciones Especiales</p>
-                       <button onClick={() => grabarHabitacionEspecial(p.id, p.slug)} className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all">+ Agregar</button>
+                       <button onClick={() => agregarHabitacionDB(p.id, p.slug)} className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase border border-blue-600/30">+ Agregar</button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => (
-                        <div key={hab.id} className="bg-slate-900 p-2 rounded-xl border border-slate-800 flex items-center gap-3">
+                        <div key={hab.id} className="flex items-center bg-slate-900 p-2 rounded-xl border border-slate-800 gap-3">
                           <span className="text-[10px] font-black uppercase text-slate-300">{hab.nombre}</span>
-                          <button onClick={() => generarQRImpresion(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso}`)} className="text-blue-500 text-[9px] font-bold uppercase hover:underline">QR</button>
-                          <button onClick={async () => { if(window.confirm("¿Eliminar habitación?")) { await supabase.from('habitaciones_especiales').delete().eq('id', hab.id); cargarDatos(); } }} className="text-red-500 font-black text-xs px-1 hover:scale-125 transition-all">×</button>
+                          <button onClick={() => generarQRImpresion(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso}`)} className="text-blue-500 text-[9px] font-bold uppercase">QR</button>
+                          <button onClick={async () => { if(window.confirm("¿Eliminar?")) { await supabase.from('habitaciones_especiales').delete().eq('id', hab.id); cargarDatos(); } }} className="text-red-500 font-black text-xs">×</button>
                         </div>
                       ))}
                     </div>

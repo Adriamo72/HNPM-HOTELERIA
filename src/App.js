@@ -53,10 +53,10 @@ function App() {
           </header>
 
           <main className="flex-grow">
-            {rol === 'admin' ? (
-              <AdminDashboard />
-            ) : (
-              <FormularioPiso 
+          {rol === 'admin' ? (
+            <AdminDashboard />
+          ) : (
+            <FormularioPiso 
               perfilUsuario={datosUsuario} 
               slugPiso={
                 window.location.pathname.split('/piso/')[1] || 
@@ -65,8 +65,8 @@ function App() {
                 'piso-1'
               } 
             />
-            )}
-          </main>
+          )}
+        </main>
           
           <footer className="p-4 text-center text-[9px] text-slate-600 uppercase tracking-widest bg-slate-950">
             Sistema de Trazabilidad Hospitalaria - HNPM Sentinel Hub
