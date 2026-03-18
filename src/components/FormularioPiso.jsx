@@ -145,5 +145,5 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
     </div>
   );
 };
-
+// cambio de seguridad
 export default FormularioPiso;
