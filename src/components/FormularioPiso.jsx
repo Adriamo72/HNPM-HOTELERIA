@@ -21,27 +21,37 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   }, []);
 
   useEffect(() => {
-    if (slugPiso) cargarContexto();
-  }, [slugPiso, datos.item]);
+  if (slugPiso) cargarContextoPiso();
+}, [slugPiso, datos.item]);
 
-const cargarContexto = async () => {
-  let slugBuscar = slugPiso;
+const cargarContextoPiso = async () => {
+  if (!slugPiso) return;
   
-  // Lógica para detectar si viene de un QR de habitación
+  let slugABuscar = slugPiso;
+  
+  // LÓGICA CRÍTICA: Si es habitación, extraer el piso (ej: de 'piso-1-medico' a 'piso-1')
   if (window.location.pathname.includes('/habitacion/')) {
     const partes = slugPiso.split('-');
-    slugBuscar = `${partes[0]}-${partes[1]}`; 
+    if (partes.length >= 2) {
+      slugABuscar = `${partes[0]}-${partes[1]}`;
+    }
   }
 
   const { data, error } = await supabase
     .from('pisos')
     .select('*')
-    .eq('slug', slugBuscar)
+    .eq('slug', slugABuscar)
     .single();
+
+  if (error) {
+    console.error("Error cargando sector:", error);
+    return;
+  }
 
   if (data) {
     setPiso(data);
-    const { data: movs } = await supabase
+    // Cargar stock del ítem seleccionado
+    const { data: st } = await supabase
       .from('movimientos_stock')
       .select('stock_fisico_piso')
       .eq('piso_id', data.id)
@@ -49,7 +59,7 @@ const cargarContexto = async () => {
       .order('created_at', { ascending: false })
       .limit(1);
     
-    setStockActual(movs?.[0]?.stock_fisico_piso || 0);
+    setStockActual(st?.[0]?.stock_fisico_piso || 0);
   }
 };
 

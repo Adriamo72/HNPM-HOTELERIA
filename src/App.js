@@ -59,7 +59,6 @@ function App() {
               <FormularioPiso 
                 perfilUsuario={datosUsuario} 
                 slugPiso={
-                  // Esta lógica detecta el slug sin importar si es piso, lavadero o habitación
                   window.location.pathname.includes('/piso/') ? window.location.pathname.split('/piso/')[1] :
                   window.location.pathname.includes('/lavadero/') ? window.location.pathname.split('/lavadero/')[1] :
                   window.location.pathname.includes('/habitacion/') ? window.location.pathname.split('/habitacion/')[1] :
