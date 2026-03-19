@@ -3,68 +3,75 @@ import { supabase } from '../supabaseClient';
 
 const ITEMS_HOTELERIA = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
 
-const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
+const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   const [piso, setPiso] = useState(null);
-  const [modo, setModo] = useState('piso'); 
+  const [modo, setModo] = useState(modoAcceso || 'piso'); 
   const [stockActual, setStockActual] = useState(0);
   const [novedades, setNovedades] = useState("Sin novedades");
   const [busquedaDni, setBusquedaDni] = useState('');
   const [enfermeroEncontrado, setEnfermeroEncontrado] = useState(null);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [datos, setDatos] = useState({ item: 'SABANAS', carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
+  const [cargando, setCargando] = useState(true);
 
-  // Determinar el modo basado en el slugPiso y la URL original
   useEffect(() => {
-    // Guardar el modo cuando se monta el componente
     if (slugPiso) {
-      if (window.location.pathname.includes('/habitacion/')) {
-        setModo('habitacion');
-      } else if (window.location.pathname.includes('/lavadero/')) {
-        setModo('lavadero');
-      } else {
-        setModo('piso');
-      }
+      cargarContexto();
+    } else {
+      console.error("No hay slug de piso");
+      setCargando(false);
     }
-  }, [slugPiso]); // Dependencia en slugPiso para que se actualice si cambia
-
-  useEffect(() => {
-    if (slugPiso) cargarContexto();
-  }, [slugPiso, datos.item]);
+  }, [slugPiso]);
 
   const cargarContexto = async () => {
-    let slugBuscar = slugPiso;
+    setCargando(true);
     
-    // Lógica para detectar si viene de un QR de habitación
-    if (window.location.pathname.includes('/habitacion/')) {
-      const partes = slugPiso.split('-');
-      // Asegurarse de que tenemos al menos 2 partes
-      if (partes.length >= 2) {
-        slugBuscar = `${partes[0]}-${partes[1]}`;
-      }
-    }
-
-    const { data, error } = await supabase
-      .from('pisos')
-      .select('*')
-      .eq('slug', slugBuscar)
-      .single();
-
-    if (error) {
-      console.error("Error cargando piso:", error);
-      return;
-    }
-
-    if (data) {
-      setPiso(data);
-      const { data: movs } = await supabase
-        .from('movimientos_stock')
-        .select('stock_fisico_piso')
-        .eq('piso_id', data.id)
-        .eq('item', datos.item)
-        .order('created_at', { ascending: false })
-        .limit(1);
+    try {
+      let slugBuscar = slugPiso;
       
-      setStockActual(movs?.[0]?.stock_fisico_piso || 0);
+      // Si es habitación, extraer el slug base del piso (primeros dos segmentos)
+      if (modo === 'habitacion') {
+        const partes = slugPiso.split('-');
+        if (partes.length >= 2) {
+          slugBuscar = `${partes[0]}-${partes[1]}`;
+        } else {
+          console.error("Formato de slug de habitación inválido:", slugPiso);
+        }
+      }
+
+      console.log("Buscando piso con slug:", slugBuscar);
+
+      const { data, error } = await supabase
+        .from('pisos')
+        .select('*')
+        .eq('slug', slugBuscar)
+        .single();
+
+      if (error) {
+        console.error("Error cargando piso:", error);
+        mostrarSplash("ERROR: Piso no encontrado");
+        setCargando(false);
+        return;
+      }
+
+      if (data) {
+        setPiso(data);
+        
+        // Cargar stock actual para el primer item
+        const { data: movs } = await supabase
+          .from('movimientos_stock')
+          .select('stock_fisico_piso')
+          .eq('piso_id', data.id)
+          .eq('item', datos.item)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        setStockActual(movs?.[0]?.stock_fisico_piso || 0);
+      }
+    } catch (error) {
+      console.error("Error inesperado:", error);
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -74,34 +81,57 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   };
 
   const ejecutarCambioEstandar = async () => {
+    if (!piso?.id) {
+      mostrarSplash("ERROR: Piso no identificado");
+      return;
+    }
+
     const items = [
       { item: 'SABANAS', cant: 2 },
       { item: 'TOALLAS', cant: 1 },
       { item: 'TOALLONES', cant: 1 }
     ];
 
-    for (const i of items) {
-      await supabase.from('movimientos_stock').insert([{
-        piso_id: piso.id,
-        dni_pañolero: perfilUsuario.dni,
-        item: i.item,
-        egreso_limpio: i.cant,
-        retirado_sucio: i.cant,
-        novedades: novedades
-      }]);
+    try {
+      for (const i of items) {
+        const { error } = await supabase.from('movimientos_stock').insert([{
+          piso_id: piso.id,
+          dni_pañolero: perfilUsuario.dni,
+          item: i.item,
+          egreso_limpio: i.cant,
+          retirado_sucio: i.cant,
+          novedades: novedades,
+          stock_fisico_piso: stockActual // Ajusta según necesites
+        }]);
+
+        if (error) throw error;
+      }
+      
+      mostrarSplash("CAMBIO ESTÁNDAR REGISTRADO");
+      setNovedades("Sin novedades");
+      cargarContexto();
+    } catch (error) {
+      console.error("Error en cambio estándar:", error);
+      mostrarSplash("ERROR EN REGISTRO");
     }
-    mostrarSplash("CAMBIO ESTÁNDAR REGISTRADO");
-    cargarContexto();
   };
 
   const enviarRegistro = async (e) => {
     e.preventDefault();
     
-    // Validar que tenemos piso antes de enviar
     if (!piso?.id) {
       mostrarSplash("Error: Piso no identificado");
       return;
     }
+
+    if (modo === 'piso' && !enfermeroEncontrado) {
+      mostrarSplash("Debe buscar un encargado de piso");
+      return;
+    }
+
+    const nuevoStock = stockActual + 
+      (parseInt(datos.carga_lavadero || 0)) - 
+      (parseInt(datos.entrega_piso || 0));
 
     const { error } = await supabase.from('movimientos_stock').insert([{
       piso_id: piso.id,
@@ -111,15 +141,19 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
       entregado_limpio: modo === 'lavadero' ? parseInt(datos.carga_lavadero || 0) : 0,
       egreso_limpio: modo === 'piso' ? parseInt(datos.entrega_piso || 0) : 0,
       retirado_sucio: modo === 'lavadero' ? parseInt(datos.retirado_sucio || 0) : 0,
-      stock_fisico_piso: stockActual + (parseInt(datos.carga_lavadero || 0)) - (parseInt(datos.entrega_piso || 0)),
+      stock_fisico_piso: nuevoStock,
       novedades: novedades
     }]);
 
     if (!error) {
       mostrarSplash("REGISTRO EXITOSO");
-      setDatos({ ...datos, carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
+      setDatos({ item: datos.item, carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
+      setStockActual(nuevoStock);
       if (modo === 'habitacion') setNovedades("Sin novedades");
-      cargarContexto();
+      if (modo === 'piso') {
+        setBusquedaDni('');
+        setEnfermeroEncontrado(null);
+      }
     } else {
       console.error("Error al registrar:", error);
       mostrarSplash("ERROR EN REGISTRO");
@@ -127,21 +161,59 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   };
 
   const buscarEnfermero = async () => {
-    if (busquedaDni.length < 7) return;
-    const { data } = await supabase.from('personal').select('*').eq('dni', busquedaDni).maybeSingle();
+    if (busquedaDni.length < 7) {
+      mostrarSplash("DNI inválido");
+      return;
+    }
+    
+    const { data, error } = await supabase
+      .from('personal')
+      .select('*')
+      .eq('dni', busquedaDni)
+      .eq('rol', 'enfermero')
+      .maybeSingle();
+    
+    if (error) {
+      console.error("Error buscando enfermero:", error);
+    }
+    
     setEnfermeroEncontrado(data);
-    if (!data) mostrarSplash("DNI NO REGISTRADO");
+    if (!data) {
+      mostrarSplash("DNI NO REGISTRADO COMO ENFERMERO");
+    } else {
+      mostrarSplash(`${data.jerarquia} ${data.apellido} encontrado`);
+    }
   };
 
-  if (!piso) return (
-    <div className="p-10 text-white text-center">
-      <div className="animate-pulse">
-        <p className="text-blue-400 font-black text-sm mb-2">SENTINEL HNPM</p>
-        <p className="text-slate-500 italic text-xs">Cargando sector {slugPiso}...</p>
+  if (cargando) {
+    return (
+      <div className="p-10 text-white text-center">
+        <div className="animate-pulse">
+          <p className="text-blue-400 font-black text-sm mb-2">SENTINEL HNPM</p>
+          <p className="text-slate-500 italic text-xs">Cargando {modo} {slugPiso}...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
+  if (!piso) {
+    return (
+      <div className="p-10 text-white text-center">
+        <div className="bg-red-900/20 p-6 rounded-3xl border border-red-800">
+          <p className="text-red-400 font-black text-sm mb-2">ERROR DE ACCESO</p>
+          <p className="text-slate-400 text-xs">No se encontró el sector: {slugPiso}</p>
+          <button 
+            onClick={() => window.location.href = '/'}
+            className="mt-4 bg-slate-800 px-4 py-2 rounded-xl text-xs font-black"
+          >
+            VOLVER AL INICIO
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Renderizado del formulario (igual que antes, pero con las mejoras)
   return (
     <div className="p-4 bg-slate-950 min-h-screen text-slate-200 pb-20 font-sans">
       <div className="mb-6 bg-slate-900/50 p-4 rounded-3xl border border-blue-900/30">
@@ -151,7 +223,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
         <h3 className="text-sm font-black uppercase">{piso.nombre_piso}</h3>
         {modo === 'habitacion' && (
           <p className="text-[10px] text-slate-500 mt-1 uppercase">
-            Habitación: {slugPiso.split('-').slice(2).join('-').toUpperCase().replace(/-/g, ' ')}
+            Habitación: {slugPiso.split('-').slice(2).join('-').replace(/-/g, ' ')}
           </p>
         )}
       </div>
@@ -162,17 +234,26 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
             <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Informe de Novedades</p>
             <textarea 
               className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-blue-400 outline-none"
-              rows="3" placeholder="Ej: No se encontró toallón sucio..."
-              value={novedades} onChange={(e) => setNovedades(e.target.value)}
+              rows="3" 
+              placeholder="Ej: No se encontró toallón sucio..."
+              value={novedades} 
+              onChange={(e) => setNovedades(e.target.value)}
             />
           </div>
-          <button onClick={ejecutarCambioEstandar} className="w-full bg-blue-600 p-8 rounded-[2.5rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all">
+          <button 
+            onClick={ejecutarCambioEstandar} 
+            className="w-full bg-blue-600 p-8 rounded-[2.5rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all"
+          >
             Registrar Cambio Estándar
           </button>
         </div>
       ) : (
         <form onSubmit={enviarRegistro} className="space-y-4">
-          <select className="w-full bg-slate-900 p-4 rounded-2xl border border-slate-800 font-black text-blue-400 outline-none" value={datos.item} onChange={e => setDatos({...datos, item: e.target.value})}>
+          <select 
+            className="w-full bg-slate-900 p-4 rounded-2xl border border-slate-800 font-black text-blue-400 outline-none" 
+            value={datos.item} 
+            onChange={e => setDatos({...datos, item: e.target.value})}
+          >
             {ITEMS_HOTELERIA.map(i => <option key={i} value={i}>{i}</option>)}
           </select>
 
@@ -191,8 +272,15 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
                     className="flex-1 bg-slate-950 p-3 rounded-xl border border-slate-800 text-sm outline-none"
                     value={busquedaDni}
                     onChange={(e) => setBusquedaDni(e.target.value)}
+                    placeholder="Ingrese DNI"
                   />
-                  <button type="button" onClick={buscarEnfermero} className="bg-blue-600 px-4 rounded-xl text-[10px] font-black uppercase">Buscar</button>
+                  <button 
+                    type="button" 
+                    onClick={buscarEnfermero} 
+                    className="bg-blue-600 px-4 rounded-xl text-[10px] font-black uppercase"
+                  >
+                    Buscar
+                  </button>
                 </div>
                 {enfermeroEncontrado && (
                   <p className="text-green-400 text-xs mt-2 font-bold">

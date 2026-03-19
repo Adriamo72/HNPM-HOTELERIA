@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import Login from './components/Login';
 import FormularioPiso from './components/FormularioPiso';
@@ -8,6 +8,24 @@ function App() {
   const [usuarioLogueado, setUsuarioLogueado] = useState(null);
   const [datosUsuario, setDatosUsuario] = useState(null);
   const [rol, setRol] = useState(null);
+  const [modoAcceso, setModoAcceso] = useState(null);
+  const [slugCompleto, setSlugCompleto] = useState(null);
+
+  // Detectar el modo y slug al cargar la app
+  useEffect(() => {
+    const path = window.location.pathname;
+    
+    if (path.includes('/piso/')) {
+      setModoAcceso('piso');
+      setSlugCompleto(path.split('/piso/')[1]);
+    } else if (path.includes('/lavadero/')) {
+      setModoAcceso('lavadero');
+      setSlugCompleto(path.split('/lavadero/')[1]);
+    } else if (path.includes('/habitacion/')) {
+      setModoAcceso('habitacion');
+      setSlugCompleto(path.split('/habitacion/')[1]);
+    }
+  }, []);
 
   const manejarLogin = async (dni) => {
     const { data, error } = await supabase.from('personal').select('*').eq('dni', dni).single();
@@ -17,7 +35,8 @@ function App() {
       return;
     }
 
-    if (dni === '22976371') { 
+    // Verificar si es admin por DNI o por rol en la base de datos
+    if (dni === '22976371' || data.rol === 'ADMIN') { 
       setRol('admin');
     } else {
       setRol('pañolero');
@@ -31,11 +50,20 @@ function App() {
     setUsuarioLogueado(null);
     setRol(null);
     setDatosUsuario(null);
+    // Opcional: redirigir al login
+    window.location.href = '/';
   };
 
+  // Si no hay modo detectado y no está logueado, mostrar login simple
+  if (!usuarioLogueado && !modoAcceso) {
+    return <Login alLoguear={manejarLogin} />;
+  }
+
+  // Si está logueado o hay modo detectado
   return (
     <div className="App bg-slate-950 min-h-screen font-sans text-slate-200">
       {!usuarioLogueado ? (
+        // Mostrar login pero preservando el modo y slug en la URL
         <Login alLoguear={manejarLogin} />
       ) : (
         <div className="flex flex-col min-h-screen">
@@ -43,8 +71,7 @@ function App() {
             <div>
               <h1 className="text-blue-500 font-black text-xs uppercase tracking-widest leading-none">Sentinel HNPM</h1>
               <p className="text-[10px] text-slate-300 font-black uppercase mt-1 tracking-widest">
-                {/* Esto unirá CCTE + MORENO + ADMIN automáticamente */}
-                {`${datosUsuario?.jerarquia} ${datosUsuario?.apellido} ${datosUsuario?.rol}`}
+                {datosUsuario?.jerarquia} {datosUsuario?.apellido} - {datosUsuario?.rol}
               </p>
             </div>
             <button onClick={cerrarSesion} className="bg-red-950/30 text-red-500 border border-red-900/50 px-3 py-1 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">
@@ -58,12 +85,8 @@ function App() {
             ) : (
               <FormularioPiso 
                 perfilUsuario={datosUsuario} 
-                slugPiso={
-                  window.location.pathname.includes('/piso/') ? window.location.pathname.split('/piso/')[1] :
-                  window.location.pathname.includes('/lavadero/') ? window.location.pathname.split('/lavadero/')[1] :
-                  window.location.pathname.includes('/habitacion/') ? window.location.pathname.split('/habitacion/')[1] :
-                  'piso-1'
-                } 
+                slugPiso={slugCompleto}
+                modoAcceso={modoAcceso} // Pasamos el modo explícitamente
               />
             )}
           </main>
