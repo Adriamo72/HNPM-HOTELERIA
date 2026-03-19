@@ -14,26 +14,46 @@ function App() {
   // Detectar el modo y slug al cargar la app
   useEffect(() => {
     const path = window.location.pathname;
+    console.log("=== App.js ===");
+    console.log("URL actual:", window.location.href);
+    console.log("Path actual:", path);
     
     if (path.includes('/piso/')) {
+      const slug = path.split('/piso/')[1];
+      console.log("📌 MODO PISO detectado con slug:", slug);
       setModoAcceso('piso');
-      setSlugCompleto(path.split('/piso/')[1]);
+      setSlugCompleto(slug);
     } else if (path.includes('/lavadero/')) {
+      const slug = path.split('/lavadero/')[1];
+      console.log("📌 MODO LAVADERO detectado con slug:", slug);
       setModoAcceso('lavadero');
-      setSlugCompleto(path.split('/lavadero/')[1]);
+      setSlugCompleto(slug);
     } else if (path.includes('/habitacion/')) {
+      const slug = path.split('/habitacion/')[1];
+      console.log("📌 MODO HABITACION detectado con slug:", slug);
       setModoAcceso('habitacion');
-      setSlugCompleto(path.split('/habitacion/')[1]);
+      setSlugCompleto(slug);
+    } else {
+      console.log("📌 MODO NORMAL (sin QR)");
     }
   }, []);
 
   const manejarLogin = async (dni) => {
-    const { data, error } = await supabase.from('personal').select('*').eq('dni', dni).single();
+    console.log("Intentando login con DNI:", dni);
+    
+    const { data, error } = await supabase
+      .from('personal')
+      .select('*')
+      .eq('dni', dni)
+      .single();
     
     if (error || !data) {
+      console.error("Error en login:", error);
       alert("DNI no registrado en la tripulación del HNPM");
       return;
     }
+
+    console.log("Usuario encontrado:", data);
 
     // Verificar si es admin por DNI o por rol en la base de datos
     if (dni === '22976371' || data.rol === 'ADMIN') { 
@@ -44,13 +64,15 @@ function App() {
     
     setDatosUsuario(data);
     setUsuarioLogueado(dni);
+    
+    console.log("Login exitoso. Rol:", rol, "Modo:", modoAcceso, "Slug:", slugCompleto);
   };
 
   const cerrarSesion = () => {
     setUsuarioLogueado(null);
     setRol(null);
     setDatosUsuario(null);
-    // Opcional: redirigir al login
+    // Redirigir al inicio
     window.location.href = '/';
   };
 
@@ -74,7 +96,10 @@ function App() {
                 {datosUsuario?.jerarquia} {datosUsuario?.apellido} - {datosUsuario?.rol}
               </p>
             </div>
-            <button onClick={cerrarSesion} className="bg-red-950/30 text-red-500 border border-red-900/50 px-3 py-1 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">
+            <button 
+              onClick={cerrarSesion} 
+              className="bg-red-950/30 text-red-500 border border-red-900/50 px-3 py-1 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all"
+            >
               Salir
             </button>
           </header>
