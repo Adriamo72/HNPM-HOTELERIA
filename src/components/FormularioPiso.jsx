@@ -13,45 +13,60 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [datos, setDatos] = useState({ item: 'SABANAS', carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
 
+  // Determinar el modo basado en el slugPiso y la URL original
   useEffect(() => {
-    const path = window.location.pathname;
-    if (path.includes('/habitacion/')) setModo('habitacion');
-    else if (path.includes('/lavadero/')) setModo('lavadero');
-    else setModo('piso');
-  }, []);
+    // Guardar el modo cuando se monta el componente
+    if (slugPiso) {
+      if (window.location.pathname.includes('/habitacion/')) {
+        setModo('habitacion');
+      } else if (window.location.pathname.includes('/lavadero/')) {
+        setModo('lavadero');
+      } else {
+        setModo('piso');
+      }
+    }
+  }, [slugPiso]); // Dependencia en slugPiso para que se actualice si cambia
 
   useEffect(() => {
     if (slugPiso) cargarContexto();
   }, [slugPiso, datos.item]);
 
-const cargarContexto = async () => {
-  let slugBuscar = slugPiso;
-  
-  // Lógica para detectar si viene de un QR de habitación
-  if (window.location.pathname.includes('/habitacion/')) {
-    const partes = slugPiso.split('-');
-    slugBuscar = `${partes[0]}-${partes[1]}`; 
-  }
-
-  const { data, error } = await supabase
-    .from('pisos')
-    .select('*')
-    .eq('slug', slugBuscar)
-    .single();
-
-  if (data) {
-    setPiso(data);
-    const { data: movs } = await supabase
-      .from('movimientos_stock')
-      .select('stock_fisico_piso')
-      .eq('piso_id', data.id)
-      .eq('item', datos.item)
-      .order('created_at', { ascending: false })
-      .limit(1);
+  const cargarContexto = async () => {
+    let slugBuscar = slugPiso;
     
-    setStockActual(movs?.[0]?.stock_fisico_piso || 0);
-  }
-};
+    // Lógica para detectar si viene de un QR de habitación
+    if (window.location.pathname.includes('/habitacion/')) {
+      const partes = slugPiso.split('-');
+      // Asegurarse de que tenemos al menos 2 partes
+      if (partes.length >= 2) {
+        slugBuscar = `${partes[0]}-${partes[1]}`;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('pisos')
+      .select('*')
+      .eq('slug', slugBuscar)
+      .single();
+
+    if (error) {
+      console.error("Error cargando piso:", error);
+      return;
+    }
+
+    if (data) {
+      setPiso(data);
+      const { data: movs } = await supabase
+        .from('movimientos_stock')
+        .select('stock_fisico_piso')
+        .eq('piso_id', data.id)
+        .eq('item', datos.item)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      setStockActual(movs?.[0]?.stock_fisico_piso || 0);
+    }
+  };
 
   const mostrarSplash = (msj) => {
     setNotificacion({ visible: true, mensaje: msj });
@@ -71,7 +86,7 @@ const cargarContexto = async () => {
         dni_pañolero: perfilUsuario.dni,
         item: i.item,
         egreso_limpio: i.cant,
-        retirado_sucio: i.cant, // Asumimos retiro, si no está se anota en novedades
+        retirado_sucio: i.cant,
         novedades: novedades
       }]);
     }
@@ -81,6 +96,13 @@ const cargarContexto = async () => {
 
   const enviarRegistro = async (e) => {
     e.preventDefault();
+    
+    // Validar que tenemos piso antes de enviar
+    if (!piso?.id) {
+      mostrarSplash("Error: Piso no identificado");
+      return;
+    }
+
     const { error } = await supabase.from('movimientos_stock').insert([{
       piso_id: piso.id,
       dni_pañolero: perfilUsuario.dni,
@@ -89,17 +111,36 @@ const cargarContexto = async () => {
       entregado_limpio: modo === 'lavadero' ? parseInt(datos.carga_lavadero || 0) : 0,
       egreso_limpio: modo === 'piso' ? parseInt(datos.entrega_piso || 0) : 0,
       retirado_sucio: modo === 'lavadero' ? parseInt(datos.retirado_sucio || 0) : 0,
-      stock_fisico_piso: stockActual + (parseInt(datos.carga_lavadero || 0)) - (parseInt(datos.entrega_piso || 0))
+      stock_fisico_piso: stockActual + (parseInt(datos.carga_lavadero || 0)) - (parseInt(datos.entrega_piso || 0)),
+      novedades: novedades
     }]);
 
     if (!error) {
       mostrarSplash("REGISTRO EXITOSO");
       setDatos({ ...datos, carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
+      if (modo === 'habitacion') setNovedades("Sin novedades");
       cargarContexto();
+    } else {
+      console.error("Error al registrar:", error);
+      mostrarSplash("ERROR EN REGISTRO");
     }
   };
 
-  if (!piso) return <div className="p-10 text-white text-center italic">Cargando Sentinel...</div>;
+  const buscarEnfermero = async () => {
+    if (busquedaDni.length < 7) return;
+    const { data } = await supabase.from('personal').select('*').eq('dni', busquedaDni).maybeSingle();
+    setEnfermeroEncontrado(data);
+    if (!data) mostrarSplash("DNI NO REGISTRADO");
+  };
+
+  if (!piso) return (
+    <div className="p-10 text-white text-center">
+      <div className="animate-pulse">
+        <p className="text-blue-400 font-black text-sm mb-2">SENTINEL HNPM</p>
+        <p className="text-slate-500 italic text-xs">Cargando sector {slugPiso}...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-4 bg-slate-950 min-h-screen text-slate-200 pb-20 font-sans">
@@ -108,6 +149,11 @@ const cargarContexto = async () => {
           {modo === 'habitacion' ? 'SERVICIO HABITACIÓN' : modo === 'lavadero' ? 'CONTROL LAVADERO' : 'CONTROL PAÑOL'}
         </p>
         <h3 className="text-sm font-black uppercase">{piso.nombre_piso}</h3>
+        {modo === 'habitacion' && (
+          <p className="text-[10px] text-slate-500 mt-1 uppercase">
+            Habitación: {slugPiso.split('-').slice(2).join('-').toUpperCase().replace(/-/g, ' ')}
+          </p>
+        )}
       </div>
 
       {modo === 'habitacion' ? (
@@ -135,23 +181,67 @@ const cargarContexto = async () => {
             <span className="text-5xl font-black text-blue-400">{stockActual}</span>
           </div>
 
-          {modo === 'lavadero' ? (
+          {modo === 'piso' && (
+            <div className="space-y-4">
+              <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                <p className="text-[10px] font-black text-slate-500 mb-2 uppercase">DNI ENCARGADO DE PISO</p>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    className="flex-1 bg-slate-950 p-3 rounded-xl border border-slate-800 text-sm outline-none"
+                    value={busquedaDni}
+                    onChange={(e) => setBusquedaDni(e.target.value)}
+                  />
+                  <button type="button" onClick={buscarEnfermero} className="bg-blue-600 px-4 rounded-xl text-[10px] font-black uppercase">Buscar</button>
+                </div>
+                {enfermeroEncontrado && (
+                  <p className="text-green-400 text-xs mt-2 font-bold">
+                    ✓ {enfermeroEncontrado.jerarquia} {enfermeroEncontrado.apellido}
+                  </p>
+                )}
+              </div>
+              <div className="bg-blue-900/10 p-5 rounded-[2rem] border border-blue-900/30 space-y-4">
+                <input 
+                  type="number" 
+                  className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none border border-blue-900/20" 
+                  placeholder="CANTIDAD" 
+                  value={datos.entrega_piso || ""} 
+                  onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
+                />
+              </div>
+            </div>
+          )}
+
+          {modo === 'lavadero' && (
             <div className="space-y-4">
               <div className="bg-green-900/10 p-5 rounded-[2rem] border border-green-900/30 text-center">
                 <label className="text-[10px] font-black text-green-500 uppercase block mb-1">INGRESO LIMPIO</label>
-                <input type="number" className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" value={datos.carga_lavadero || ""} onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} />
+                <input 
+                  type="number" 
+                  className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" 
+                  value={datos.carga_lavadero || ""} 
+                  onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
+                />
               </div>
               <div className="bg-red-900/10 p-5 rounded-[2rem] border border-red-900/30 text-center">
                 <label className="text-[10px] font-black text-red-500 uppercase block mb-1">SALIDA SUCIO</label>
-                <input type="number" className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center" value={datos.retirado_sucio || ""} onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} />
+                <input 
+                  type="number" 
+                  className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center" 
+                  value={datos.retirado_sucio || ""} 
+                  onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
+                />
               </div>
             </div>
-          ) : (
-            <div className="bg-blue-900/10 p-5 rounded-[2rem] border border-blue-900/30 space-y-4">
-               <input type="number" className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-blue-400 outline-none border border-blue-900/20" placeholder="CANTIDAD" value={datos.entrega_piso || ""} onChange={e => setDatos({...datos, entrega_piso: e.target.value})} />
-            </div>
           )}
-          <button type="submit" className="w-full p-5 rounded-3xl bg-blue-600 text-white font-black uppercase text-sm shadow-xl">Confirmar Registro</button>
+
+          <button 
+            type="submit" 
+            className="w-full p-5 rounded-3xl bg-blue-600 text-white font-black uppercase text-sm shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={modo === 'piso' && !enfermeroEncontrado}
+          >
+            Confirmar Registro
+          </button>
         </form>
       )}
 
@@ -165,5 +255,5 @@ const cargarContexto = async () => {
     </div>
   );
 };
-// cambio de seguridad
+
 export default FormularioPiso;
