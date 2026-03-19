@@ -59,10 +59,11 @@ function App() {
               <FormularioPiso 
                 perfilUsuario={datosUsuario} 
                 slugPiso={
+                  // Detecta el slug de forma segura según la ruta
                   window.location.pathname.includes('/piso/') ? window.location.pathname.split('/piso/')[1] :
                   window.location.pathname.includes('/lavadero/') ? window.location.pathname.split('/lavadero/')[1] :
                   window.location.pathname.includes('/habitacion/') ? window.location.pathname.split('/habitacion/')[1] :
-                  'piso-1'
+                  'piso-1' // fallback
                 } 
               />
             )}
