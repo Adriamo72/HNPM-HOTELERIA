@@ -27,27 +27,21 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
 const cargarContexto = async () => {
   if (!slugPiso) return;
   
-  let slugParaBuscar = slugPiso;
+  let slugBuscar = slugPiso;
   
-  // Si entramos por ruta de habitación (ej: 'piso-1-medico'), 
-  // extraemos 'piso-1' para encontrarlo en la tabla 'pisos'
+  // Si es habitación, extraemos el piso padre para que Supabase lo encuentre
   if (window.location.pathname.includes('/habitacion/')) {
     const partes = slugPiso.split('-');
     if (partes.length >= 2) {
-      slugParaBuscar = `${partes[0]}-${partes[1]}`;
+      slugBuscar = `${partes[0]}-${partes[1]}`;
     }
   }
 
   const { data, error } = await supabase
     .from('pisos')
     .select('*')
-    .eq('slug', slugParaBuscar)
+    .eq('slug', slugBuscar)
     .single();
-
-  if (error) {
-    console.error("Error cargando contexto:", error);
-    return;
-  }
 
   if (data) {
     setPiso(data);
