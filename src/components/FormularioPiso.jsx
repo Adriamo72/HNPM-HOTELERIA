@@ -21,32 +21,37 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   }, []);
 
   useEffect(() => {
-  if (slugPiso) cargarContextoPiso();
+  if (slugPiso) cargarContexto();
 }, [slugPiso, datos.item]);
 
-const cargarContextoPiso = async () => {
+const cargarContexto = async () => {
   if (!slugPiso) return;
   
-  let slugABuscar = slugPiso;
+  let slugParaBuscar = slugPiso;
   
-  // Si la ruta es de habitación, el slug es "piso-1-medico"
-  // Necesitamos extraer solo "piso-1" para que Supabase encuentre el sector
+  // Si entramos por ruta de habitación (ej: 'piso-1-medico'), 
+  // extraemos 'piso-1' para encontrarlo en la tabla 'pisos'
   if (window.location.pathname.includes('/habitacion/')) {
     const partes = slugPiso.split('-');
     if (partes.length >= 2) {
-      slugABuscar = `${partes[0]}-${partes[1]}`;
+      slugParaBuscar = `${partes[0]}-${partes[1]}`;
     }
   }
 
   const { data, error } = await supabase
     .from('pisos')
     .select('*')
-    .eq('slug', slugABuscar)
+    .eq('slug', slugParaBuscar)
     .single();
+
+  if (error) {
+    console.error("Error cargando contexto:", error);
+    return;
+  }
 
   if (data) {
     setPiso(data);
-    const { data: st } = await supabase
+    const { data: movs } = await supabase
       .from('movimientos_stock')
       .select('stock_fisico_piso')
       .eq('piso_id', data.id)
@@ -54,7 +59,7 @@ const cargarContextoPiso = async () => {
       .order('created_at', { ascending: false })
       .limit(1);
     
-    setStockActual(st?.[0]?.stock_fisico_piso || 0);
+    setStockActual(movs?.[0]?.stock_fisico_piso || 0);
   }
 };
 

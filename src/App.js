@@ -53,21 +53,20 @@ function App() {
           </header>
 
           <main className="flex-grow">
-            {rol === 'admin' ? (
-              <AdminDashboard />
-            ) : (
-              <FormularioPiso 
-                perfilUsuario={datosUsuario} 
-                slugPiso={
-                  // Detecta el slug de forma segura según la ruta
-                  window.location.pathname.includes('/piso/') ? window.location.pathname.split('/piso/')[1] :
-                  window.location.pathname.includes('/lavadero/') ? window.location.pathname.split('/lavadero/')[1] :
-                  window.location.pathname.includes('/habitacion/') ? window.location.pathname.split('/habitacion/')[1] :
-                  'piso-1' // fallback
-                } 
-              />
-            )}
-          </main>
+              {rol === 'admin' ? (
+                <AdminDashboard />
+              ) : (
+                <FormularioPiso 
+                  perfilUsuario={datosUsuario} 
+                  slugPiso={
+                    window.location.pathname.includes('/lavadero/') ? window.location.pathname.split('/lavadero/')[1] :
+                    window.location.pathname.includes('/habitacion/') ? window.location.pathname.split('/habitacion/')[1] :
+                    window.location.pathname.includes('/piso/') ? window.location.pathname.split('/piso/')[1] :
+                    'piso-1'
+                  } 
+                />
+              )}
+            </main>
           
           <footer className="p-4 text-center text-[9px] text-slate-600 uppercase tracking-widest bg-slate-950">
             Sistema de Trazabilidad Hospitalaria - HNPM Sentinel Hub
