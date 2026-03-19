@@ -5,6 +5,7 @@ const ITEMS_HOTELERIA = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS 
 
 const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   const [piso, setPiso] = useState(null);
+  const [habitacionEspecial, setHabitacionEspecial] = useState(null);
   const [modo, setModo] = useState(modoAcceso || 'piso'); 
   const [stockActual, setStockActual] = useState(0);
   const [novedades, setNovedades] = useState("Sin novedades");
@@ -27,41 +28,70 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setCargando(true);
     
     try {
-      let slugBuscar = slugPiso;
-      
-      // Si es habitación, extraer el slug base del piso (primeros dos segmentos)
+      let pisoData = null;
+      let habitacionData = null;
+
+      // PASO 1: Si es habitación, buscar primero en habitaciones_especiales
       if (modo === 'habitacion') {
-        const partes = slugPiso.split('-');
-        if (partes.length >= 2) {
-          slugBuscar = `${partes[0]}-${partes[1]}`;
-        } else {
-          console.error("Formato de slug de habitación inválido:", slugPiso);
+        console.log("Buscando habitación especial con slug:", slugPiso);
+        
+        const { data: habitacion, error: errorHabitacion } = await supabase
+          .from('habitaciones_especiales')
+          .select('*, pisos(*)') // Traemos también los datos del piso relacionado
+          .eq('slug', slugPiso)
+          .maybeSingle();
+
+        if (errorHabitacion) {
+          console.error("Error buscando habitación:", errorHabitacion);
+        }
+
+        if (habitacion) {
+          console.log("Habitación encontrada:", habitacion);
+          habitacionData = habitacion;
+          pisoData = habitacion.pisos; // El piso viene de la relación
         }
       }
 
-      console.log("Buscando piso con slug:", slugBuscar);
+      // PASO 2: Si no encontramos habitación o no es modo habitación, buscar en pisos
+      if (!pisoData) {
+        let slugBuscar = slugPiso;
+        
+        // Si es habitación pero no encontramos la habitación, intentamos extraer el slug del piso
+        if (modo === 'habitacion' && !habitacionData) {
+          const partes = slugPiso.split('-');
+          if (partes.length >= 2) {
+            slugBuscar = `${partes[0]}-${partes[1]}`;
+            console.log("Buscando piso por slug extraído:", slugBuscar);
+          }
+        }
 
-      const { data, error } = await supabase
-        .from('pisos')
-        .select('*')
-        .eq('slug', slugBuscar)
-        .single();
+        const { data: piso, error } = await supabase
+          .from('pisos')
+          .select('*')
+          .eq('slug', slugBuscar)
+          .single();
 
-      if (error) {
-        console.error("Error cargando piso:", error);
-        mostrarSplash("ERROR: Piso no encontrado");
-        setCargando(false);
-        return;
+        if (error) {
+          console.error("Error cargando piso:", error);
+          mostrarSplash("ERROR: Sector no encontrado");
+          setCargando(false);
+          return;
+        }
+
+        pisoData = piso;
       }
 
-      if (data) {
-        setPiso(data);
+      if (pisoData) {
+        setPiso(pisoData);
+        if (habitacionData) {
+          setHabitacionEspecial(habitacionData);
+        }
         
         // Cargar stock actual para el primer item
         const { data: movs } = await supabase
           .from('movimientos_stock')
           .select('stock_fisico_piso')
-          .eq('piso_id', data.id)
+          .eq('piso_id', pisoData.id)
           .eq('item', datos.item)
           .order('created_at', { ascending: false })
           .limit(1);
@@ -94,15 +124,23 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
     try {
       for (const i of items) {
-        const { error } = await supabase.from('movimientos_stock').insert([{
+        const movimiento = {
           piso_id: piso.id,
           dni_pañolero: perfilUsuario.dni,
           item: i.item,
           egreso_limpio: i.cant,
           retirado_sucio: i.cant,
           novedades: novedades,
-          stock_fisico_piso: stockActual // Ajusta según necesites
-        }]);
+          es_cambio_habitacion: true,
+          stock_fisico_piso: stockActual // Esto habría que ajustarlo según tu lógica de stock
+        };
+
+        // Si es una habitación especial, guardamos también el ID
+        if (habitacionEspecial) {
+          movimiento.habitacion_id = habitacionEspecial.id;
+        }
+
+        const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
         if (error) throw error;
       }
@@ -133,7 +171,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       (parseInt(datos.carga_lavadero || 0)) - 
       (parseInt(datos.entrega_piso || 0));
 
-    const { error } = await supabase.from('movimientos_stock').insert([{
+    const movimiento = {
       piso_id: piso.id,
       dni_pañolero: perfilUsuario.dni,
       dni_enfermero: modo === 'piso' ? enfermeroEncontrado?.dni : null,
@@ -143,7 +181,15 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       retirado_sucio: modo === 'lavadero' ? parseInt(datos.retirado_sucio || 0) : 0,
       stock_fisico_piso: nuevoStock,
       novedades: novedades
-    }]);
+    };
+
+    // Si es una habitación especial, guardamos el ID
+    if (habitacionEspecial) {
+      movimiento.habitacion_id = habitacionEspecial.id;
+      movimiento.es_cambio_habitacion = true;
+    }
+
+    const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
     if (!error) {
       mostrarSplash("REGISTRO EXITOSO");
@@ -170,7 +216,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       .from('personal')
       .select('*')
       .eq('dni', busquedaDni)
-      .eq('rol', 'enfermero')
+      .in('rol', ['enfermero', 'ADMIN']) // Permitir también ADMIN como responsable
       .maybeSingle();
     
     if (error) {
@@ -179,7 +225,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     
     setEnfermeroEncontrado(data);
     if (!data) {
-      mostrarSplash("DNI NO REGISTRADO COMO ENFERMERO");
+      mostrarSplash("DNI NO REGISTRADO");
     } else {
       mostrarSplash(`${data.jerarquia} ${data.apellido} encontrado`);
     }
@@ -190,7 +236,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       <div className="p-10 text-white text-center">
         <div className="animate-pulse">
           <p className="text-blue-400 font-black text-sm mb-2">SENTINEL HNPM</p>
-          <p className="text-slate-500 italic text-xs">Cargando {modo} {slugPiso}...</p>
+          <p className="text-slate-500 italic text-xs">
+            {modo === 'habitacion' ? 'Buscando habitación' : 'Cargando sector'} {slugPiso}...
+          </p>
         </div>
       </div>
     );
@@ -204,7 +252,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           <p className="text-slate-400 text-xs">No se encontró el sector: {slugPiso}</p>
           <button 
             onClick={() => window.location.href = '/'}
-            className="mt-4 bg-slate-800 px-4 py-2 rounded-xl text-xs font-black"
+            className="mt-4 bg-slate-800 px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-700 transition-all"
           >
             VOLVER AL INICIO
           </button>
@@ -213,7 +261,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     );
   }
 
-  // Renderizado del formulario (igual que antes, pero con las mejoras)
   return (
     <div className="p-4 bg-slate-950 min-h-screen text-slate-200 pb-20 font-sans">
       <div className="mb-6 bg-slate-900/50 p-4 rounded-3xl border border-blue-900/30">
@@ -221,9 +268,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           {modo === 'habitacion' ? 'SERVICIO HABITACIÓN' : modo === 'lavadero' ? 'CONTROL LAVADERO' : 'CONTROL PAÑOL'}
         </p>
         <h3 className="text-sm font-black uppercase">{piso.nombre_piso}</h3>
-        {modo === 'habitacion' && (
-          <p className="text-[10px] text-slate-500 mt-1 uppercase">
-            Habitación: {slugPiso.split('-').slice(2).join('-').replace(/-/g, ' ')}
+        {habitacionEspecial && (
+          <p className="text-[10px] text-blue-400 mt-1 uppercase font-bold">
+            Habitación: {habitacionEspecial.nombre}
           </p>
         )}
       </div>
@@ -242,7 +289,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           </div>
           <button 
             onClick={ejecutarCambioEstandar} 
-            className="w-full bg-blue-600 p-8 rounded-[2.5rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all"
+            className="w-full bg-blue-600 p-8 rounded-[2.5rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all hover:bg-blue-500"
           >
             Registrar Cambio Estándar
           </button>
@@ -277,7 +324,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
                   <button 
                     type="button" 
                     onClick={buscarEnfermero} 
-                    className="bg-blue-600 px-4 rounded-xl text-[10px] font-black uppercase"
+                    className="bg-blue-600 px-4 rounded-xl text-[10px] font-black uppercase hover:bg-blue-500 transition-all"
                   >
                     Buscar
                   </button>
@@ -325,7 +372,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <button 
             type="submit" 
-            className="w-full p-5 rounded-3xl bg-blue-600 text-white font-black uppercase text-sm shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full p-5 rounded-3xl bg-blue-600 text-white font-black uppercase text-sm shadow-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500 transition-all"
             disabled={modo === 'piso' && !enfermeroEncontrado}
           >
             Confirmar Registro

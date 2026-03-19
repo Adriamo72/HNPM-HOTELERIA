@@ -86,7 +86,7 @@ function App() {
               <FormularioPiso 
                 perfilUsuario={datosUsuario} 
                 slugPiso={slugCompleto}
-                modoAcceso={modoAcceso} // Pasamos el modo explícitamente
+                modoAcceso={modoAcceso}
               />
             )}
           </main>
