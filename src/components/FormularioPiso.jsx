@@ -21,20 +21,16 @@ const FormularioPiso = ({ perfilUsuario, slugPiso }) => {
   }, []);
 
   useEffect(() => {
-  if (slugPiso) cargarContexto();
-}, [slugPiso, datos.item]);
+    if (slugPiso) cargarContexto();
+  }, [slugPiso, datos.item]);
 
 const cargarContexto = async () => {
-  if (!slugPiso) return;
-  
   let slugBuscar = slugPiso;
   
-  // Si es habitación, extraemos el piso padre para que Supabase lo encuentre
+  // Lógica para detectar si viene de un QR de habitación
   if (window.location.pathname.includes('/habitacion/')) {
     const partes = slugPiso.split('-');
-    if (partes.length >= 2) {
-      slugBuscar = `${partes[0]}-${partes[1]}`;
-    }
+    slugBuscar = `${partes[0]}-${partes[1]}`; 
   }
 
   const { data, error } = await supabase
