@@ -65,28 +65,17 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           console.log("✅ Habitación encontrada:", habitacion);
           habitacionData = habitacion;
           pisoData = habitacion.pisos;
-        } else {
-          console.log("❌ No se encontró la habitación, buscando por piso base");
         }
       }
 
-      // PASO 2: Si no encontramos habitación o no es modo habitación, buscar en pisos
+      // PASO 2: Si no encontramos habitación, buscar en pisos
       if (!pisoData) {
-        let slugBuscar = slugPiso;
+        console.log("🔍 Buscando piso con slug:", slugPiso);
         
-        // Si es habitación pero no encontramos la habitación, intentamos extraer el slug del piso
-        if (modo === 'habitacion' && !habitacionData) {
-          const partes = slugPiso.split('-');
-          if (partes.length >= 2) {
-            slugBuscar = `${partes[0]}-${partes[1]}`;
-            console.log("🔍 Buscando piso por slug extraído:", slugBuscar);
-          }
-        }
-
         const { data: piso, error } = await supabase
           .from('pisos')
           .select('*')
-          .eq('slug', slugBuscar)
+          .eq('slug', slugPiso)
           .single();
 
         if (error) {
@@ -163,12 +152,15 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
     try {
       console.log("Registrando cambio en habitación:", itemsHabitacion);
+      let registrosExitosos = 0;
       
       for (const itemConf of itemsHabitacion) {
         if (itemConf.cantidadLimpia === 0 && itemConf.cantidadSucia === 0) continue;
 
-        // Calcular nuevo stock para este item
+        // Obtener stock actual para este item
         const stockActual = stocksPorItem[itemConf.item] || 0;
+        
+        // Calcular nuevo stock (restamos lo que entregamos)
         const nuevoStock = stockActual - itemConf.cantidadLimpia;
 
         const movimiento = {
@@ -191,21 +183,29 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
         if (error) {
           console.error("Error insertando movimiento:", error);
-          throw error;
+          mostrarSplash(`ERROR en ${itemConf.item}`);
+        } else {
+          registrosExitosos++;
+          // Actualizar stock local
+          setStocksPorItem(prev => ({
+            ...prev,
+            [itemConf.item]: nuevoStock
+          }));
         }
       }
       
-      mostrarSplash("REGISTRO EXITOSO");
-      setNovedades("Sin novedades");
+      if (registrosExitosos > 0) {
+        mostrarSplash(`${registrosExitosos} ITEMS REGISTRADOS`);
+        setNovedades("Sin novedades");
+        
+        // Resetear cantidades
+        setItemsHabitacion(itemsHabitacion.map(item => ({
+          ...item,
+          cantidadLimpia: 0,
+          cantidadSucia: 0
+        })));
+      }
       
-      // Resetear cantidades
-      setItemsHabitacion(itemsHabitacion.map(item => ({
-        ...item,
-        cantidadLimpia: 0,
-        cantidadSucia: 0
-      })));
-      
-      cargarContexto();
     } catch (error) {
       console.error("Error en cambio de habitación:", error);
       mostrarSplash("ERROR EN REGISTRO");
@@ -271,9 +271,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     }
 
     const stockActual = stocksPorItem[datos.item] || 0;
-    const nuevoStock = stockActual + 
-      (parseInt(datos.carga_lavadero || 0)) - 
-      (parseInt(datos.entrega_piso || 0));
+    let nuevoStock = stockActual;
+
+    if (modo === 'lavadero') {
+      nuevoStock = stockActual + (parseInt(datos.carga_lavadero || 0));
+    } else if (modo === 'piso') {
+      nuevoStock = stockActual - (parseInt(datos.entrega_piso || 0));
+    }
 
     const movimiento = {
       piso_id: piso.id,
@@ -420,10 +424,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             <div className="mt-4 pt-4 border-t border-slate-800">
               <p className="text-[8px] text-slate-500 font-black uppercase mb-2">STOCK DISPONIBLE EN PAÑOL</p>
               <div className="grid grid-cols-3 gap-2 text-center">
-                {Object.entries(stocksPorItem).map(([item, stock]) => (
+                {ITEMS_HOTELERIA.map(item => (
                   <div key={item} className="bg-slate-950 p-2 rounded-lg">
                     <span className="text-[7px] text-slate-400 block">{item}</span>
-                    <span className="text-sm font-black text-blue-400">{stock}</span>
+                    <span className="text-sm font-black text-blue-400">{stocksPorItem[item] || 0}</span>
                   </div>
                 ))}
               </div>

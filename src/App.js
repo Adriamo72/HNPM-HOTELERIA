@@ -76,51 +76,46 @@ function App() {
     window.location.href = '/';
   };
 
-  // Si no hay modo detectado y no está logueado, mostrar login simple
-  if (!usuarioLogueado && !modoAcceso) {
+  // MOSTRAR LOGIN SIEMPRE QUE NO HAY USUARIO LOGUEADO
+  if (!usuarioLogueado) {
     return <Login alLoguear={manejarLogin} />;
   }
 
-  // Si está logueado o hay modo detectado
+  // Si está logueado, mostrar el contenido correspondiente
   return (
     <div className="App bg-slate-950 min-h-screen font-sans text-slate-200">
-      {!usuarioLogueado ? (
-        // Mostrar login pero preservando el modo y slug en la URL
-        <Login alLoguear={manejarLogin} />
-      ) : (
-        <div className="flex flex-col min-h-screen">
-          <header className="bg-slate-900 border-b border-blue-900 p-4 flex justify-between items-center shadow-2xl">
-            <div>
-              <h1 className="text-blue-500 font-black text-xs uppercase tracking-widest leading-none">Sentinel HNPM</h1>
-              <p className="text-[10px] text-slate-300 font-black uppercase mt-1 tracking-widest">
-                {datosUsuario?.jerarquia} {datosUsuario?.apellido} - {datosUsuario?.rol}
-              </p>
-            </div>
-            <button 
-              onClick={cerrarSesion} 
-              className="bg-red-950/30 text-red-500 border border-red-900/50 px-3 py-1 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all"
-            >
-              Salir
-            </button>
-          </header>
+      <div className="flex flex-col min-h-screen">
+        <header className="bg-slate-900 border-b border-blue-900 p-4 flex justify-between items-center shadow-2xl">
+          <div>
+            <h1 className="text-blue-500 font-black text-xs uppercase tracking-widest leading-none">Sentinel HNPM</h1>
+            <p className="text-[10px] text-slate-300 font-black uppercase mt-1 tracking-widest">
+              {datosUsuario?.jerarquia} {datosUsuario?.apellido} - {datosUsuario?.rol}
+            </p>
+          </div>
+          <button 
+            onClick={cerrarSesion} 
+            className="bg-red-950/30 text-red-500 border border-red-900/50 px-3 py-1 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all"
+          >
+            Salir
+          </button>
+        </header>
 
-          <main className="flex-grow">
-            {rol === 'admin' ? (
-              <AdminDashboard />
-            ) : (
-              <FormularioPiso 
-                perfilUsuario={datosUsuario} 
-                slugPiso={slugCompleto}
-                modoAcceso={modoAcceso}
-              />
-            )}
-          </main>
-          
-          <footer className="p-4 text-center text-[9px] text-slate-600 uppercase tracking-widest bg-slate-950">
-            Sistema de Trazabilidad Hospitalaria - HNPM Sentinel Hub
-          </footer>
-        </div>
-      )}
+        <main className="flex-grow">
+          {rol === 'admin' ? (
+            <AdminDashboard />
+          ) : (
+            <FormularioPiso 
+              perfilUsuario={datosUsuario} 
+              slugPiso={slugCompleto}
+              modoAcceso={modoAcceso}
+            />
+          )}
+        </main>
+        
+        <footer className="p-4 text-center text-[9px] text-slate-600 uppercase tracking-widest bg-slate-950">
+          Sistema de Trazabilidad Hospitalaria - HNPM Sentinel Hub
+        </footer>
+      </div>
     </div>
   );
 }
