@@ -133,7 +133,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setItemsHabitacion(nuevosItems);
   };
 
-  // Función para registrar cambio en habitación
+  // Función para registrar cambio en habitación - VERSIÓN CORREGIDA
   const ejecutarCambioHabitacion = async () => {
     if (!piso?.id) {
       mostrarSplash("ERROR: Piso no identificado");
@@ -152,6 +152,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
     try {
       console.log("Registrando cambio en habitación:", itemsHabitacion);
+      console.log("Piso ID:", piso.id);
+      console.log("Usuario:", perfilUsuario);
+      
       let registrosExitosos = 0;
       
       for (const itemConf of itemsHabitacion) {
@@ -163,28 +166,42 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         // Calcular nuevo stock (restamos lo que entregamos)
         const nuevoStock = stockActual - itemConf.cantidadLimpia;
 
+        // IMPORTANTE: Usar los campos correctos según tu esquema
         const movimiento = {
           piso_id: piso.id,
           dni_pañolero: perfilUsuario.dni,
+          // dni_enfermero no es obligatorio para habitación
           item: itemConf.item,
+          // Para entrega a piso/habitación usamos egreso_limpio
           egreso_limpio: itemConf.cantidadLimpia,
+          // Para ropa sucia retirada
           retirado_sucio: itemConf.cantidadSucia,
+          // Stock actualizado
+          stock_fisico_piso: nuevoStock,
+          // Novedades
           novedades: novedades,
-          es_cambio_habitacion: true,
-          stock_fisico_piso: nuevoStock
+          // Marcar como cambio de habitación
+          es_cambio_habitacion: true
         };
 
+        // Si hay habitación especial, agregar el ID
         if (habitacionEspecial) {
           movimiento.habitacion_id = habitacionEspecial.id;
         }
 
-        console.log("Insertando movimiento:", movimiento);
+        console.log("Insertando movimiento:", JSON.stringify(movimiento, null, 2));
 
-        const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
+        const { data, error } = await supabase
+          .from('movimientos_stock')
+          .insert([movimiento])
+          .select();
+
         if (error) {
-          console.error("Error insertando movimiento:", error);
+          console.error(`❌ Error insertando movimiento para ${itemConf.item}:`, error);
+          console.error("Detalle del error:", error);
           mostrarSplash(`ERROR en ${itemConf.item}`);
         } else {
+          console.log(`✅ Movimiento registrado para ${itemConf.item}:`, data);
           registrosExitosos++;
           // Actualizar stock local
           setStocksPorItem(prev => ({
