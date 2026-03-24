@@ -15,7 +15,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   const [datos, setDatos] = useState({ item: 'SABANAS', carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
   const [cargando, setCargando] = useState(true);
   
-  // Estado para el formulario de habitación
   const [itemsHabitacion, setItemsHabitacion] = useState([
     { item: 'SABANAS', cantidadLimpia: 0, cantidadSucia: 0 },
     { item: 'TOALLAS', cantidadLimpia: 0, cantidadSucia: 0 },
@@ -25,14 +24,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   ]);
 
   useEffect(() => {
-    console.log("=== FormularioPiso montado ===");
-    console.log("slugPiso:", slugPiso);
-    console.log("modoAcceso:", modoAcceso);
-    
     if (slugPiso) {
       cargarContexto();
     } else {
-      console.error("❌ No hay slug de piso");
       setCargando(false);
     }
   }, [slugPiso]);
@@ -44,9 +38,8 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       let pisoData = null;
       let habitacionData = null;
 
-      // PASO 1: Si es habitación, buscar primero en habitaciones_especiales
       if (modo === 'habitacion') {
-        const { data: habitacion, error: errorHabitacion } = await supabase
+        const { data: habitacion } = await supabase
           .from('habitaciones_especiales')
           .select('*, pisos(*)')
           .eq('slug', slugPiso)
@@ -58,7 +51,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         }
       }
 
-      // PASO 2: Si no encontramos habitación, buscar en pisos
       if (!pisoData) {
         const { data: piso, error } = await supabase
           .from('pisos')
@@ -67,12 +59,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           .single();
 
         if (error) {
-          console.error("❌ Error cargando piso:", error);
           mostrarSplash("ERROR: Sector no encontrado");
           setCargando(false);
           return;
         }
-
         pisoData = piso;
       }
 
@@ -82,9 +72,8 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           setHabitacionEspecial(habitacionData);
         }
         
-        // Cargar stocks para todos los items
+        // Cargar stock actual para cada item
         const stocksTemp = {};
-        
         for (const item of ITEMS_HOTELERIA) {
           const { data: movs } = await supabase
             .from('movimientos_stock')
@@ -97,11 +86,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           stocksTemp[item] = movs?.[0]?.stock_fisico_piso || 0;
         }
         
-        console.log("📊 Stocks cargados:", stocksTemp);
         setStocksPorItem(stocksTemp);
       }
     } catch (error) {
-      console.error("Error inesperado:", error);
+      console.error(error);
       mostrarSplash("ERROR INESPERADO");
     } finally {
       setCargando(false);
@@ -113,14 +101,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
   };
 
-  // Actualizar cantidades en habitación
   const actualizarItemHabitacion = (index, campo, valor) => {
     const nuevosItems = [...itemsHabitacion];
     nuevosItems[index][campo] = parseInt(valor) || 0;
     setItemsHabitacion(nuevosItems);
   };
 
-  // REGISTRO PARA HABITACIÓN - Entrega limpia y retira sucia
+  // ==================== REGISTRO HABITACIÓN ====================
   const ejecutarCambioHabitacion = async () => {
     if (!piso?.id) {
       mostrarSplash("ERROR: Piso no identificado");
@@ -143,15 +130,20 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         if (itemConf.cantidadLimpia === 0 && itemConf.cantidadSucia === 0) continue;
 
         const stockActual = stocksPorItem[itemConf.item] || 0;
-        // El stock disminuye solo por lo que ENTREGAMOS LIMPIO
+        // SOLO lo que se entrega limpio afecta el stock
         const nuevoStock = stockActual - itemConf.cantidadLimpia;
+
+        if (nuevoStock < 0) {
+          mostrarSplash(`Stock insuficiente de ${itemConf.item}`);
+          continue;
+        }
 
         const movimiento = {
           piso_id: piso.id,
           dni_pañolero: perfilUsuario.dni,
           item: itemConf.item,
-          egreso_limpio: itemConf.cantidadLimpia,      // Entrega al piso/habitación
-          retirado_sucio: itemConf.cantidadSucia,       // Ropa sucia que retiramos
+          egreso_limpio: itemConf.cantidadLimpia,
+          retirado_sucio: itemConf.cantidadSucia,
           stock_fisico_piso: nuevoStock,
           novedades: novedades,
           es_cambio_habitacion: true
@@ -163,10 +155,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
         const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
-        if (error) {
-          console.error(`❌ Error en ${itemConf.item}:`, error);
-          mostrarSplash(`ERROR en ${itemConf.item}`);
-        } else {
+        if (!error) {
           registrosExitosos++;
           setStocksPorItem(prev => ({
             ...prev,
@@ -186,12 +175,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       }
       
     } catch (error) {
-      console.error("Error en cambio de habitación:", error);
+      console.error(error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
 
-  // REGISTRO PARA PAÑOL - Entrega al encargado de piso
+  // ==================== REGISTRO PAÑOL - ENTREGA A PISO ====================
   const registrarEntregaPiso = async (e) => {
     e.preventDefault();
     
@@ -215,7 +204,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const nuevoStock = stockActual - cantidadEntregada;
 
     if (nuevoStock < 0) {
-      mostrarSplash(`Stock insuficiente de ${datos.item}. Disponible: ${stockActual}`);
+      mostrarSplash(`Stock insuficiente. Disponible: ${stockActual}`);
       return;
     }
 
@@ -232,19 +221,18 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
     if (!error) {
-      mostrarSplash(`${cantidadEntregada} ${datos.item} ENTREGADOS`);
+      mostrarSplash(`${cantidadEntregada} ${datos.item} entregados`);
       setDatos({ ...datos, entrega_piso: 0 });
       setStocksPorItem({...stocksPorItem, [datos.item]: nuevoStock});
       setBusquedaDni('');
       setEnfermeroEncontrado(null);
       setNovedades("Sin novedades");
     } else {
-      console.error("Error al registrar:", error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
 
-  // REGISTRO PARA LAVADERO - Recibe sucio y entrega limpio
+  // ==================== REGISTRO LAVADERO ====================
   const registrarLavadero = async (e) => {
     e.preventDefault();
     
@@ -262,17 +250,15 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     }
 
     const stockActual = stocksPorItem[datos.item] || 0;
-    
-    // LÓGICA CORRECTA: El stock del pañol SOLO aumenta con lo que el lavadero ENTREGA LIMPIO
-    // El lavadero recibe sucio pero eso NO afecta el stock del pañol
+    // SOLO lo que ingresa limpio aumenta el stock del pañol
     const nuevoStock = stockActual + ingresoLimpio;
 
     const movimiento = {
       piso_id: piso.id,
       dni_pañolero: perfilUsuario.dni,
       item: datos.item,
-      entregado_limpio: ingresoLimpio,    // Lo que el lavadero ENTREGA LIMPIO al pañol
-      retirado_sucio: salidaSucio,        // Lo que el lavadero RECIBE SUCIO del piso
+      entregado_limpio: ingresoLimpio,
+      retirado_sucio: salidaSucio,
       stock_fisico_piso: nuevoStock,
       novedades: novedades
     };
@@ -280,21 +266,20 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
     if (!error) {
-      let mensaje = "";
-      if (ingresoLimpio > 0) mensaje += `+${ingresoLimpio} limpio `;
-      if (salidaSucio > 0) mensaje += `-${salidaSucio} sucio`;
-      mostrarSplash(`${datos.item}: ${mensaje}`);
+      let mensaje = [];
+      if (ingresoLimpio > 0) mensaje.push(`${ingresoLimpio} limpios`);
+      if (salidaSucio > 0) mensaje.push(`${salidaSucio} sucios`);
+      mostrarSplash(`${datos.item}: ${mensaje.join(' / ')}`);
       
       setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
       setStocksPorItem({...stocksPorItem, [datos.item]: nuevoStock});
       setNovedades("Sin novedades");
     } else {
-      console.error("Error al registrar:", error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
 
-  // Cambio estándar para habitación (2 sábanas, 1 toalla, 1 toallón)
+  // ==================== CAMBIO ESTÁNDAR HABITACIÓN ====================
   const ejecutarCambioEstandar = async () => {
     if (!piso?.id) {
       mostrarSplash("ERROR: Piso no identificado");
@@ -338,7 +323,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
         if (error) {
           errores = true;
-          console.error(`Error en ${i.item}:`, error);
         } else {
           setStocksPorItem(prev => ({ ...prev, [i.item]: nuevoStock }));
         }
@@ -349,7 +333,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         setNovedades("Sin novedades");
       }
     } catch (error) {
-      console.error("Error en cambio estándar:", error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
@@ -360,7 +343,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       return;
     }
     
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('personal')
       .select('*')
       .eq('dni', busquedaDni)
@@ -371,7 +354,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     if (!data) {
       mostrarSplash("DNI NO REGISTRADO");
     } else {
-      mostrarSplash(`${data.jerarquia} ${data.apellido} encontrado`);
+      mostrarSplash(`${data.jerarquia} ${data.apellido}`);
     }
   };
 
@@ -380,9 +363,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       <div className="p-10 text-white text-center">
         <div className="animate-pulse">
           <p className="text-blue-400 font-black text-sm mb-2">SENTINEL HNPM</p>
-          <p className="text-slate-500 italic text-xs">
-            {modo === 'habitacion' ? 'Buscando habitación' : 'Cargando sector'} {slugPiso}...
-          </p>
+          <p className="text-slate-500 italic text-xs">Cargando...</p>
         </div>
       </div>
     );
@@ -393,10 +374,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       <div className="p-10 text-white text-center">
         <div className="bg-red-900/20 p-6 rounded-3xl border border-red-800">
           <p className="text-red-400 font-black text-sm mb-2">ERROR DE ACCESO</p>
-          <p className="text-slate-400 text-xs">No se encontró el sector: {slugPiso}</p>
           <button 
             onClick={() => window.location.href = '/'}
-            className="mt-4 bg-slate-800 px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-700 transition-all"
+            className="mt-4 bg-slate-800 px-4 py-2 rounded-xl text-xs font-black"
           >
             VOLVER AL INICIO
           </button>
@@ -420,9 +400,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       </div>
 
       {modo === 'habitacion' ? (
-        <div className="space-y-4 animate-in fade-in">
+        <div className="space-y-4">
           <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800">
-            <p className="text-[10px] font-black text-slate-500 uppercase mb-4">ITEMS PARA HABITACIÓN</p>
+            <p className="text-[10px] font-black text-slate-500 uppercase mb-4">ITEMS</p>
             
             {itemsHabitacion.map((itemConf, index) => (
               <div key={itemConf.item} className="mb-6 last:mb-0 border-b border-slate-800 pb-4 last:border-0">
@@ -469,7 +449,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             <textarea 
               className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-blue-400 outline-none"
               rows="2" 
-              placeholder="Ej: Faltó toalla sucia..."
               value={novedades} 
               onChange={(e) => setNovedades(e.target.value)}
             />
@@ -477,14 +456,14 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <button 
             onClick={ejecutarCambioEstandar}
-            className="w-full bg-green-600 p-4 rounded-[2rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all hover:bg-green-500"
+            className="w-full bg-green-600 p-4 rounded-[2rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all"
           >
             Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)
           </button>
 
           <button 
             onClick={ejecutarCambioHabitacion} 
-            className="w-full bg-blue-600 p-6 rounded-[2.5rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all hover:bg-blue-500"
+            className="w-full bg-blue-600 p-6 rounded-[2.5rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all"
           >
             Registrar Cambio Personalizado
           </button>
@@ -506,7 +485,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <div className="bg-green-900/10 p-5 rounded-[2rem] border border-green-900/30 text-center">
             <label className="text-[10px] font-black text-green-500 uppercase block mb-1">
-              🧺 ENTREGA LIMPIA AL PAÑOL
+              ENTREGA LIMPIA AL PAÑOL
             </label>
             <input 
               type="number" 
@@ -515,12 +494,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
               placeholder="0"
             />
-            <p className="text-[8px] text-slate-500 mt-1">Aumenta el stock del pañol</p>
           </div>
 
           <div className="bg-red-900/10 p-5 rounded-[2rem] border border-red-900/30 text-center">
             <label className="text-[10px] font-black text-red-500 uppercase block mb-1">
-              🗑️ RECIBE SUCIO DEL PISO
+              RECIBE SUCIO DEL PISO
             </label>
             <input 
               type="number" 
@@ -529,7 +507,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
               placeholder="0"
             />
-            <p className="text-[8px] text-slate-500 mt-1">No afecta el stock del pañol</p>
           </div>
 
           <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800">
@@ -544,13 +521,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <button 
             type="submit" 
-            className="w-full p-5 rounded-3xl bg-blue-600 text-white font-black uppercase text-sm shadow-xl hover:bg-blue-500 transition-all"
+            className="w-full p-5 rounded-3xl bg-blue-600 text-white font-black uppercase text-sm shadow-xl"
           >
-            Registrar Movimiento Lavadero
+            Registrar Movimiento
           </button>
         </form>
       ) : (
-        // MODO PAÑOL - Entrega al encargado de piso
+        // MODO PAÑOL
         <form onSubmit={registrarEntregaPiso} className="space-y-4">
           <select 
             className="w-full bg-slate-900 p-4 rounded-2xl border border-slate-800 font-black text-blue-400 outline-none" 
@@ -566,19 +543,19 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           </div>
 
           <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
-            <p className="text-[10px] font-black text-slate-500 mb-2 uppercase">DNI ENCARGADO DE PISO</p>
+            <p className="text-[10px] font-black text-slate-500 mb-2 uppercase">ENCARGADO DE PISO</p>
             <div className="flex gap-2">
               <input 
                 type="text" 
                 className="flex-1 bg-slate-950 p-3 rounded-xl border border-slate-800 text-sm outline-none"
                 value={busquedaDni}
                 onChange={(e) => setBusquedaDni(e.target.value)}
-                placeholder="Ingrese DNI"
+                placeholder="DNI"
               />
               <button 
                 type="button" 
                 onClick={buscarEnfermero} 
-                className="bg-blue-600 px-4 rounded-xl text-[10px] font-black uppercase hover:bg-blue-500 transition-all"
+                className="bg-blue-600 px-4 rounded-xl text-[10px] font-black uppercase"
               >
                 Buscar
               </button>
@@ -590,9 +567,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             )}
           </div>
 
-          <div className="bg-blue-900/10 p-5 rounded-[2rem] border border-blue-900/30 space-y-4">
-            <label className="text-[10px] font-black text-blue-500 uppercase block text-center">
-              📦 CANTIDAD A ENTREGAR
+          <div className="bg-blue-900/10 p-5 rounded-[2rem] border border-blue-900/30">
+            <label className="text-[10px] font-black text-blue-500 uppercase block text-center mb-2">
+              CANTIDAD A ENTREGAR
             </label>
             <input 
               type="number" 
@@ -601,7 +578,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               value={datos.entrega_piso || ""} 
               onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
             />
-            <p className="text-[8px] text-slate-500 text-center">Esta cantidad se DESCONTARÁ del stock</p>
           </div>
 
           <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800">
@@ -616,17 +592,17 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <button 
             type="submit" 
-            className="w-full p-5 rounded-3xl bg-blue-600 text-white font-black uppercase text-sm shadow-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500 transition-all"
+            className="w-full p-5 rounded-3xl bg-blue-600 text-white font-black uppercase text-sm shadow-xl disabled:opacity-50"
             disabled={!enfermeroEncontrado}
           >
-            Entregar al Encargado de Piso
+            Entregar al Piso
           </button>
         </form>
       )}
 
       {notificacion.visible && (
         <div className="fixed inset-0 flex items-center justify-center z-[100] bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-blue-600 p-8 rounded-[3rem] text-center shadow-2xl animate-in zoom-in">
+          <div className="bg-blue-600 p-8 rounded-[3rem] text-center shadow-2xl">
              <p className="text-white font-black uppercase text-xs tracking-widest">{notificacion.mensaje}</p>
           </div>
         </div>
