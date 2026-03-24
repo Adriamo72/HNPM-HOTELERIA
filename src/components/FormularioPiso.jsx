@@ -86,6 +86,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           stocksTemp[item] = movs?.[0]?.stock_fisico_piso || 0;
         }
         
+        console.log("📊 Stock cargado:", stocksTemp);
         setStocksPorItem(stocksTemp);
       }
     } catch (error) {
@@ -130,11 +131,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         if (itemConf.cantidadLimpia === 0 && itemConf.cantidadSucia === 0) continue;
 
         const stockActual = stocksPorItem[itemConf.item] || 0;
-        // SOLO lo que se entrega limpio afecta el stock
         const nuevoStock = stockActual - itemConf.cantidadLimpia;
 
         if (nuevoStock < 0) {
-          mostrarSplash(`Stock insuficiente de ${itemConf.item}`);
+          mostrarSplash(`Stock insuficiente de ${itemConf.item}. Disponible: ${stockActual}`);
           continue;
         }
 
@@ -153,6 +153,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           movimiento.habitacion_id = habitacionEspecial.id;
         }
 
+        console.log(`📝 Registrando ${itemConf.item}: stock ${stockActual} -> ${nuevoStock}`);
         const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
         if (!error) {
@@ -161,6 +162,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             ...prev,
             [itemConf.item]: nuevoStock
           }));
+          console.log(`✅ ${itemConf.item} actualizado a ${nuevoStock}`);
+        } else {
+          console.error(`❌ Error en ${itemConf.item}:`, error);
         }
       }
       
@@ -203,6 +207,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const stockActual = stocksPorItem[datos.item] || 0;
     const nuevoStock = stockActual - cantidadEntregada;
 
+    console.log(`📦 Entrega a piso: ${datos.item}`);
+    console.log(`   Stock actual: ${stockActual}`);
+    console.log(`   Cantidad entregar: ${cantidadEntregada}`);
+    console.log(`   Nuevo stock: ${nuevoStock}`);
+
     if (nuevoStock < 0) {
       mostrarSplash(`Stock insuficiente. Disponible: ${stockActual}`);
       return;
@@ -221,13 +230,25 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
     if (!error) {
-      mostrarSplash(`${cantidadEntregada} ${datos.item} entregados`);
+      // Actualizar stock local INMEDIATAMENTE
+      setStocksPorItem(prev => {
+        const updated = {
+          ...prev,
+          [datos.item]: nuevoStock
+        };
+        console.log("✅ Stock actualizado:", updated);
+        return updated;
+      });
+      
+      mostrarSplash(`${cantidadEntregada} ${datos.item} entregados a ${enfermeroEncontrado.apellido}`);
+      
+      // Limpiar formulario
       setDatos({ ...datos, entrega_piso: 0 });
-      setStocksPorItem({...stocksPorItem, [datos.item]: nuevoStock});
       setBusquedaDni('');
       setEnfermeroEncontrado(null);
       setNovedades("Sin novedades");
     } else {
+      console.error("❌ Error al registrar:", error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
@@ -250,8 +271,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     }
 
     const stockActual = stocksPorItem[datos.item] || 0;
-    // SOLO lo que ingresa limpio aumenta el stock del pañol
     const nuevoStock = stockActual + ingresoLimpio;
+
+    console.log(`🧺 Lavadero: ${datos.item}`);
+    console.log(`   Stock actual: ${stockActual}`);
+    console.log(`   Ingreso limpio: ${ingresoLimpio}`);
+    console.log(`   Nuevo stock: ${nuevoStock}`);
 
     const movimiento = {
       piso_id: piso.id,
@@ -266,15 +291,20 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
     if (!error) {
+      setStocksPorItem(prev => ({
+        ...prev,
+        [datos.item]: nuevoStock
+      }));
+      
       let mensaje = [];
-      if (ingresoLimpio > 0) mensaje.push(`${ingresoLimpio} limpios`);
-      if (salidaSucio > 0) mensaje.push(`${salidaSucio} sucios`);
+      if (ingresoLimpio > 0) mensaje.push(`${ingresoLimpio} limpios recibidos`);
+      if (salidaSucio > 0) mensaje.push(`${salidaSucio} sucios retirados`);
       mostrarSplash(`${datos.item}: ${mensaje.join(' / ')}`);
       
       setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
-      setStocksPorItem({...stocksPorItem, [datos.item]: nuevoStock});
       setNovedades("Sin novedades");
     } else {
+      console.error("❌ Error al registrar:", error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
@@ -299,8 +329,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const stockActual = stocksPorItem[i.item] || 0;
         const nuevoStock = stockActual - i.cant;
 
+        console.log(`🏨 Cambio estándar ${i.item}: ${stockActual} -> ${nuevoStock}`);
+
         if (nuevoStock < 0) {
-          mostrarSplash(`Stock insuficiente de ${i.item}`);
+          mostrarSplash(`Stock insuficiente de ${i.item}. Disponible: ${stockActual}`);
           errores = true;
           continue;
         }
@@ -323,6 +355,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
         if (error) {
           errores = true;
+          console.error(`❌ Error en ${i.item}:`, error);
         } else {
           setStocksPorItem(prev => ({ ...prev, [i.item]: nuevoStock }));
         }
@@ -333,6 +366,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         setNovedades("Sin novedades");
       }
     } catch (error) {
+      console.error(error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
@@ -494,6 +528,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
               placeholder="0"
             />
+            <p className="text-[8px] text-slate-500 mt-1">✓ Aumenta el stock del pañol</p>
           </div>
 
           <div className="bg-red-900/10 p-5 rounded-[2rem] border border-red-900/30 text-center">
@@ -507,6 +542,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
               placeholder="0"
             />
+            <p className="text-[8px] text-slate-500 mt-1">⭕ No afecta el stock (solo registro)</p>
           </div>
 
           <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800">
@@ -527,7 +563,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           </button>
         </form>
       ) : (
-        // MODO PAÑOL
+        // MODO PAÑOL - ENTREGA AL ENCARGADO DE PISO
         <form onSubmit={registrarEntregaPiso} className="space-y-4">
           <select 
             className="w-full bg-slate-900 p-4 rounded-2xl border border-slate-800 font-black text-blue-400 outline-none" 
@@ -578,6 +614,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               value={datos.entrega_piso || ""} 
               onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
             />
+            <p className="text-[8px] text-slate-500 text-center mt-2">
+              ⚠️ Esta cantidad se DESCONTARÁ del stock del pañol
+            </p>
           </div>
 
           <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800">
