@@ -560,66 +560,127 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       </div>
 
       {modo === 'habitacion' ? (
-  <div className="space-y-4">
-    {/* Selector de item */}
-    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-      <p className="text-sm font-black text-slate-500 uppercase mb-4">ITEM PARA ENTREGAR</p>
-      
-      <select 
-        className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-6"
-        value={itemSeleccionadoHabitacion}
-        onChange={(e) => setItemSeleccionadoHabitacion(e.target.value)}
-      >
-        {ITEMS_HOTELERIA.map(item => (
-          <option key={item} value={item}>
-            {item} - Pañol: {stocksPorItem[item] || 0} | Uso: {stocksUsoPorItem[item] || 0} | Lav: {stocksLavaderoPorItem[item] || 0}
-          </option>
-        ))}
-      </select>
+        <div className="space-y-4">
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <div className="flex justify-between items-center mb-4">
+              <p className="text-sm font-black text-slate-500 uppercase">ITEMS PARA ENTREGA</p>
+              <div className="flex gap-3 text-xs">
+                <span className="text-green-400">Pañol: {stocksPorItem['SABANAS'] || 0}</span>
+                <span className="text-yellow-400">Uso: {stocksUsoPorItem['SABANAS'] || 0}</span>
+                <span className="text-red-400">Lav: {stocksLavaderoPorItem['SABANAS'] || 0}</span>
+                <span className="text-blue-400">Total: {totalRealPorItem('SABANAS')}</span>
+              </div>
+            </div>
+            
+            <select 
+              className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-4"
+              value={itemsHabitacion.findIndex(i => i.cantidad > 0) >= 0 ? itemsHabitacion.findIndex(i => i.cantidad > 0) : 0}
+              onChange={(e) => {
+                const idx = parseInt(e.target.value);
+                const itemSeleccionado = itemsHabitacion[idx];
+                const cantidad = prompt(`¿Cuántas ${itemSeleccionado.item} va a entregar?`, "0");
+                if (cantidad !== null && parseInt(cantidad) > 0) {
+                  const nuevosItems = [...itemsHabitacion];
+                  nuevosItems[idx].cantidad = parseInt(cantidad);
+                  setItemsHabitacion(nuevosItems);
+                }
+              }}
+            >
+              {itemsHabitacion.map((itemConf, idx) => (
+                <option key={itemConf.item} value={idx}>
+                  {itemConf.item} - Stock: {stocksPorItem[itemConf.item] || 0} | En uso: {stocksUsoPorItem[itemConf.item] || 0} | Lav: {stocksLavaderoPorItem[itemConf.item] || 0}
+                </option>
+              ))}
+            </select>
 
-      {/* Campo único de cantidad */}
-      <div>
-        <label className="text-sm font-black text-green-500 uppercase block mb-2">
-          CANTIDAD A ENTREGAR
-        </label>
-        <input
-          type="number"
-          min="0"
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none"
-          value={cantidadHabitacion || ""}
-          onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
-          placeholder="0"
-        />
-      </div>
-    </div>
+            {itemsHabitacion.some(item => item.cantidad > 0) && (
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                <p className="text-xs font-black text-green-500 uppercase mb-2">ITEMS SELECCIONADOS:</p>
+                <div className="space-y-1">
+                  {itemsHabitacion.filter(item => item.cantidad > 0).map(item => (
+                    <div key={item.item} className="flex justify-between items-center">
+                      <span className="text-sm font-black text-white">{item.item}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg font-black text-green-400">{item.cantidad}</span>
+                        <button 
+                          onClick={() => {
+                            const nuevosItems = [...itemsHabitacion];
+                            const idx = itemsHabitacion.findIndex(i => i.item === item.item);
+                            nuevosItems[idx].cantidad = 0;
+                            setItemsHabitacion(nuevosItems);
+                          }}
+                          className="text-red-500 text-sm font-black px-2 py-1 rounded-lg hover:bg-red-950/30"
+                        >
+                          ✖
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-      <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
-      <textarea 
-        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
-        rows="3" 
-        value={novedades} 
-        onChange={(e) => setNovedades(e.target.value)}
-        placeholder="Observaciones sobre el servicio..."
-      />
-    </div>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              {itemsHabitacion.map((itemConf, idx) => (
+                <div key={itemConf.item} className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nuevosItems = [...itemsHabitacion];
+                      nuevosItems[idx].cantidad = Math.max(0, (nuevosItems[idx].cantidad || 0) - 1);
+                      setItemsHabitacion(nuevosItems);
+                    }}
+                    className="bg-red-900/30 text-red-400 w-8 h-8 rounded-lg font-black text-lg hover:bg-red-900/50"
+                  >
+                    -
+                  </button>
+                  <div className="flex-1 bg-slate-800 rounded-lg px-2 py-1 text-center">
+                    <span className="text-[10px] text-slate-400 block">{itemConf.item}</span>
+                    <span className="text-sm font-black text-white">{itemConf.cantidad || 0}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nuevosItems = [...itemsHabitacion];
+                      nuevosItems[idx].cantidad = (nuevosItems[idx].cantidad || 0) + 1;
+                      setItemsHabitacion(nuevosItems);
+                    }}
+                    className="bg-green-900/30 text-green-400 w-8 h-8 rounded-lg font-black text-lg hover:bg-green-900/50"
+                  >
+                    +
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
 
-    <button 
-      onClick={ejecutarCambioEstandar}
-      disabled={registrando}
-      className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
-    >
-      {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
-    </button>
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
+            <textarea 
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
+              rows="3" 
+              value={novedades} 
+              onChange={(e) => setNovedades(e.target.value)}
+              placeholder="Observaciones sobre el servicio..."
+            />
+          </div>
 
-    <button 
-      onClick={registrarHabitacion} 
-      disabled={registrando || cantidadHabitacion <= 0}
-      className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(registrando || cantidadHabitacion <= 0) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
-    >
-      {registrando ? 'REGISTRANDO...' : 'Registrar Entrega'}
-    </button>
-  </div>
+          <button 
+            onClick={ejecutarCambioEstandar}
+            disabled={registrando}
+            className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
+          >
+            {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
+          </button>
+
+          <button 
+            onClick={ejecutarCambioHabitacion} 
+            disabled={registrando || !itemsHabitacion.some(item => item.cantidad > 0)}
+            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(registrando || !itemsHabitacion.some(item => item.cantidad > 0)) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
+          >
+            {registrando ? 'REGISTRANDO...' : 'Registrar Entrega Personalizada'}
+          </button>
+        </div>
       ) : modo === 'lavadero' ? (
         <form onSubmit={registrarLavadero} className="space-y-4">
           <select 
