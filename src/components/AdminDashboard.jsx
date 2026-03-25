@@ -8,7 +8,11 @@ const AdminDashboard = () => {
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]); 
   const [movimientosAgrupados, setMovimientosAgrupados] = useState({});
   const [resumenStock, setResumenStock] = useState({});
-  const [stockGlobal, setStockGlobal] = useState({}); 
+  const [stockEnUso, setStockEnUso] = useState({});
+  const [stockEnLavadero, setStockEnLavadero] = useState({});
+  const [stockGlobal, setStockGlobal] = useState({});
+  const [stockGlobalUso, setStockGlobalUso] = useState({});
+  const [stockGlobalLavadero, setStockGlobalLavadero] = useState({});
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [sincronizando, setSincronizando] = useState(false);
@@ -49,36 +53,73 @@ const AdminDashboard = () => {
         `)
         .order('created_at', { ascending: true });
 
-      // Calcular stock por piso y stock global
+      // Inicializar mapas
       const stockMap = {};
-      const globalStock = {};
+      const stockUsoMap = {};
+      const stockLavaderoMap = {};
       
       ITEMS_REQUERIDOS.forEach(item => {
-        globalStock[item] = 0;
+        stockGlobal[item] = 0;
+        stockGlobalUso[item] = 0;
+        stockGlobalLavadero[item] = 0;
       });
 
       if (resPisos.data) {
         resPisos.data.forEach(p => {
           stockMap[p.nombre_piso] = {};
+          stockUsoMap[p.nombre_piso] = {};
+          stockLavaderoMap[p.nombre_piso] = {};
           ITEMS_REQUERIDOS.forEach(item => {
             stockMap[p.nombre_piso][item] = 0;
+            stockUsoMap[p.nombre_piso][item] = 0;
+            stockLavaderoMap[p.nombre_piso][item] = 0;
           });
         });
 
-        for (const piso of resPisos.data) {
-          for (const item of ITEMS_REQUERIDOS) {
-            // Buscar el último movimiento para este piso y item
-            const { data: ultimoMov } = await supabase
-              .from('movimientos_stock')
-              .select('stock_fisico_piso')
-              .eq('piso_id', piso.id)
-              .eq('item', item)
-              .order('created_at', { ascending: false })
-              .limit(1);
+        // Procesar movimientos en orden cronológico
+        if (movs) {
+          for (const piso of resPisos.data) {
+            const movsPiso = movs.filter(m => m.piso_id === piso.id);
             
-            const stockPiso = ultimoMov?.[0]?.stock_fisico_piso || 0;
-            stockMap[piso.nombre_piso][item] = stockPiso;
-            globalStock[item] += stockPiso;
+            for (const item of ITEMS_REQUERIDOS) {
+              let pañol = 0;
+              let uso = 0;
+              let lavadero = 0;
+              
+              const movsItem = movsPiso.filter(m => m.item === item);
+              
+              for (const mov of movsItem) {
+                // 1. Lavadero entrega limpio al pañol
+                if (mov.entregado_limpio > 0) {
+                  // Sale del lavadero, entra al pañol
+                  lavadero = Math.max(0, lavadero - mov.entregado_limpio);
+                  pañol += mov.entregado_limpio;
+                }
+                
+                // 2. Pañol entrega al piso/habitación (ropa limpia para usar)
+                if (mov.egreso_limpio > 0) {
+                  // Sale del pañol, va a uso
+                  pañol -= mov.egreso_limpio;
+                  uso += mov.egreso_limpio;
+                }
+                
+                // 3. Retiro de ropa sucia al lavadero
+                if (mov.retirado_sucio > 0) {
+                  // Sale de uso, va al lavadero
+                  uso = Math.max(0, uso - mov.retirado_sucio);
+                  lavadero += mov.retirado_sucio;
+                }
+              }
+              
+              // Guardar valores finales
+              stockMap[piso.nombre_piso][item] = pañol;
+              stockUsoMap[piso.nombre_piso][item] = uso;
+              stockLavaderoMap[piso.nombre_piso][item] = lavadero;
+              
+              stockGlobal[item] += pañol;
+              stockGlobalUso[item] += uso;
+              stockGlobalLavadero[item] += lavadero;
+            }
           }
         }
       }
@@ -96,7 +137,11 @@ const AdminDashboard = () => {
       setHabitacionesEspeciales(resHabs.data || []);
       setMovimientosAgrupados(agrupados);
       setResumenStock(stockMap);
-      setStockGlobal(globalStock);
+      setStockEnUso(stockUsoMap);
+      setStockEnLavadero(stockLavaderoMap);
+      setStockGlobal(stockGlobal);
+      setStockGlobalUso(stockGlobalUso);
+      setStockGlobalLavadero(stockGlobalLavadero);
       
       mostrarSplash("✅ DATOS ACTUALIZADOS");
     } catch (error) {
@@ -161,6 +206,11 @@ const AdminDashboard = () => {
     return `${diaYNumero.charAt(0).toUpperCase() + diaYNumero.slice(1)}, ${hora}`;
   };
 
+  // Calcular total por item (pañol + uso + lavadero)
+  const getTotalPorItem = (item) => {
+    return (stockGlobal[item] || 0) + (stockGlobalUso[item] || 0) + (stockGlobalLavadero[item] || 0);
+  };
+
   return (
     <div className="p-4 md:p-6 bg-slate-950 min-h-screen text-slate-100 font-sans">
       <div className="flex gap-2 mb-6 bg-slate-900 p-1 rounded-lg border border-slate-800 w-fit">
@@ -181,79 +231,144 @@ const AdminDashboard = () => {
             </button>
           </div>
           
-          {/* STOCK TOTAL CONSOLIDADO */}
+          {/* FLUJO TOTAL DE ROPA - 3 ESTADOS */}
           <div className="bg-blue-900/10 border border-blue-900/30 rounded-lg p-4">
             <p className="text-[9px] font-black text-blue-400 uppercase tracking-wider mb-3 text-center">
-              STOCK TOTAL CONSOLIDADO (SUMA DE TODOS LOS PAÑOLES)
+              FLUJO TOTAL DE ROPA (PAÑOL + EN USO + LAVADERO)
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-              {ITEMS_REQUERIDOS.map(item => (
-                <div key={item} className="bg-slate-900/80 p-2 rounded-md border border-blue-800/40 text-center">
-                  <span className="text-[7px] text-slate-500 font-black uppercase block">{item}</span>
-                  <span className={`text-xl font-black ${stockGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>
-                    {stockGlobal[item] || 0}
-                  </span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="bg-green-900/20 p-3 rounded-lg border border-green-900/30">
+                <p className="text-[8px] font-black text-green-500 uppercase text-center">📍 PAÑOL (Limpio disponible)</p>
+                <div className="grid grid-cols-4 gap-1 mt-2">
+                  {ITEMS_REQUERIDOS.map(item => (
+                    <div key={item} className="text-center">
+                      <span className="text-[6px] text-slate-500 block">{item.substring(0, 4)}</span>
+                      <span className={`text-sm font-black ${(stockGlobal[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
+                        {stockGlobal[item] || 0}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+              <div className="bg-yellow-900/20 p-3 rounded-lg border border-yellow-900/30">
+                <p className="text-[8px] font-black text-yellow-500 uppercase text-center">🛏️ EN USO (Habitaciones/Pisos)</p>
+                <div className="grid grid-cols-4 gap-1 mt-2">
+                  {ITEMS_REQUERIDOS.map(item => (
+                    <div key={item} className="text-center">
+                      <span className="text-[6px] text-slate-500 block">{item.substring(0, 4)}</span>
+                      <span className="text-sm font-black text-yellow-400">{stockGlobalUso[item] || 0}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-red-900/20 p-3 rounded-lg border border-red-900/30">
+                <p className="text-[8px] font-black text-red-500 uppercase text-center">🧺 EN LAVADERO (Sucio)</p>
+                <div className="grid grid-cols-4 gap-1 mt-2">
+                  {ITEMS_REQUERIDOS.map(item => (
+                    <div key={item} className="text-center">
+                      <span className="text-[6px] text-slate-500 block">{item.substring(0, 4)}</span>
+                      <span className="text-sm font-black text-red-400">{stockGlobalLavadero[item] || 0}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-blue-900/30 pt-3 mt-2 text-center">
+              <p className="text-[8px] font-black text-blue-400 uppercase">📊 TOTAL POR ITEM (Pañol + Uso + Lavadero)</p>
+              <div className="grid grid-cols-4 gap-2 mt-2">
+                {ITEMS_REQUERIDOS.map(item => (
+                  <div key={item} className="bg-slate-800/50 p-1 rounded text-center">
+                    <span className="text-[6px] text-slate-400 block">{item}</span>
+                    <span className="text-base font-black text-blue-400">{getTotalPorItem(item)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* STOCK POR PISO */}
+          {/* STOCK POR PISO - CON 3 ESTADOS */}
           {Object.keys(resumenStock).map((nombrePiso) => (
             <div key={nombrePiso} className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden shadow-lg">
               <div className="bg-slate-800/40 px-4 py-2 border-b border-slate-800">
                 <span className="text-sm font-black text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-1 p-2 bg-slate-950/50 border-b border-slate-800">
-                {ITEMS_REQUERIDOS.map(item => (
-                  <div key={item} className="p-1.5 rounded-md border bg-slate-900 border-slate-700">
-                    <span className="text-[6px] font-black uppercase block text-center text-slate-500">{item}</span>
-                    <span className="text-base font-black block text-center text-blue-400">{resumenStock[nombrePiso][item]}</span>
+              
+              {/* 3 estados del piso */}
+              <div className="grid grid-cols-3 gap-2 p-3 bg-slate-950/50 border-b border-slate-800">
+                <div className="bg-green-900/20 p-2 rounded-lg">
+                  <p className="text-[7px] font-black text-green-500 uppercase text-center">Pañol</p>
+                  <div className="grid grid-cols-4 gap-0.5 mt-1">
+                    {ITEMS_REQUERIDOS.map(item => (
+                      <div key={item} className="text-center">
+                        <span className="text-[5px] text-slate-500 block">{item.substring(0, 3)}</span>
+                        <span className={`text-[10px] font-black ${(resumenStock[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
+                          {resumenStock[nombrePiso]?.[item] || 0}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+                <div className="bg-yellow-900/20 p-2 rounded-lg">
+                  <p className="text-[7px] font-black text-yellow-500 uppercase text-center">En Uso</p>
+                  <div className="grid grid-cols-4 gap-0.5 mt-1">
+                    {ITEMS_REQUERIDOS.map(item => (
+                      <div key={item} className="text-center">
+                        <span className="text-[5px] text-slate-500 block">{item.substring(0, 3)}</span>
+                        <span className="text-[10px] font-black text-yellow-400">{stockEnUso[nombrePiso]?.[item] || 0}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-red-900/20 p-2 rounded-lg">
+                  <p className="text-[7px] font-black text-red-500 uppercase text-center">Lavadero</p>
+                  <div className="grid grid-cols-4 gap-0.5 mt-1">
+                    {ITEMS_REQUERIDOS.map(item => (
+                      <div key={item} className="text-center">
+                        <span className="text-[5px] text-slate-500 block">{item.substring(0, 3)}</span>
+                        <span className="text-[10px] font-black text-red-400">{stockEnLavadero[nombrePiso]?.[item] || 0}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
               
               {/* HISTORIAL DE MOVIMIENTOS */}
               <div className="p-2 space-y-1 max-h-[400px] overflow-y-auto bg-slate-950/20">
                 {movimientosAgrupados[nombrePiso]?.map((m) => (
                   <div key={m.id} className="bg-slate-950/50 px-2 py-1.5 rounded-md border border-slate-800/50 flex items-center group hover:bg-slate-800 transition-all text-xs">
-                    {/* Fecha e Item */}
-                    <div className="w-[22%] shrink-0">
+                    <div className="w-[18%] shrink-0">
                       <p className="font-black text-white uppercase">{m.item}</p>
                       <p className="text-[6px] text-blue-500 font-black uppercase">{formatearFechaGuardia(m.created_at)}</p>
+                      {m.es_cambio_habitacion && (
+                        <span className="text-[5px] bg-purple-900/50 px-1 rounded">HAB</span>
+                      )}
                     </div>
                     
-                    {/* Columnas de movimientos */}
-                    <div className="flex-1 grid grid-cols-3 gap-1 px-1">
+                    <div className="flex-1 grid grid-cols-3 gap-1">
                       <div className="text-center">
-                        <span className="text-[6px] text-green-500 font-black uppercase block">Lavado → Pañol</span>
+                        <span className="text-[6px] text-green-500 font-black uppercase">Lav→Pañol</span>
                         <p className="text-sm font-black text-green-500">
                           {m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}
                         </p>
                       </div>
                       <div className="text-center">
-                        <span className="text-[6px] text-orange-500 font-black uppercase block">Pañol → Piso</span>
+                        <span className="text-[6px] text-orange-500 font-black uppercase">Pañol→Uso</span>
                         <p className="text-sm font-black text-orange-500">
-                          {m.egreso_limpio > 0 && !m.es_cambio_habitacion ? `-${m.egreso_limpio}` : '—'}
+                          {m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}
                         </p>
                       </div>
                       <div className="text-center">
-                        <span className="text-[6px] text-purple-500 font-black uppercase block">Pañol → Habitación</span>
-                        <p className="text-sm font-black text-purple-500">
-                          {m.egreso_limpio > 0 && m.es_cambio_habitacion ? `-${m.egreso_limpio}` : '—'}
+                        <span className="text-[6px] text-red-500 font-black uppercase">Uso→Lav</span>
+                        <p className="text-sm font-black text-red-500">
+                          {m.retirado_sucio > 0 ? m.retirado_sucio : '—'}
                         </p>
                       </div>
                     </div>
                     
-                    {/* Sucio a lavadero y operador */}
-                    <div className="w-[28%] flex items-center justify-end gap-1 border-l border-slate-800 pl-2">
-                      <div className="text-center">
-                        <span className="text-[6px] text-red-500 font-black uppercase block">Sucio → Lavadero</span>
-                        <p className="text-sm font-black text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[6px] text-slate-400 font-black uppercase">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
-                      </div>
+                    <div className="w-[25%] flex items-center justify-end gap-1 border-l border-slate-800 pl-2">
+                      <p className="text-[6px] text-slate-400 font-black uppercase truncate">
+                        {m.pañolero?.jerarquia} {m.pañolero?.apellido}
+                      </p>
                       <button onClick={() => eliminarMovimiento(m.id)} className="p-0.5 bg-red-950/30 text-red-500 rounded border border-red-900/30 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
