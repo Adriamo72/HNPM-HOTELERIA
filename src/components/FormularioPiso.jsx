@@ -18,13 +18,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   const [cargando, setCargando] = useState(true);
   const [registrando, setRegistrando] = useState(false);
   
-  const [itemsHabitacion, setItemsHabitacion] = useState([
-    { item: 'SABANAS', cantidad: 0 },
-    { item: 'TOALLAS', cantidad: 0 },
-    { item: 'TOALLONES', cantidad: 0 },
-    { item: 'FRAZADAS', cantidad: 0 },
-    { item: 'CUBRECAMAS', cantidad: 0 }
-  ]);
+  // Estados para el formulario de habitación
+  const [itemSeleccionadoHabitacion, setItemSeleccionadoHabitacion] = useState('SABANAS');
+  const [cantidadHabitacion, setCantidadHabitacion] = useState(0);
 
   useEffect(() => {
     if (slugPiso) {
@@ -118,12 +114,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           }
         }
         
-        console.log("📊 Stocks cargados:", { 
-          pañol: stocksTemp, 
-          uso: stocksUsoTemp, 
-          lavadero: stocksLavaderoTemp 
-        });
-        
         setStocksPorItem(stocksTemp);
         setStocksUsoPorItem(stocksUsoTemp);
         setStocksLavaderoPorItem(stocksLavaderoTemp);
@@ -141,14 +131,8 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
   };
 
-  const actualizarItemHabitacion = (index, valor) => {
-    const nuevosItems = [...itemsHabitacion];
-    nuevosItems[index].cantidad = parseInt(valor) || 0;
-    setItemsHabitacion(nuevosItems);
-  };
-
   const actualizarStockCompleto = async (item, nuevoPañol, nuevoUso, nuevoLavadero) => {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('stock_piso')
       .upsert({
         piso_id: piso.id,
@@ -157,262 +141,74 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         stock_en_uso: nuevoUso,
         stock_lavadero: nuevoLavadero,
         updated_at: new Date()
-      }, { onConflict: 'piso_id,item' })
-      .select();
+      }, { onConflict: 'piso_id,item' });
     
     if (error) {
       console.error("Error actualizando stock_piso:", error);
       return false;
     }
-    console.log(`✅ Stock actualizado para ${item}:`, data);
     return true;
   };
 
-  // ==================== REGISTRO LAVADERO ====================
-  const registrarLavadero = async (e) => {
-    e.preventDefault();
-    
-    if (!piso?.id) {
-      mostrarSplash("Error: Piso no identificado");
-      return;
-    }
-
-    const ingresoLimpio = parseInt(datos.carga_lavadero || 0);
-    const salidaSucio = parseInt(datos.retirado_sucio || 0);
-
-    if (ingresoLimpio === 0 && salidaSucio === 0) {
-      mostrarSplash("Ingrese al menos una cantidad");
-      return;
-    }
-
-    setRegistrando(true);
-
-    let nuevoStockPañol = stocksPorItem[datos.item] || 0;
-    let nuevoStockUso = stocksUsoPorItem[datos.item] || 0;
-    let nuevoStockLavadero = stocksLavaderoPorItem[datos.item] || 0;
-    let mensajes = [];
-    let ajusteAutomatico = false;
-
-    console.log(`🔍 Estado actual - ${datos.item}: Pañol=${nuevoStockPañol}, Uso=${nuevoStockUso}, Lavadero=${nuevoStockLavadero}`);
-    console.log(`📝 Operación - Ingreso limpio: ${ingresoLimpio}, Salida sucio: ${salidaSucio}`);
-
-    if (salidaSucio > 0) {
-      if (nuevoStockUso >= salidaSucio) {
-        nuevoStockUso -= salidaSucio;
-        nuevoStockLavadero += salidaSucio;
-        mensajes.push(`${salidaSucio} sucios`);
-      } else {
-        const deficit = salidaSucio - nuevoStockUso;
-        nuevoStockPañol -= deficit;
-        nuevoStockUso = 0;
-        nuevoStockLavadero += salidaSucio;
-        ajusteAutomatico = true;
-        mensajes.push(`${salidaSucio} sucios (${deficit} ajustado)`);
-      }
-    }
-
-    if (ingresoLimpio > 0) {
-      if (nuevoStockLavadero >= ingresoLimpio) {
-        nuevoStockLavadero -= ingresoLimpio;
-        nuevoStockPañol += ingresoLimpio;
-        mensajes.push(`${ingresoLimpio} limpios`);
-      } else {
-        const deficit = ingresoLimpio - nuevoStockLavadero;
-        nuevoStockLavadero = 0;
-        nuevoStockPañol += ingresoLimpio;
-        ajusteAutomatico = true;
-        mensajes.push(`${ingresoLimpio} limpios (${deficit} nuevo ingreso)`);
-      }
-    }
-
-    if (nuevoStockPañol < 0) {
-      mostrarSplash(`❌ Error: Stock en pañol negativo. Contacte administración.`);
-      setRegistrando(false);
-      return;
-    }
-
-    console.log(`📊 Resultado final - Pañol: ${nuevoStockPañol}, Uso: ${nuevoStockUso}, Lavadero: ${nuevoStockLavadero}`);
-
-    const movimiento = {
-      piso_id: piso.id,
-      dni_pañolero: perfilUsuario.dni,
-      item: datos.item,
-      entregado_limpio: ingresoLimpio,
-      retirado_sucio: salidaSucio,
-      stock_fisico_piso: nuevoStockPañol,
-      novedades: novedades + (ajusteAutomatico ? " [Ajuste automático]" : "")
-    };
-
-    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
-    
-    if (movError) {
-      console.error("Error insertando movimiento:", movError);
-      mostrarSplash("❌ ERROR EN REGISTRO");
-      setRegistrando(false);
-      return;
-    }
-
-    const ok = await actualizarStockCompleto(datos.item, nuevoStockPañol, nuevoStockUso, nuevoStockLavadero);
-    
-    if (ok) {
-      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
-      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
-      setStocksLavaderoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockLavadero }));
-      mostrarSplash(`✅ ${datos.item}: ${mensajes.join(' / ')}${ajusteAutomatico ? ' ⚠️ Ajuste' : ''}`);
-      setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
-      setNovedades("Sin novedades");
-    } else {
-      mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
-    }
-    
-    setRegistrando(false);
-  };
-
-  // ==================== REGISTRO PAÑOL - ENTREGA A PISO ====================
-  const registrarEntregaPiso = async (e) => {
-    e.preventDefault();
-    
-    if (!piso?.id) {
-      mostrarSplash("Error: Piso no identificado");
-      return;
-    }
-
-    if (!enfermeroEncontrado) {
-      mostrarSplash("Debe buscar un encargado de piso");
-      return;
-    }
-
-    const cantidadEntregada = parseInt(datos.entrega_piso || 0);
-    if (cantidadEntregada <= 0) {
-      mostrarSplash("Ingrese una cantidad válida");
-      return;
-    }
-
-    setRegistrando(true);
-
-    const stockActualPañol = stocksPorItem[datos.item] || 0;
-    const nuevoStockPañol = stockActualPañol - cantidadEntregada;
-    const nuevoStockUso = (stocksUsoPorItem[datos.item] || 0) + cantidadEntregada;
-
-    console.log(`📦 Entrega a piso - ${datos.item}: Pañol ${stockActualPañol} → ${nuevoStockPañol}, Uso +${cantidadEntregada}`);
-
-    if (nuevoStockPañol < 0) {
-      mostrarSplash(`❌ Stock insuficiente. Disponible: ${stockActualPañol}`);
-      setRegistrando(false);
-      return;
-    }
-
-    const movimiento = {
-      piso_id: piso.id,
-      dni_pañolero: perfilUsuario.dni,
-      dni_enfermero: enfermeroEncontrado.dni,
-      item: datos.item,
-      egreso_limpio: cantidadEntregada,
-      stock_fisico_piso: nuevoStockPañol,
-      novedades: novedades
-    };
-
-    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
-    
-    if (movError) {
-      console.error("Error insertando movimiento:", movError);
-      mostrarSplash("❌ ERROR EN REGISTRO");
-      setRegistrando(false);
-      return;
-    }
-
-    const ok = await actualizarStockCompleto(datos.item, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[datos.item] || 0);
-    
-    if (ok) {
-      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
-      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
-      mostrarSplash(`✅ ${cantidadEntregada} ${datos.item} entregados a ${enfermeroEncontrado.apellido}`);
-      setDatos({ ...datos, entrega_piso: 0 });
-      setBusquedaDni('');
-      setEnfermeroEncontrado(null);
-      setNovedades("Sin novedades");
-    } else {
-      mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
-    }
-    
-    setRegistrando(false);
-  };
-
   // ==================== REGISTRO HABITACIÓN ====================
-  const ejecutarCambioHabitacion = async () => {
+  const registrarHabitacion = async () => {
     if (!piso?.id) {
       mostrarSplash("ERROR: Piso no identificado");
       return;
     }
 
-    const hayMovimientos = itemsHabitacion.some(item => item.cantidad > 0);
+    if (cantidadHabitacion <= 0) {
+      mostrarSplash("INGRESE UNA CANTIDAD VÁLIDA");
+      return;
+    }
 
-    if (!hayMovimientos) {
-      mostrarSplash("INGRESE AL MENOS UN ITEM");
+    const stockActualPañol = stocksPorItem[itemSeleccionadoHabitacion] || 0;
+    const nuevoStockPañol = stockActualPañol - cantidadHabitacion;
+    const nuevoStockUso = (stocksUsoPorItem[itemSeleccionadoHabitacion] || 0) + cantidadHabitacion;
+
+    if (nuevoStockPañol < 0) {
+      mostrarSplash(`⚠️ Stock insuficiente de ${itemSeleccionadoHabitacion}. Disponible: ${stockActualPañol}`);
       return;
     }
 
     setRegistrando(true);
-    
-    try {
-      let registrosExitosos = 0;
-      const movimientosInsertados = [];
-      
-      for (const itemConf of itemsHabitacion) {
-        if (itemConf.cantidad === 0) continue;
 
-        const stockActualPañol = stocksPorItem[itemConf.item] || 0;
-        const nuevoStockPañol = stockActualPañol - itemConf.cantidad;
-        const nuevoStockUso = (stocksUsoPorItem[itemConf.item] || 0) + itemConf.cantidad;
+    const movimiento = {
+      piso_id: piso.id,
+      dni_pañolero: perfilUsuario.dni,
+      item: itemSeleccionadoHabitacion,
+      egreso_limpio: cantidadHabitacion,
+      stock_fisico_piso: nuevoStockPañol,
+      novedades: novedades,
+      es_cambio_habitacion: true
+    };
 
-        if (nuevoStockPañol < 0) {
-          mostrarSplash(`⚠️ Stock insuficiente de ${itemConf.item}. Disponible: ${stockActualPañol}`);
-          continue;
-        }
-
-        const movimiento = {
-          piso_id: piso.id,
-          dni_pañolero: perfilUsuario.dni,
-          item: itemConf.item,
-          egreso_limpio: itemConf.cantidad,
-          stock_fisico_piso: nuevoStockPañol,
-          novedades: novedades,
-          es_cambio_habitacion: true
-        };
-
-        if (habitacionEspecial) {
-          movimiento.habitacion_id = habitacionEspecial.id;
-        }
-
-        const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
-        
-        if (movError) {
-          console.error(`❌ Error en ${itemConf.item}:`, movError);
-          continue;
-        }
-
-        const ok = await actualizarStockCompleto(itemConf.item, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[itemConf.item] || 0);
-        
-        if (ok) {
-          registrosExitosos++;
-          movimientosInsertados.push(`${itemConf.item}(${itemConf.cantidad})`);
-          setStocksPorItem(prev => ({ ...prev, [itemConf.item]: nuevoStockPañol }));
-          setStocksUsoPorItem(prev => ({ ...prev, [itemConf.item]: nuevoStockUso }));
-        }
-      }
-      
-      if (registrosExitosos > 0) {
-        mostrarSplash(`✅ ${registrosExitosos} ITEM(S): ${movimientosInsertados.join(', ')}`);
-        setNovedades("Sin novedades");
-        setItemsHabitacion(itemsHabitacion.map(item => ({ ...item, cantidad: 0 })));
-      }
-      
-    } catch (error) {
-      console.error("Error:", error);
-      mostrarSplash("ERROR EN REGISTRO");
-    } finally {
-      setRegistrando(false);
+    if (habitacionEspecial) {
+      movimiento.habitacion_id = habitacionEspecial.id;
     }
+
+    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
+    
+    if (movError) {
+      console.error("Error:", movError);
+      mostrarSplash("❌ ERROR EN REGISTRO");
+      setRegistrando(false);
+      return;
+    }
+
+    const ok = await actualizarStockCompleto(itemSeleccionadoHabitacion, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[itemSeleccionadoHabitacion] || 0);
+    
+    if (ok) {
+      setStocksPorItem(prev => ({ ...prev, [itemSeleccionadoHabitacion]: nuevoStockPañol }));
+      setStocksUsoPorItem(prev => ({ ...prev, [itemSeleccionadoHabitacion]: nuevoStockUso }));
+      mostrarSplash(`✅ ${cantidadHabitacion} ${itemSeleccionadoHabitacion} entregados`);
+      setCantidadHabitacion(0);
+      setNovedades("Sin novedades");
+    } else {
+      mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
+    }
+    
+    setRegistrando(false);
   };
 
   // ==================== CAMBIO ESTÁNDAR HABITACIÓN ====================
@@ -493,6 +289,167 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     }
   };
 
+  // ==================== REGISTRO LAVADERO ====================
+  const registrarLavadero = async (e) => {
+    e.preventDefault();
+    
+    if (!piso?.id) {
+      mostrarSplash("Error: Piso no identificado");
+      return;
+    }
+
+    const ingresoLimpio = parseInt(datos.carga_lavadero || 0);
+    const salidaSucio = parseInt(datos.retirado_sucio || 0);
+
+    if (ingresoLimpio === 0 && salidaSucio === 0) {
+      mostrarSplash("Ingrese al menos una cantidad");
+      return;
+    }
+
+    setRegistrando(true);
+
+    let nuevoStockPañol = stocksPorItem[datos.item] || 0;
+    let nuevoStockUso = stocksUsoPorItem[datos.item] || 0;
+    let nuevoStockLavadero = stocksLavaderoPorItem[datos.item] || 0;
+    let mensajes = [];
+    let ajusteAutomatico = false;
+
+    if (salidaSucio > 0) {
+      if (nuevoStockUso >= salidaSucio) {
+        nuevoStockUso -= salidaSucio;
+        nuevoStockLavadero += salidaSucio;
+        mensajes.push(`${salidaSucio} sucios`);
+      } else {
+        const deficit = salidaSucio - nuevoStockUso;
+        nuevoStockPañol -= deficit;
+        nuevoStockUso = 0;
+        nuevoStockLavadero += salidaSucio;
+        ajusteAutomatico = true;
+        mensajes.push(`${salidaSucio} sucios (${deficit} ajustado)`);
+      }
+    }
+
+    if (ingresoLimpio > 0) {
+      if (nuevoStockLavadero >= ingresoLimpio) {
+        nuevoStockLavadero -= ingresoLimpio;
+        nuevoStockPañol += ingresoLimpio;
+        mensajes.push(`${ingresoLimpio} limpios`);
+      } else {
+        const deficit = ingresoLimpio - nuevoStockLavadero;
+        nuevoStockLavadero = 0;
+        nuevoStockPañol += ingresoLimpio;
+        ajusteAutomatico = true;
+        mensajes.push(`${ingresoLimpio} limpios (${deficit} nuevo ingreso)`);
+      }
+    }
+
+    if (nuevoStockPañol < 0) {
+      mostrarSplash(`❌ Error: Stock en pañol negativo. Contacte administración.`);
+      setRegistrando(false);
+      return;
+    }
+
+    const movimiento = {
+      piso_id: piso.id,
+      dni_pañolero: perfilUsuario.dni,
+      item: datos.item,
+      entregado_limpio: ingresoLimpio,
+      retirado_sucio: salidaSucio,
+      stock_fisico_piso: nuevoStockPañol,
+      novedades: novedades + (ajusteAutomatico ? " [Ajuste automático]" : "")
+    };
+
+    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
+    
+    if (movError) {
+      mostrarSplash("❌ ERROR EN REGISTRO");
+      setRegistrando(false);
+      return;
+    }
+
+    const ok = await actualizarStockCompleto(datos.item, nuevoStockPañol, nuevoStockUso, nuevoStockLavadero);
+    
+    if (ok) {
+      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
+      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
+      setStocksLavaderoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockLavadero }));
+      mostrarSplash(`✅ ${datos.item}: ${mensajes.join(' / ')}${ajusteAutomatico ? ' ⚠️ Ajuste' : ''}`);
+      setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
+      setNovedades("Sin novedades");
+    } else {
+      mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
+    }
+    
+    setRegistrando(false);
+  };
+
+  // ==================== REGISTRO PAÑOL - ENTREGA A PISO ====================
+  const registrarEntregaPiso = async (e) => {
+    e.preventDefault();
+    
+    if (!piso?.id) {
+      mostrarSplash("Error: Piso no identificado");
+      return;
+    }
+
+    if (!enfermeroEncontrado) {
+      mostrarSplash("Debe buscar un encargado de piso");
+      return;
+    }
+
+    const cantidadEntregada = parseInt(datos.entrega_piso || 0);
+    if (cantidadEntregada <= 0) {
+      mostrarSplash("Ingrese una cantidad válida");
+      return;
+    }
+
+    setRegistrando(true);
+
+    const stockActualPañol = stocksPorItem[datos.item] || 0;
+    const nuevoStockPañol = stockActualPañol - cantidadEntregada;
+    const nuevoStockUso = (stocksUsoPorItem[datos.item] || 0) + cantidadEntregada;
+
+    if (nuevoStockPañol < 0) {
+      mostrarSplash(`❌ Stock insuficiente. Disponible: ${stockActualPañol}`);
+      setRegistrando(false);
+      return;
+    }
+
+    const movimiento = {
+      piso_id: piso.id,
+      dni_pañolero: perfilUsuario.dni,
+      dni_enfermero: enfermeroEncontrado.dni,
+      item: datos.item,
+      egreso_limpio: cantidadEntregada,
+      stock_fisico_piso: nuevoStockPañol,
+      novedades: novedades
+    };
+
+    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
+    
+    if (movError) {
+      mostrarSplash("❌ ERROR EN REGISTRO");
+      setRegistrando(false);
+      return;
+    }
+
+    const ok = await actualizarStockCompleto(datos.item, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[datos.item] || 0);
+    
+    if (ok) {
+      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
+      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
+      mostrarSplash(`✅ ${cantidadEntregada} ${datos.item} entregados a ${enfermeroEncontrado.apellido}`);
+      setDatos({ ...datos, entrega_piso: 0 });
+      setBusquedaDni('');
+      setEnfermeroEncontrado(null);
+      setNovedades("Sin novedades");
+    } else {
+      mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
+    }
+    
+    setRegistrando(false);
+  };
+
   const buscarEnfermero = async () => {
     if (busquedaDni.length < 7) {
       mostrarSplash("DNI inválido");
@@ -560,81 +517,81 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       </div>
 
       {modo === 'habitacion' ? (
-  <div className="space-y-4">
-    {/* Selector de item y cantidad */}
-    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-      <p className="text-sm font-black text-slate-500 uppercase mb-4">ITEM PARA ENTREGAR</p>
-      
-      <select 
-        className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-4"
-        value={itemSeleccionadoHabitacion}
-        onChange={(e) => setItemSeleccionadoHabitacion(e.target.value)}
-      >
-        {ITEMS_HOTELERIA.map(item => (
-          <option key={item} value={item}>
-            {item}
-          </option>
-        ))}
-      </select>
+        <div className="space-y-4">
+          {/* Selector de item y cantidad */}
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <p className="text-sm font-black text-slate-500 uppercase mb-4">ITEM PARA ENTREGAR</p>
+            
+            <select 
+              className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-4"
+              value={itemSeleccionadoHabitacion}
+              onChange={(e) => setItemSeleccionadoHabitacion(e.target.value)}
+            >
+              {ITEMS_HOTELERIA.map(item => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
 
-      <div>
-        <label className="text-sm font-black text-green-500 uppercase block mb-2">
-          CANTIDAD
-        </label>
-        <input
-          type="number"
-          min="0"
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none"
-          value={cantidadHabitacion || ""}
-          onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
-          placeholder="0"
-        />
-      </div>
+            <div>
+              <label className="text-sm font-black text-green-500 uppercase block mb-2">
+                CANTIDAD
+              </label>
+              <input
+                type="number"
+                min="0"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none"
+                value={cantidadHabitacion || ""}
+                onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
+                placeholder="0"
+              />
+            </div>
 
-      {/* Información de stock del item seleccionado */}
-      <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-800 text-center">
-        <div>
-          <p className="text-[10px] text-green-500 uppercase font-black">PAÑOL</p>
-          <p className="text-lg font-black text-green-400">{stocksPorItem[itemSeleccionadoHabitacion] || 0}</p>
+            {/* Información de stock del item seleccionado */}
+            <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-800 text-center">
+              <div>
+                <p className="text-[10px] text-green-500 uppercase font-black">PAÑOL</p>
+                <p className="text-lg font-black text-green-400">{stocksPorItem[itemSeleccionadoHabitacion] || 0}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-yellow-500 uppercase font-black">EN USO</p>
+                <p className="text-lg font-black text-yellow-400">{stocksUsoPorItem[itemSeleccionadoHabitacion] || 0}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-red-500 uppercase font-black">LAVADERO</p>
+                <p className="text-lg font-black text-red-400">{stocksLavaderoPorItem[itemSeleccionadoHabitacion] || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
+            <textarea 
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
+              rows="2" 
+              value={novedades} 
+              onChange={(e) => setNovedades(e.target.value)}
+              placeholder="Ej: No había toallón sucio..."
+            />
+          </div>
+
+          <button 
+            onClick={ejecutarCambioEstandar}
+            disabled={registrando}
+            className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
+          >
+            {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
+          </button>
+
+          <button 
+            onClick={registrarHabitacion} 
+            disabled={registrando || cantidadHabitacion <= 0}
+            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(registrando || cantidadHabitacion <= 0) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
+          >
+            {registrando ? 'REGISTRANDO...' : 'Registrar Entrega'}
+          </button>
         </div>
-        <div>
-          <p className="text-[10px] text-yellow-500 uppercase font-black">EN USO</p>
-          <p className="text-lg font-black text-yellow-400">{stocksUsoPorItem[itemSeleccionadoHabitacion] || 0}</p>
-        </div>
-        <div>
-          <p className="text-[10px] text-red-500 uppercase font-black">LAVADERO</p>
-          <p className="text-lg font-black text-red-400">{stocksLavaderoPorItem[itemSeleccionadoHabitacion] || 0}</p>
-        </div>
-      </div>
-    </div>
-
-    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-      <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
-      <textarea 
-        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
-        rows="2" 
-        value={novedades} 
-        onChange={(e) => setNovedades(e.target.value)}
-        placeholder="Ej: No había toallón sucio..."
-      />
-    </div>
-
-    <button 
-      onClick={ejecutarCambioEstandar}
-      disabled={registrando}
-      className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
-    >
-      {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
-    </button>
-
-    <button 
-      onClick={registrarHabitacion} 
-      disabled={registrando || cantidadHabitacion <= 0}
-      className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(registrando || cantidadHabitacion <= 0) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
-    >
-      {registrando ? 'REGISTRANDO...' : 'Registrar Entrega'}
-    </button>
-  </div>
       ) : modo === 'lavadero' ? (
         <form onSubmit={registrarLavadero} className="space-y-4">
           <select 
