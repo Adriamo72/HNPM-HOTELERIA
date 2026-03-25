@@ -80,37 +80,58 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const stocksLavaderoTemp = {};
         
         for (const item of ITEMS_HOTELERIA) {
-          const { data: stockPañol } = await supabase
+          // Obtener stock de la tabla stock_piso
+          const { data: stockData, error } = await supabase
             .from('stock_piso')
-            .select('cantidad')
+            .select('stock_pañol, stock_en_uso, stock_lavadero')
             .eq('piso_id', pisoData.id)
             .eq('item', item)
             .maybeSingle();
-          stocksTemp[item] = stockPañol?.cantidad || 0;
           
-          const { data: stockUso } = await supabase
-            .from('stock_piso_uso')
-            .select('cantidad')
-            .eq('piso_id', pisoData.id)
-            .eq('item', item)
-            .maybeSingle();
-          stocksUsoTemp[item] = stockUso?.cantidad || 0;
+          if (error) {
+            console.error(`Error cargando stock para ${item}:`, error);
+          }
           
-          const { data: stockLavadero } = await supabase
-            .from('stock_lavadero')
-            .select('cantidad')
-            .eq('piso_id', pisoData.id)
-            .eq('item', item)
-            .maybeSingle();
-          stocksLavaderoTemp[item] = stockLavadero?.cantidad || 0;
+          // Si no existe registro, crear uno con valores 0
+          if (!stockData) {
+            console.log(`Creando registro inicial para ${item} en piso ${pisoData.nombre_piso}`);
+            const { error: insertError } = await supabase
+              .from('stock_piso')
+              .insert({
+                piso_id: pisoData.id,
+                item: item,
+                stock_pañol: 0,
+                stock_en_uso: 0,
+                stock_lavadero: 0,
+                updated_at: new Date()
+              });
+            
+            if (insertError) {
+              console.error(`Error creando registro para ${item}:`, insertError);
+            }
+            
+            stocksTemp[item] = 0;
+            stocksUsoTemp[item] = 0;
+            stocksLavaderoTemp[item] = 0;
+          } else {
+            stocksTemp[item] = stockData.stock_pañol || 0;
+            stocksUsoTemp[item] = stockData.stock_en_uso || 0;
+            stocksLavaderoTemp[item] = stockData.stock_lavadero || 0;
+          }
         }
+        
+        console.log("📊 Stocks cargados:", { 
+          pañol: stocksTemp, 
+          uso: stocksUsoTemp, 
+          lavadero: stocksLavaderoTemp 
+        });
         
         setStocksPorItem(stocksTemp);
         setStocksUsoPorItem(stocksUsoTemp);
         setStocksLavaderoPorItem(stocksLavaderoTemp);
       }
     } catch (error) {
-      console.error(error);
+      console.error("Error en cargarContexto:", error);
       mostrarSplash("ERROR INESPERADO");
     } finally {
       setCargando(false);
@@ -128,43 +149,200 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setItemsHabitacion(nuevosItems);
   };
 
-  const actualizarStockPañol = async (item, nuevaCantidad) => {
-    const { error } = await supabase
+  // Actualizar los 3 campos en una sola tabla
+  const actualizarStockCompleto = async (item, nuevoPañol, nuevoUso, nuevoLavadero) => {
+    const { data, error } = await supabase
       .from('stock_piso')
       .upsert({
         piso_id: piso.id,
         item: item,
-        cantidad: nuevaCantidad,
+        stock_pañol: nuevoPañol,
+        stock_en_uso: nuevoUso,
+        stock_lavadero: nuevoLavadero,
         updated_at: new Date()
-      }, { onConflict: 'piso_id,item' });
-    if (error) console.error("Error actualizando stock_piso:", error);
-    return !error;
+      }, { onConflict: 'piso_id,item' })
+      .select();
+    
+    if (error) {
+      console.error("Error actualizando stock_piso:", error);
+      return false;
+    }
+    console.log(`✅ Stock actualizado para ${item}:`, data);
+    return true;
   };
 
-  const actualizarStockUso = async (item, nuevaCantidad) => {
-    const { error } = await supabase
-      .from('stock_piso_uso')
-      .upsert({
-        piso_id: piso.id,
-        item: item,
-        cantidad: nuevaCantidad,
-        updated_at: new Date()
-      }, { onConflict: 'piso_id,item' });
-    if (error) console.error("Error actualizando stock_piso_uso:", error);
-    return !error;
+  // ==================== REGISTRO LAVADERO ====================
+  const registrarLavadero = async (e) => {
+    e.preventDefault();
+    
+    if (!piso?.id) {
+      mostrarSplash("Error: Piso no identificado");
+      return;
+    }
+
+    const ingresoLimpio = parseInt(datos.carga_lavadero || 0);
+    const salidaSucio = parseInt(datos.retirado_sucio || 0);
+
+    if (ingresoLimpio === 0 && salidaSucio === 0) {
+      mostrarSplash("Ingrese al menos una cantidad");
+      return;
+    }
+
+    setRegistrando(true);
+
+    let nuevoStockPañol = stocksPorItem[datos.item] || 0;
+    let nuevoStockUso = stocksUsoPorItem[datos.item] || 0;
+    let nuevoStockLavadero = stocksLavaderoPorItem[datos.item] || 0;
+    let mensajes = [];
+    let ajusteAutomatico = false;
+
+    console.log(`🔍 Estado actual - ${datos.item}: Pañol=${nuevoStockPañol}, Uso=${nuevoStockUso}, Lavadero=${nuevoStockLavadero}`);
+    console.log(`📝 Operación - Ingreso limpio: ${ingresoLimpio}, Salida sucio: ${salidaSucio}`);
+
+    // 1. Si el lavadero recibe sucio (sale del uso, va al lavadero)
+    if (salidaSucio > 0) {
+      if (nuevoStockUso >= salidaSucio) {
+        nuevoStockUso -= salidaSucio;
+        nuevoStockLavadero += salidaSucio;
+        mensajes.push(`${salidaSucio} sucios`);
+      } else {
+        const deficit = salidaSucio - nuevoStockUso;
+        nuevoStockPañol -= deficit;
+        nuevoStockUso = 0;
+        nuevoStockLavadero += salidaSucio;
+        ajusteAutomatico = true;
+        mensajes.push(`${salidaSucio} sucios (${deficit} ajustado)`);
+      }
+    }
+
+    // 2. Si el lavadero entrega limpio (sale del lavadero, va al pañol)
+    if (ingresoLimpio > 0) {
+      if (nuevoStockLavadero >= ingresoLimpio) {
+        nuevoStockLavadero -= ingresoLimpio;
+        nuevoStockPañol += ingresoLimpio;
+        mensajes.push(`${ingresoLimpio} limpios`);
+      } else {
+        const deficit = ingresoLimpio - nuevoStockLavadero;
+        nuevoStockLavadero = 0;
+        nuevoStockPañol += ingresoLimpio;
+        ajusteAutomatico = true;
+        mensajes.push(`${ingresoLimpio} limpios (${deficit} nuevo ingreso)`);
+      }
+    }
+
+    if (nuevoStockPañol < 0) {
+      mostrarSplash(`❌ Error: Stock en pañol negativo. Contacte administración.`);
+      setRegistrando(false);
+      return;
+    }
+
+    console.log(`📊 Resultado final - Pañol: ${nuevoStockPañol}, Uso: ${nuevoStockUso}, Lavadero: ${nuevoStockLavadero}`);
+
+    // Insertar movimiento en historial
+    const movimiento = {
+      piso_id: piso.id,
+      dni_pañolero: perfilUsuario.dni,
+      item: datos.item,
+      entregado_limpio: ingresoLimpio,
+      retirado_sucio: salidaSucio,
+      stock_fisico_piso: nuevoStockPañol,
+      novedades: novedades + (ajusteAutomatico ? " [Ajuste automático]" : "")
+    };
+
+    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
+    
+    if (movError) {
+      console.error("Error insertando movimiento:", movError);
+      mostrarSplash("❌ ERROR EN REGISTRO");
+      setRegistrando(false);
+      return;
+    }
+
+    // Actualizar los 3 campos en una sola tabla
+    const ok = await actualizarStockCompleto(datos.item, nuevoStockPañol, nuevoStockUso, nuevoStockLavadero);
+    
+    if (ok) {
+      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
+      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
+      setStocksLavaderoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockLavadero }));
+      mostrarSplash(`✅ ${datos.item}: ${mensajes.join(' / ')}${ajusteAutomatico ? ' ⚠️ Ajuste' : ''}`);
+      setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
+      setNovedades("Sin novedades");
+    } else {
+      mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
+    }
+    
+    setRegistrando(false);
   };
 
-  const actualizarStockLavadero = async (item, nuevaCantidad) => {
-    const { error } = await supabase
-      .from('stock_lavadero')
-      .upsert({
-        piso_id: piso.id,
-        item: item,
-        cantidad: nuevaCantidad,
-        updated_at: new Date()
-      }, { onConflict: 'piso_id,item' });
-    if (error) console.error("Error actualizando stock_lavadero:", error);
-    return !error;
+  // ==================== REGISTRO PAÑOL - ENTREGA A PISO ====================
+  const registrarEntregaPiso = async (e) => {
+    e.preventDefault();
+    
+    if (!piso?.id) {
+      mostrarSplash("Error: Piso no identificado");
+      return;
+    }
+
+    if (!enfermeroEncontrado) {
+      mostrarSplash("Debe buscar un encargado de piso");
+      return;
+    }
+
+    const cantidadEntregada = parseInt(datos.entrega_piso || 0);
+    if (cantidadEntregada <= 0) {
+      mostrarSplash("Ingrese una cantidad válida");
+      return;
+    }
+
+    setRegistrando(true);
+
+    const stockActualPañol = stocksPorItem[datos.item] || 0;
+    const nuevoStockPañol = stockActualPañol - cantidadEntregada;
+    const nuevoStockUso = (stocksUsoPorItem[datos.item] || 0) + cantidadEntregada;
+
+    console.log(`📦 Entrega a piso - ${datos.item}: Pañol ${stockActualPañol} → ${nuevoStockPañol}, Uso +${cantidadEntregada}`);
+
+    if (nuevoStockPañol < 0) {
+      mostrarSplash(`❌ Stock insuficiente. Disponible: ${stockActualPañol}`);
+      setRegistrando(false);
+      return;
+    }
+
+    const movimiento = {
+      piso_id: piso.id,
+      dni_pañolero: perfilUsuario.dni,
+      dni_enfermero: enfermeroEncontrado.dni,
+      item: datos.item,
+      egreso_limpio: cantidadEntregada,
+      stock_fisico_piso: nuevoStockPañol,
+      novedades: novedades
+    };
+
+    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
+    
+    if (movError) {
+      console.error("Error insertando movimiento:", movError);
+      mostrarSplash("❌ ERROR EN REGISTRO");
+      setRegistrando(false);
+      return;
+    }
+
+    const ok = await actualizarStockCompleto(datos.item, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[datos.item] || 0);
+    
+    if (ok) {
+      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
+      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
+      mostrarSplash(`✅ ${cantidadEntregada} ${datos.item} entregados a ${enfermeroEncontrado.apellido}`);
+      setDatos({ ...datos, entrega_piso: 0 });
+      setBusquedaDni('');
+      setEnfermeroEncontrado(null);
+      setNovedades("Sin novedades");
+    } else {
+      mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
+    }
+    
+    setRegistrando(false);
   };
 
   // ==================== REGISTRO HABITACIÓN ====================
@@ -220,10 +398,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           continue;
         }
 
-        const okPañol = await actualizarStockPañol(itemConf.item, nuevoStockPañol);
-        const okUso = await actualizarStockUso(itemConf.item, nuevoStockUso);
+        const ok = await actualizarStockCompleto(itemConf.item, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[itemConf.item] || 0);
         
-        if (okPañol && okUso) {
+        if (ok) {
           registrosExitosos++;
           movimientosInsertados.push(`${itemConf.item}(${itemConf.cantidad})`);
           setStocksPorItem(prev => ({ ...prev, [itemConf.item]: nuevoStockPañol }));
@@ -296,10 +473,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           continue;
         }
 
-        const okPañol = await actualizarStockPañol(i.item, nuevoStockPañol);
-        const okUso = await actualizarStockUso(i.item, nuevoStockUso);
+        const ok = await actualizarStockCompleto(i.item, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[i.item] || 0);
         
-        if (okPañol && okUso) {
+        if (ok) {
           exitosos.push(i.item);
           setStocksPorItem(prev => ({ ...prev, [i.item]: nuevoStockPañol }));
           setStocksUsoPorItem(prev => ({ ...prev, [i.item]: nuevoStockUso }));
@@ -322,172 +498,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     } finally {
       setRegistrando(false);
     }
-  };
-
-  // ==================== REGISTRO PAÑOL - ENTREGA A PISO ====================
-  const registrarEntregaPiso = async (e) => {
-    e.preventDefault();
-    
-    if (!piso?.id) {
-      mostrarSplash("Error: Piso no identificado");
-      return;
-    }
-
-    if (!enfermeroEncontrado) {
-      mostrarSplash("Debe buscar un encargado de piso");
-      return;
-    }
-
-    const cantidadEntregada = parseInt(datos.entrega_piso || 0);
-    if (cantidadEntregada <= 0) {
-      mostrarSplash("Ingrese una cantidad válida");
-      return;
-    }
-
-    setRegistrando(true);
-
-    const stockActualPañol = stocksPorItem[datos.item] || 0;
-    const nuevoStockPañol = stockActualPañol - cantidadEntregada;
-    const nuevoStockUso = (stocksUsoPorItem[datos.item] || 0) + cantidadEntregada;
-
-    if (nuevoStockPañol < 0) {
-      mostrarSplash(`❌ Stock insuficiente. Disponible: ${stockActualPañol}`);
-      setRegistrando(false);
-      return;
-    }
-
-    const movimiento = {
-      piso_id: piso.id,
-      dni_pañolero: perfilUsuario.dni,
-      dni_enfermero: enfermeroEncontrado.dni,
-      item: datos.item,
-      egreso_limpio: cantidadEntregada,
-      stock_fisico_piso: nuevoStockPañol,
-      novedades: novedades
-    };
-
-    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
-    
-    if (movError) {
-      mostrarSplash("❌ ERROR EN REGISTRO");
-      setRegistrando(false);
-      return;
-    }
-
-    const okPañol = await actualizarStockPañol(datos.item, nuevoStockPañol);
-    const okUso = await actualizarStockUso(datos.item, nuevoStockUso);
-    
-    if (okPañol && okUso) {
-      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
-      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
-      mostrarSplash(`✅ ${cantidadEntregada} ${datos.item} a ${enfermeroEncontrado.apellido}`);
-      setDatos({ ...datos, entrega_piso: 0 });
-      setBusquedaDni('');
-      setEnfermeroEncontrado(null);
-      setNovedades("Sin novedades");
-    } else {
-      mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
-    }
-    
-    setRegistrando(false);
-  };
-
-  // ==================== REGISTRO LAVADERO (VERSIÓN FLEXIBLE) ====================
-  const registrarLavadero = async (e) => {
-    e.preventDefault();
-    
-    if (!piso?.id) {
-      mostrarSplash("Error: Piso no identificado");
-      return;
-    }
-
-    const ingresoLimpio = parseInt(datos.carga_lavadero || 0);
-    const salidaSucio = parseInt(datos.retirado_sucio || 0);
-
-    if (ingresoLimpio === 0 && salidaSucio === 0) {
-      mostrarSplash("Ingrese al menos una cantidad");
-      return;
-    }
-
-    setRegistrando(true);
-
-    let nuevoStockPañol = stocksPorItem[datos.item] || 0;
-    let nuevoStockUso = stocksUsoPorItem[datos.item] || 0;
-    let nuevoStockLavadero = stocksLavaderoPorItem[datos.item] || 0;
-    let mensajes = [];
-    let ajusteAutomatico = false;
-
-    // 1. Si el lavadero recibe sucio (sale del uso, va al lavadero)
-    if (salidaSucio > 0) {
-      if (nuevoStockUso >= salidaSucio) {
-        nuevoStockUso -= salidaSucio;
-        nuevoStockLavadero += salidaSucio;
-        mensajes.push(`${salidaSucio} sucios`);
-      } else {
-        const deficit = salidaSucio - nuevoStockUso;
-        nuevoStockPañol -= deficit;
-        nuevoStockUso = 0;
-        nuevoStockLavadero += salidaSucio;
-        ajusteAutomatico = true;
-        mensajes.push(`${salidaSucio} sucios (${deficit} ajustado)`);
-      }
-    }
-
-    // 2. Si el lavadero entrega limpio (sale del lavadero, va al pañol)
-    if (ingresoLimpio > 0) {
-      if (nuevoStockLavadero >= ingresoLimpio) {
-        nuevoStockLavadero -= ingresoLimpio;
-        nuevoStockPañol += ingresoLimpio;
-        mensajes.push(`${ingresoLimpio} limpios`);
-      } else {
-        const deficit = ingresoLimpio - nuevoStockLavadero;
-        nuevoStockLavadero = 0;
-        nuevoStockPañol += ingresoLimpio;
-        ajusteAutomatico = true;
-        mensajes.push(`${ingresoLimpio} limpios (${deficit} nuevo ingreso)`);
-      }
-    }
-
-    if (nuevoStockPañol < 0) {
-      mostrarSplash(`❌ Error: Stock en pañol negativo. Contacte administración.`);
-      setRegistrando(false);
-      return;
-    }
-
-    const movimiento = {
-      piso_id: piso.id,
-      dni_pañolero: perfilUsuario.dni,
-      item: datos.item,
-      entregado_limpio: ingresoLimpio,
-      retirado_sucio: salidaSucio,
-      stock_fisico_piso: nuevoStockPañol,
-      novedades: novedades + (ajusteAutomatico ? " [Ajuste automático]" : "")
-    };
-
-    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
-    
-    if (movError) {
-      mostrarSplash("❌ ERROR EN REGISTRO");
-      setRegistrando(false);
-      return;
-    }
-
-    const okPañol = await actualizarStockPañol(datos.item, nuevoStockPañol);
-    const okUso = await actualizarStockUso(datos.item, nuevoStockUso);
-    const okLavadero = await actualizarStockLavadero(datos.item, nuevoStockLavadero);
-    
-    if (okPañol && okUso && okLavadero) {
-      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
-      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
-      setStocksLavaderoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockLavadero }));
-      mostrarSplash(`✅ ${datos.item}: ${mensajes.join(' / ')}${ajusteAutomatico ? ' ⚠️ Ajuste' : ''}`);
-      setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
-      setNovedades("Sin novedades");
-    } else {
-      mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
-    }
-    
-    setRegistrando(false);
   };
 
   const buscarEnfermero = async () => {
@@ -519,8 +529,8 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     return (
       <div className="p-10 text-white text-center">
         <div className="animate-pulse">
-          <p className="text-blue-400 font-black text-sm mb-2">SENTINEL HNPM</p>
-          <p className="text-slate-500 italic text-xs">Cargando...</p>
+          <p className="text-blue-400 font-black text-base mb-2">SENTINEL HNPM</p>
+          <p className="text-slate-500 text-sm">Cargando...</p>
         </div>
       </div>
     );
@@ -529,11 +539,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   if (!piso) {
     return (
       <div className="p-10 text-white text-center">
-        <div className="bg-red-900/20 p-6 rounded-lg border border-red-800">
-          <p className="text-red-400 font-black text-sm mb-2">ERROR DE ACCESO</p>
+        <div className="bg-red-900/20 p-8 rounded-xl border border-red-800">
+          <p className="text-red-400 font-black text-lg mb-2">ERROR DE ACCESO</p>
           <button 
             onClick={() => window.location.href = '/'}
-            className="mt-4 bg-slate-800 px-4 py-2 rounded-lg text-xs font-black"
+            className="mt-4 bg-slate-800 px-6 py-2 rounded-lg text-sm font-black"
           >
             VOLVER AL INICIO
           </button>
@@ -543,38 +553,38 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   }
 
   return (
-    <div className="p-4 md:p-6 bg-slate-950 min-h-screen text-slate-200 pb-20 font-sans">
-      <div className="mb-4 bg-slate-900/50 p-3 rounded-lg border border-blue-900/30">
-        <p className="text-[8px] text-blue-500 font-black uppercase tracking-wider">
+    <div className="p-6 bg-slate-950 min-h-screen text-slate-200 pb-20 font-sans">
+      <div className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-blue-900/30">
+        <p className="text-xs text-blue-500 font-black uppercase tracking-wider">
           {modo === 'habitacion' ? 'SERVICIO HABITACIÓN' : modo === 'lavadero' ? 'CONTROL LAVADERO' : 'CONTROL PAÑOL'}
         </p>
-        <h3 className="text-sm font-black uppercase">{piso.nombre_piso}</h3>
+        <h3 className="text-xl font-black uppercase">{piso.nombre_piso}</h3>
         {habitacionEspecial && (
-          <p className="text-[9px] text-blue-400 mt-1 uppercase font-bold">
+          <p className="text-sm text-blue-400 mt-1 uppercase font-bold">
             Habitación: {habitacionEspecial.nombre}
           </p>
         )}
       </div>
 
       {modo === 'habitacion' ? (
-        <div className="space-y-3">
-          <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
-            <div className="flex justify-between items-center mb-3">
-              <p className="text-[9px] font-black text-slate-500 uppercase">ITEMS PARA ENTREGA</p>
-              <div className="flex gap-2 text-[8px]">
-                <span className="text-green-400">P:{stocksPorItem['SABANAS'] || 0}</span>
-                <span className="text-yellow-400">U:{stocksUsoPorItem['SABANAS'] || 0}</span>
-                <span className="text-red-400">L:{stocksLavaderoPorItem['SABANAS'] || 0}</span>
-                <span className="text-blue-400">T:{totalRealPorItem('SABANAS')}</span>
+        <div className="space-y-4">
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <div className="flex justify-between items-center mb-4">
+              <p className="text-sm font-black text-slate-500 uppercase">ITEMS PARA ENTREGA</p>
+              <div className="flex gap-3 text-xs">
+                <span className="text-green-400">🗄️ Pañol: {stocksPorItem['SABANAS'] || 0}</span>
+                <span className="text-yellow-400">🛏️ Uso: {stocksUsoPorItem['SABANAS'] || 0}</span>
+                <span className="text-red-400">🧺 Lav: {stocksLavaderoPorItem['SABANAS'] || 0}</span>
+                <span className="text-blue-400">📊 Total: {totalRealPorItem('SABANAS')}</span>
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {itemsHabitacion.map((itemConf, index) => (
-                <div key={itemConf.item} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700">
-                  <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm font-black text-blue-400">{itemConf.item}</p>
-                    <div className="flex gap-1 text-[7px]">
+                <div key={itemConf.item} className="bg-slate-800/30 p-4 rounded-xl border border-slate-700">
+                  <div className="flex justify-between items-center mb-3">
+                    <p className="text-lg font-black text-blue-400">{itemConf.item}</p>
+                    <div className="flex gap-2 text-xs">
                       <span className="text-green-400">P:{stocksPorItem[itemConf.item] || 0}</span>
                       <span className="text-yellow-400">U:{stocksUsoPorItem[itemConf.item] || 0}</span>
                       <span className="text-red-400">L:{stocksLavaderoPorItem[itemConf.item] || 0}</span>
@@ -582,13 +592,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
                   </div>
                   
                   <div>
-                    <label className="text-[7px] text-green-500 font-black uppercase block mb-1">
+                    <label className="text-xs text-green-500 font-black uppercase block mb-2">
                       CANTIDAD A ENTREGAR (-)
                     </label>
                     <input
                       type="number"
                       min="0"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xl text-green-400 font-black text-center outline-none"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-3xl text-green-400 font-black text-center outline-none"
                       value={itemConf.cantidad || ""}
                       onChange={(e) => actualizarItemHabitacion(index, e.target.value)}
                       placeholder="0"
@@ -599,11 +609,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             </div>
           </div>
 
-          <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
-            <p className="text-[9px] font-black text-slate-500 uppercase mb-2">Novedades</p>
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
             <textarea 
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-blue-400 outline-none"
-              rows="2" 
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
+              rows="3" 
               value={novedades} 
               onChange={(e) => setNovedades(e.target.value)}
               placeholder="Observaciones sobre el servicio..."
@@ -613,77 +623,77 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           <button 
             onClick={ejecutarCambioEstandar}
             disabled={registrando}
-            className={`w-full p-3 rounded-lg font-black uppercase text-sm transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
+            className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
           >
-            {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
+            {registrando ? 'REGISTRANDO...' : '🎯 Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
           </button>
 
           <button 
             onClick={ejecutarCambioHabitacion} 
             disabled={registrando}
-            className={`w-full p-4 rounded-lg font-black uppercase text-sm transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 active:scale-95'}`}
+            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 active:scale-95'}`}
           >
-            {registrando ? 'REGISTRANDO...' : 'Registrar Entrega Personalizada'}
+            {registrando ? 'REGISTRANDO...' : '📝 Registrar Entrega Personalizada'}
           </button>
         </div>
       ) : modo === 'lavadero' ? (
-        <form onSubmit={registrarLavadero} className="space-y-3">
+        <form onSubmit={registrarLavadero} className="space-y-4">
           <select 
-            className="w-full bg-slate-900 p-3 rounded-lg border border-slate-800 font-black text-blue-400 outline-none" 
+            className="w-full bg-slate-900 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg" 
             value={datos.item} 
             onChange={e => setDatos({...datos, item: e.target.value})}
           >
             {ITEMS_HOTELERIA.map(i => <option key={i} value={i}>{i}</option>)}
           </select>
 
-          <div className="grid grid-cols-3 gap-2 bg-slate-900 p-3 rounded-lg border border-slate-800 text-center">
+          <div className="grid grid-cols-3 gap-4 bg-slate-900 p-5 rounded-xl border border-slate-800 text-center">
             <div>
-              <p className="text-[7px] text-green-500 uppercase">Pañol</p>
-              <p className="text-lg font-black text-green-400">{stocksPorItem[datos.item] || 0}</p>
+              <p className="text-xs text-green-500 uppercase font-black">🗄️ PAÑOL</p>
+              <p className="text-3xl font-black text-green-400">{stocksPorItem[datos.item] || 0}</p>
             </div>
             <div>
-              <p className="text-[7px] text-yellow-500 uppercase">En Uso</p>
-              <p className="text-lg font-black text-yellow-400">{stocksUsoPorItem[datos.item] || 0}</p>
+              <p className="text-xs text-yellow-500 uppercase font-black">🛏️ EN USO</p>
+              <p className="text-3xl font-black text-yellow-400">{stocksUsoPorItem[datos.item] || 0}</p>
             </div>
             <div>
-              <p className="text-[7px] text-red-500 uppercase">Lavadero</p>
-              <p className="text-lg font-black text-red-400">{stocksLavaderoPorItem[datos.item] || 0}</p>
+              <p className="text-xs text-red-500 uppercase font-black">🧺 LAVADERO</p>
+              <p className="text-3xl font-black text-red-400">{stocksLavaderoPorItem[datos.item] || 0}</p>
             </div>
           </div>
 
-          <div className="bg-red-900/10 p-4 rounded-lg border border-red-900/30 text-center">
-            <label className="text-[9px] font-black text-red-500 uppercase block mb-1">
+          <div className="bg-red-900/10 p-5 rounded-xl border border-red-900/30 text-center">
+            <label className="text-sm font-black text-red-500 uppercase block mb-2">
               📤 RECIBE SUCIO DEL PISO (Uso → Lavadero)
             </label>
             <input 
               type="number" 
-              className="bg-transparent w-full text-4xl font-black text-red-400 outline-none text-center" 
+              className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center" 
               value={datos.retirado_sucio || ""} 
               onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
               placeholder="0"
             />
-            <p className="text-[7px] text-slate-500 mt-1">Stock en uso: {stocksUsoPorItem[datos.item] || 0}</p>
+            <p className="text-xs text-slate-500 mt-2">Stock en uso: {stocksUsoPorItem[datos.item] || 0}</p>
           </div>
 
-          <div className="bg-green-900/10 p-4 rounded-lg border border-green-900/30 text-center">
-            <label className="text-[9px] font-black text-green-500 uppercase block mb-1">
+          <div className="bg-green-900/10 p-5 rounded-xl border border-green-900/30 text-center">
+            <label className="text-sm font-black text-green-500 uppercase block mb-2">
               📥 ENTREGA LIMPIA AL PAÑOL (Lavadero → Pañol)
             </label>
             <input 
               type="number" 
-              className="bg-transparent w-full text-4xl font-black text-green-400 outline-none text-center" 
+              className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" 
               value={datos.carga_lavadero || ""} 
               onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
               placeholder="0"
             />
-            <p className="text-[7px] text-slate-500 mt-1">Stock en lavadero: {stocksLavaderoPorItem[datos.item] || 0}</p>
+            <p className="text-xs text-slate-500 mt-2">Stock en lavadero: {stocksLavaderoPorItem[datos.item] || 0}</p>
           </div>
 
-          <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
-            <p className="text-[9px] font-black text-slate-500 uppercase mb-2">Novedades</p>
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
             <textarea 
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-blue-400 outline-none"
-              rows="2" 
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
+              rows="3" 
               value={novedades} 
               onChange={(e) => setNovedades(e.target.value)}
             />
@@ -692,42 +702,42 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           <button 
             type="submit" 
             disabled={registrando}
-            className={`w-full p-4 rounded-lg font-black uppercase text-sm transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 active:scale-95'}`}
+            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 active:scale-95'}`}
           >
-            {registrando ? 'REGISTRANDO...' : 'Registrar Movimiento'}
+            {registrando ? 'REGISTRANDO...' : '✅ Registrar Movimiento'}
           </button>
         </form>
       ) : (
-        <form onSubmit={registrarEntregaPiso} className="space-y-3">
+        <form onSubmit={registrarEntregaPiso} className="space-y-4">
           <select 
-            className="w-full bg-slate-900 p-3 rounded-lg border border-slate-800 font-black text-blue-400 outline-none" 
+            className="w-full bg-slate-900 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg" 
             value={datos.item} 
             onChange={e => setDatos({...datos, item: e.target.value})}
           >
             {ITEMS_HOTELERIA.map(i => <option key={i} value={i}>{i}</option>)}
           </select>
 
-          <div className="grid grid-cols-3 gap-2 bg-slate-900 p-3 rounded-lg border border-slate-800 text-center">
+          <div className="grid grid-cols-3 gap-4 bg-slate-900 p-5 rounded-xl border border-slate-800 text-center">
             <div>
-              <p className="text-[7px] text-green-500 uppercase">Pañol</p>
-              <p className="text-lg font-black text-green-400">{stocksPorItem[datos.item] || 0}</p>
+              <p className="text-xs text-green-500 uppercase font-black">🗄️ PAÑOL</p>
+              <p className="text-3xl font-black text-green-400">{stocksPorItem[datos.item] || 0}</p>
             </div>
             <div>
-              <p className="text-[7px] text-yellow-500 uppercase">En Uso</p>
-              <p className="text-lg font-black text-yellow-400">{stocksUsoPorItem[datos.item] || 0}</p>
+              <p className="text-xs text-yellow-500 uppercase font-black">🛏️ EN USO</p>
+              <p className="text-3xl font-black text-yellow-400">{stocksUsoPorItem[datos.item] || 0}</p>
             </div>
             <div>
-              <p className="text-[7px] text-red-500 uppercase">Lavadero</p>
-              <p className="text-lg font-black text-red-400">{stocksLavaderoPorItem[datos.item] || 0}</p>
+              <p className="text-xs text-red-500 uppercase font-black">🧺 LAVADERO</p>
+              <p className="text-3xl font-black text-red-400">{stocksLavaderoPorItem[datos.item] || 0}</p>
             </div>
           </div>
 
-          <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
-            <p className="text-[9px] font-black text-slate-500 mb-2 uppercase">ENCARGADO DE PISO</p>
-            <div className="flex gap-2">
+          <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+            <p className="text-sm font-black text-slate-500 mb-3 uppercase">ENCARGADO DE PISO</p>
+            <div className="flex gap-3">
               <input 
                 type="text" 
-                className="flex-1 bg-slate-950 p-2 rounded-lg border border-slate-800 text-sm outline-none"
+                className="flex-1 bg-slate-950 p-3 rounded-xl border border-slate-800 text-base outline-none"
                 value={busquedaDni}
                 onChange={(e) => setBusquedaDni(e.target.value)}
                 placeholder="DNI"
@@ -735,39 +745,39 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               <button 
                 type="button" 
                 onClick={buscarEnfermero} 
-                className="bg-blue-600 px-3 rounded-lg text-[9px] font-black uppercase"
+                className="bg-blue-600 px-5 rounded-xl text-sm font-black uppercase"
               >
                 Buscar
               </button>
             </div>
             {enfermeroEncontrado && (
-              <p className="text-green-400 text-xs mt-2 font-bold">
+              <p className="text-green-400 text-sm mt-3 font-bold">
                 ✓ {enfermeroEncontrado.jerarquia} {enfermeroEncontrado.apellido}
               </p>
             )}
           </div>
 
-          <div className="bg-orange-900/10 p-4 rounded-lg border border-orange-900/30">
-            <label className="text-[9px] font-black text-orange-500 uppercase block text-center mb-2">
+          <div className="bg-orange-900/10 p-5 rounded-xl border border-orange-900/30">
+            <label className="text-sm font-black text-orange-500 uppercase block text-center mb-3">
               CANTIDAD A ENTREGAR AL PISO (Pañol → Uso)
             </label>
             <input 
               type="number" 
-              className="w-full bg-slate-950 p-3 rounded-lg text-4xl text-center font-black text-orange-400 outline-none border border-orange-900/20" 
+              className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-orange-400 outline-none border border-orange-900/20" 
               placeholder="0" 
               value={datos.entrega_piso || ""} 
               onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
             />
-            <p className="text-[7px] text-slate-500 text-center mt-2">
+            <p className="text-sm text-slate-500 text-center mt-3">
               Stock en pañol: {stocksPorItem[datos.item] || 0}
             </p>
           </div>
 
-          <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
-            <p className="text-[9px] font-black text-slate-500 uppercase mb-2">Novedades</p>
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
             <textarea 
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-blue-400 outline-none"
-              rows="2" 
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
+              rows="3" 
               value={novedades} 
               onChange={(e) => setNovedades(e.target.value)}
             />
@@ -776,17 +786,17 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           <button 
             type="submit" 
             disabled={!enfermeroEncontrado || registrando}
-            className={`w-full p-4 rounded-lg font-black uppercase text-sm transition-all ${(!enfermeroEncontrado || registrando) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
+            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(!enfermeroEncontrado || registrando) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
           >
-            {registrando ? 'REGISTRANDO...' : 'Entregar al Piso'}
+            {registrando ? 'REGISTRANDO...' : '📦 Entregar al Piso'}
           </button>
         </form>
       )}
 
       {notificacion.visible && (
         <div className="fixed inset-0 flex items-center justify-center z-[100] bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-blue-600 p-6 rounded-lg text-center shadow-2xl">
-             <p className="text-white font-black uppercase text-xs tracking-wider">{notificacion.mensaje}</p>
+          <div className="bg-blue-600 p-8 rounded-xl text-center shadow-2xl">
+             <p className="text-white font-black uppercase text-base tracking-wider">{notificacion.mensaje}</p>
           </div>
         </div>
       )}
