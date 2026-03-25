@@ -561,23 +561,24 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
       {modo === 'habitacion' ? (
   <div className="space-y-4">
-    {/* Selector de item y cantidad */}
+    {/* Selector de item */}
     <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
       <p className="text-sm font-black text-slate-500 uppercase mb-4">ITEM PARA ENTREGAR</p>
       
       <select 
-        className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-4"
+        className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-6"
         value={itemSeleccionadoHabitacion}
         onChange={(e) => setItemSeleccionadoHabitacion(e.target.value)}
       >
         {ITEMS_HOTELERIA.map(item => (
           <option key={item} value={item}>
-            {item} - Pañol: {stocksPorItem[item] || 0} | Uso: {stocksUsoPorItem[item] || 0} | Lav: {stocksLavaderoPorItem[item] || 0} | Total: {totalRealPorItem(item)}
+            {item} - Pañol: {stocksPorItem[item] || 0} | Uso: {stocksUsoPorItem[item] || 0} | Lav: {stocksLavaderoPorItem[item] || 0}
           </option>
         ))}
       </select>
 
-      <div className="mb-4">
+      {/* Campo único de cantidad */}
+      <div>
         <label className="text-sm font-black text-green-500 uppercase block mb-2">
           CANTIDAD A ENTREGAR
         </label>
@@ -589,22 +590,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
           placeholder="0"
         />
-      </div>
-
-      {/* Mostrar stock actual del item seleccionado */}
-      <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-800">
-        <div className="text-center">
-          <p className="text-xs text-green-500 uppercase font-black">PAÑOL</p>
-          <p className="text-xl font-black text-green-400">{stocksPorItem[itemSeleccionadoHabitacion] || 0}</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-yellow-500 uppercase font-black">EN USO</p>
-          <p className="text-xl font-black text-yellow-400">{stocksUsoPorItem[itemSeleccionadoHabitacion] || 0}</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-red-500 uppercase font-black">LAVADERO</p>
-          <p className="text-xl font-black text-red-400">{stocksLavaderoPorItem[itemSeleccionadoHabitacion] || 0}</p>
-        </div>
       </div>
     </div>
 
