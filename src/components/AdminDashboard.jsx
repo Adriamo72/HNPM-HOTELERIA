@@ -28,7 +28,6 @@ const AdminDashboard = () => {
   };
 
   const cargarDatos = async () => {
-    // Cargar datos básicos
     const resPers = await supabase.from('personal').select('*').order('apellido');
     const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
     const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
@@ -36,7 +35,6 @@ const AdminDashboard = () => {
     const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
     setAuditoriaHabilitada(config?.valor === 'true');
 
-    // Cargar movimientos con relaciones
     const { data: movs } = await supabase.from('movimientos_stock')
       .select(`
         *, 
@@ -46,7 +44,6 @@ const AdminDashboard = () => {
       `)
       .order('created_at', { ascending: true });
 
-    // Inicializar mapas de stock
     const stockMap = {};
     const globalStock = {};
     
@@ -55,7 +52,6 @@ const AdminDashboard = () => {
     });
 
     if (resPisos.data) {
-      // Inicializar stock por piso
       resPisos.data.forEach(p => {
         stockMap[p.nombre_piso] = {};
         ITEMS_REQUERIDOS.forEach(item => {
@@ -63,7 +59,6 @@ const AdminDashboard = () => {
         });
       });
 
-      // Obtener el último stock de cada piso para cada item
       for (const piso of resPisos.data) {
         for (const item of ITEMS_REQUERIDOS) {
           const { data: ultimoMov } = await supabase
@@ -76,13 +71,11 @@ const AdminDashboard = () => {
           
           const stockPiso = ultimoMov?.[0]?.stock_fisico_piso || 0;
           stockMap[piso.nombre_piso][item] = stockPiso;
-          // Sumar al stock global (suma de todos los pisos)
           globalStock[item] += stockPiso;
         }
       }
     }
 
-    // Agrupar movimientos por piso para el historial
     const agrupados = movs ? [...movs].reverse().reduce((acc, curr) => {
       const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
       if (!acc[nombrePiso]) acc[nombrePiso] = [];
@@ -152,6 +145,15 @@ const AdminDashboard = () => {
     return `${diaYNumero.charAt(0).toUpperCase() + diaYNumero.slice(1)}, ${hora} hs`;
   };
 
+  const getTipoMovimiento = (mov) => {
+    if (mov.entregado_limpio > 0 && mov.retirado_sucio === 0) return 'Lavado → Pañol';
+    if (mov.entregado_limpio > 0 && mov.retirado_sucio > 0) return 'Lavado (Mixto)';
+    if (mov.retirado_sucio > 0 && mov.entregado_limpio === 0 && mov.egreso_limpio === 0) return 'Sucio → Lavadero';
+    if (mov.egreso_limpio > 0 && mov.es_cambio_habitacion) return 'Entrega a Habitación';
+    if (mov.egreso_limpio > 0 && mov.dni_enfermero) return 'Entrega a Piso';
+    return 'Otro';
+  };
+
   return (
     <div className="p-4 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans relative text-left">
       <div className="flex gap-2 mb-8 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit">
@@ -166,7 +168,7 @@ const AdminDashboard = () => {
             <button onClick={cargarDatos} className="text-[10px] bg-slate-800 px-4 py-2 rounded-xl font-black text-slate-400 border border-slate-700">Sincronizar</button>
           </div>
           
-          {/* STOCK TOTAL CONSOLIDADO (SUMA DE TODOS LOS PISOS) */}
+          {/* STOCK TOTAL CONSOLIDADO */}
           <div className="bg-blue-900/10 border-2 border-blue-900/30 rounded-[2.5rem] p-6 shadow-2xl">
             <p className="text-[11px] font-black text-blue-400 uppercase tracking-[0.3em] mb-4 text-center italic font-bold">
               STOCK TOTAL CONSOLIDADO (SUMA DE TODOS LOS PAÑOLES)
@@ -200,47 +202,43 @@ const AdminDashboard = () => {
               
               {/* HISTORIAL DE MOVIMIENTOS DEL PISO */}
               <div className="p-2 space-y-1 overflow-y-auto max-h-[450px] custom-scroll bg-slate-950/20 text-left">
-                {movimientosAgrupados[nombrePiso]?.map((m) => {
-                  const esCambioHabitacion = m.es_cambio_habitacion;
-                  return (
-                    <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-2xl border border-slate-800/50 flex items-center group hover:bg-slate-800 transition-all text-left">
-                      <div className="w-[22%] shrink-0">
-                        <p className="text-[11px] font-black text-white uppercase leading-none">{m.item}</p>
-                        <p className="text-[8px] text-blue-500 font-black uppercase mt-1 tracking-tighter italic">{formatearFechaGuardia(m.created_at)}</p>
-                        {esCambioHabitacion && (
-                          <span className="text-[7px] bg-purple-900/50 px-1 rounded">HABITACIÓN</span>
-                        )}
+                {movimientosAgrupados[nombrePiso]?.map((m) => (
+                  <div key={m.id} className="bg-slate-950/50 px-3 py-2 rounded-2xl border border-slate-800/50 flex items-center group hover:bg-slate-800 transition-all text-left">
+                    {/* Fecha e Item */}
+                    <div className="w-[20%] shrink-0">
+                      <p className="text-[11px] font-black text-white uppercase leading-none">{m.item}</p>
+                      <p className="text-[8px] text-blue-500 font-black uppercase mt-1 tracking-tighter italic">{formatearFechaGuardia(m.created_at)}</p>
+                    </div>
+                    
+                    {/* Columnas de movimientos */}
+                    <div className="flex-1 grid grid-cols-3 gap-2 px-3">
+                      <div className="text-center">
+                        <span className="text-[7px] text-green-500 font-black uppercase block tracking-widest">→ Piso</span>
+                        <p className="text-sm font-black text-green-500">{m.egreso_limpio > 0 && !m.es_cambio_habitacion ? m.egreso_limpio : '0'}</p>
                       </div>
-                      <div className="flex-1 flex justify-around items-center px-4">
-                        <div className="text-center min-w-[50px]">
-                          <span className="text-[7px] text-green-500 font-black uppercase block tracking-widest">Limpio</span>
-                          <p className="text-sm font-black text-green-500">
-                            {m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : 
-                             m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '0'}
-                          </p>
-                        </div>
-                        <div className="text-center min-w-[50px]">
-                          <span className="text-[7px] text-red-500 font-black uppercase block tracking-widest">Sucio</span>
-                          <p className="text-sm font-black text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '0'}</p>
-                        </div>
-                        <div className="text-center min-w-[70px]">
-                          <span className="text-[7px] text-blue-400 font-black uppercase block tracking-widest">Stock</span>
-                          <p className="text-sm font-black text-blue-400">{m.stock_fisico_piso}</p>
-                        </div>
+                      <div className="text-center">
+                        <span className="text-[7px] text-purple-500 font-black uppercase block tracking-widest">→ Habitación</span>
+                        <p className="text-sm font-black text-purple-500">{m.egreso_limpio > 0 && m.es_cambio_habitacion ? m.egreso_limpio : '0'}</p>
                       </div>
-                      <div className="w-[28%] flex items-center justify-end gap-2 border-l border-slate-800 pl-3">
-                        <p className="text-[8px] text-slate-400 font-black uppercase truncate">
-                          {m.pañolero?.jerarquia} {m.pañolero?.apellido}
-                        </p>
-                        <button onClick={() => eliminarMovimiento(m.id)} className="p-1 bg-red-950/30 text-red-500 rounded-lg border border-red-900/30 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                      <div className="text-center">
+                        <span className="text-[7px] text-red-500 font-black uppercase block tracking-widest">Sucio → Lavadero</span>
+                        <p className="text-sm font-black text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '0'}</p>
                       </div>
                     </div>
-                  );
-                })}
+                    
+                    {/* Operador */}
+                    <div className="w-[25%] flex items-center justify-end gap-2 border-l border-slate-800 pl-3">
+                      <p className="text-[8px] text-slate-400 font-black uppercase truncate">
+                        {m.pañolero?.jerarquia} {m.pañolero?.apellido}
+                      </p>
+                      <button onClick={() => eliminarMovimiento(m.id)} className="p-1 bg-red-950/30 text-red-500 rounded-lg border border-red-900/30 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}

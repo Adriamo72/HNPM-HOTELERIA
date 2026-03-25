@@ -15,12 +15,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   const [datos, setDatos] = useState({ item: 'SABANAS', carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
   const [cargando, setCargando] = useState(true);
   
+  // Estado para el formulario de habitación - SOLO ENTREGA LIMPIA
   const [itemsHabitacion, setItemsHabitacion] = useState([
-    { item: 'SABANAS', cantidadLimpia: 0, cantidadSucia: 0 },
-    { item: 'TOALLAS', cantidadLimpia: 0, cantidadSucia: 0 },
-    { item: 'TOALLONES', cantidadLimpia: 0, cantidadSucia: 0 },
-    { item: 'FRAZADAS', cantidadLimpia: 0, cantidadSucia: 0 },
-    { item: 'CUBRECAMAS', cantidadLimpia: 0, cantidadSucia: 0 }
+    { item: 'SABANAS', cantidadLimpia: 0 },
+    { item: 'TOALLAS', cantidadLimpia: 0 },
+    { item: 'TOALLONES', cantidadLimpia: 0 },
+    { item: 'FRAZADAS', cantidadLimpia: 0 },
+    { item: 'CUBRECAMAS', cantidadLimpia: 0 }
   ]);
 
   useEffect(() => {
@@ -72,7 +73,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           setHabitacionEspecial(habitacionData);
         }
         
-        // Cargar stock actual para cada item
         const stocksTemp = {};
         for (const item of ITEMS_HOTELERIA) {
           const { data: movs } = await supabase
@@ -86,7 +86,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           stocksTemp[item] = movs?.[0]?.stock_fisico_piso || 0;
         }
         
-        console.log("📊 Stock cargado:", stocksTemp);
         setStocksPorItem(stocksTemp);
       }
     } catch (error) {
@@ -102,22 +101,20 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
   };
 
-  const actualizarItemHabitacion = (index, campo, valor) => {
+  const actualizarItemHabitacion = (index, valor) => {
     const nuevosItems = [...itemsHabitacion];
-    nuevosItems[index][campo] = parseInt(valor) || 0;
+    nuevosItems[index].cantidadLimpia = parseInt(valor) || 0;
     setItemsHabitacion(nuevosItems);
   };
 
-  // ==================== REGISTRO HABITACIÓN ====================
+  // ==================== REGISTRO HABITACIÓN - SOLO ENTREGA LIMPIA ====================
   const ejecutarCambioHabitacion = async () => {
     if (!piso?.id) {
       mostrarSplash("ERROR: Piso no identificado");
       return;
     }
 
-    const hayMovimientos = itemsHabitacion.some(
-      item => item.cantidadLimpia > 0 || item.cantidadSucia > 0
-    );
+    const hayMovimientos = itemsHabitacion.some(item => item.cantidadLimpia > 0);
 
     if (!hayMovimientos) {
       mostrarSplash("INGRESE AL MENOS UN ITEM");
@@ -128,7 +125,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       let registrosExitosos = 0;
       
       for (const itemConf of itemsHabitacion) {
-        if (itemConf.cantidadLimpia === 0 && itemConf.cantidadSucia === 0) continue;
+        if (itemConf.cantidadLimpia === 0) continue;
 
         const stockActual = stocksPorItem[itemConf.item] || 0;
         const nuevoStock = stockActual - itemConf.cantidadLimpia;
@@ -143,7 +140,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           dni_pañolero: perfilUsuario.dni,
           item: itemConf.item,
           egreso_limpio: itemConf.cantidadLimpia,
-          retirado_sucio: itemConf.cantidadSucia,
           stock_fisico_piso: nuevoStock,
           novedades: novedades,
           es_cambio_habitacion: true
@@ -153,7 +149,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           movimiento.habitacion_id = habitacionEspecial.id;
         }
 
-        console.log(`📝 Registrando ${itemConf.item}: stock ${stockActual} -> ${nuevoStock}`);
         const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
         if (!error) {
@@ -162,9 +157,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             ...prev,
             [itemConf.item]: nuevoStock
           }));
-          console.log(`✅ ${itemConf.item} actualizado a ${nuevoStock}`);
-        } else {
-          console.error(`❌ Error en ${itemConf.item}:`, error);
         }
       }
       
@@ -173,8 +165,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         setNovedades("Sin novedades");
         setItemsHabitacion(itemsHabitacion.map(item => ({
           ...item,
-          cantidadLimpia: 0,
-          cantidadSucia: 0
+          cantidadLimpia: 0
         })));
       }
       
@@ -207,11 +198,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const stockActual = stocksPorItem[datos.item] || 0;
     const nuevoStock = stockActual - cantidadEntregada;
 
-    console.log(`📦 Entrega a piso: ${datos.item}`);
-    console.log(`   Stock actual: ${stockActual}`);
-    console.log(`   Cantidad entregar: ${cantidadEntregada}`);
-    console.log(`   Nuevo stock: ${nuevoStock}`);
-
     if (nuevoStock < 0) {
       mostrarSplash(`Stock insuficiente. Disponible: ${stockActual}`);
       return;
@@ -230,25 +216,18 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
     if (!error) {
-      // Actualizar stock local INMEDIATAMENTE
-      setStocksPorItem(prev => {
-        const updated = {
-          ...prev,
-          [datos.item]: nuevoStock
-        };
-        console.log("✅ Stock actualizado:", updated);
-        return updated;
-      });
+      setStocksPorItem(prev => ({
+        ...prev,
+        [datos.item]: nuevoStock
+      }));
       
       mostrarSplash(`${cantidadEntregada} ${datos.item} entregados a ${enfermeroEncontrado.apellido}`);
       
-      // Limpiar formulario
       setDatos({ ...datos, entrega_piso: 0 });
       setBusquedaDni('');
       setEnfermeroEncontrado(null);
       setNovedades("Sin novedades");
     } else {
-      console.error("❌ Error al registrar:", error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
@@ -272,11 +251,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
     const stockActual = stocksPorItem[datos.item] || 0;
     const nuevoStock = stockActual + ingresoLimpio;
-
-    console.log(`🧺 Lavadero: ${datos.item}`);
-    console.log(`   Stock actual: ${stockActual}`);
-    console.log(`   Ingreso limpio: ${ingresoLimpio}`);
-    console.log(`   Nuevo stock: ${nuevoStock}`);
 
     const movimiento = {
       piso_id: piso.id,
@@ -304,7 +278,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
       setNovedades("Sin novedades");
     } else {
-      console.error("❌ Error al registrar:", error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
@@ -329,8 +302,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const stockActual = stocksPorItem[i.item] || 0;
         const nuevoStock = stockActual - i.cant;
 
-        console.log(`🏨 Cambio estándar ${i.item}: ${stockActual} -> ${nuevoStock}`);
-
         if (nuevoStock < 0) {
           mostrarSplash(`Stock insuficiente de ${i.item}. Disponible: ${stockActual}`);
           errores = true;
@@ -342,10 +313,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           dni_pañolero: perfilUsuario.dni,
           item: i.item,
           egreso_limpio: i.cant,
-          retirado_sucio: i.cant,
+          stock_fisico_piso: nuevoStock,
           novedades: novedades,
-          es_cambio_habitacion: true,
-          stock_fisico_piso: nuevoStock
+          es_cambio_habitacion: true
         };
 
         if (habitacionEspecial) {
@@ -355,7 +325,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
         if (error) {
           errores = true;
-          console.error(`❌ Error en ${i.item}:`, error);
         } else {
           setStocksPorItem(prev => ({ ...prev, [i.item]: nuevoStock }));
         }
@@ -366,7 +335,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         setNovedades("Sin novedades");
       }
     } catch (error) {
-      console.error(error);
       mostrarSplash("ERROR EN REGISTRO");
     }
   };
@@ -435,49 +403,37 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
       {modo === 'habitacion' ? (
         <div className="space-y-4">
+          {/* Selector de items para habitación - SOLO ENTREGA LIMPIA */}
           <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800">
-            <p className="text-[10px] font-black text-slate-500 uppercase mb-4">ITEMS</p>
+            <p className="text-[10px] font-black text-slate-500 uppercase mb-4">ITEMS PARA ENTREGA</p>
             
-            {itemsHabitacion.map((itemConf, index) => (
-              <div key={itemConf.item} className="mb-6 last:mb-0 border-b border-slate-800 pb-4 last:border-0">
-                <div className="flex justify-between items-center mb-3">
-                  <p className="text-sm font-black text-blue-400">{itemConf.item}</p>
-                  <p className="text-[10px] text-slate-500">Stock: {stocksPorItem[itemConf.item] || 0}</p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[8px] text-green-500 font-black uppercase block mb-1">
-                      ENTREGA LIMPIA
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xl text-green-400 font-black text-center outline-none"
-                      value={itemConf.cantidadLimpia || ""}
-                      onChange={(e) => actualizarItemHabitacion(index, 'cantidadLimpia', e.target.value)}
-                      placeholder="0"
-                    />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {itemsHabitacion.map((itemConf, index) => (
+                <div key={itemConf.item} className="bg-slate-800/30 p-4 rounded-2xl border border-slate-700">
+                  <div className="flex justify-between items-center mb-3">
+                    <p className="text-sm font-black text-blue-400">{itemConf.item}</p>
+                    <p className="text-[10px] text-slate-500">Stock: {stocksPorItem[itemConf.item] || 0}</p>
                   </div>
                   
                   <div>
-                    <label className="text-[8px] text-red-500 font-black uppercase block mb-1">
-                      RETIRA SUCIO
+                    <label className="text-[8px] text-green-500 font-black uppercase block mb-1">
+                      CANTIDAD A ENTREGAR
                     </label>
                     <input
                       type="number"
                       min="0"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xl text-red-400 font-black text-center outline-none"
-                      value={itemConf.cantidadSucia || ""}
-                      onChange={(e) => actualizarItemHabitacion(index, 'cantidadSucia', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-2xl text-green-400 font-black text-center outline-none"
+                      value={itemConf.cantidadLimpia || ""}
+                      onChange={(e) => actualizarItemHabitacion(index, e.target.value)}
                       placeholder="0"
                     />
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
+          {/* Novedades */}
           <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800">
             <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Novedades</p>
             <textarea 
@@ -485,9 +441,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               rows="2" 
               value={novedades} 
               onChange={(e) => setNovedades(e.target.value)}
+              placeholder="Observaciones sobre el servicio..."
             />
           </div>
 
+          {/* Botones */}
           <button 
             onClick={ejecutarCambioEstandar}
             className="w-full bg-green-600 p-4 rounded-[2rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all"
@@ -499,7 +457,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             onClick={ejecutarCambioHabitacion} 
             className="w-full bg-blue-600 p-6 rounded-[2.5rem] font-black uppercase text-sm shadow-2xl active:scale-95 transition-all"
           >
-            Registrar Cambio Personalizado
+            Registrar Entrega Personalizada
           </button>
         </div>
       ) : modo === 'lavadero' ? (
@@ -528,7 +486,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
               placeholder="0"
             />
-            <p className="text-[8px] text-slate-500 mt-1">✓ Aumenta el stock del pañol</p>
           </div>
 
           <div className="bg-red-900/10 p-5 rounded-[2rem] border border-red-900/30 text-center">
@@ -542,7 +499,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
               placeholder="0"
             />
-            <p className="text-[8px] text-slate-500 mt-1">⭕ No afecta el stock (solo registro)</p>
           </div>
 
           <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800">
@@ -563,7 +519,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           </button>
         </form>
       ) : (
-        // MODO PAÑOL - ENTREGA AL ENCARGADO DE PISO
         <form onSubmit={registrarEntregaPiso} className="space-y-4">
           <select 
             className="w-full bg-slate-900 p-4 rounded-2xl border border-slate-800 font-black text-blue-400 outline-none" 
@@ -614,9 +569,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               value={datos.entrega_piso || ""} 
               onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
             />
-            <p className="text-[8px] text-slate-500 text-center mt-2">
-              ⚠️ Esta cantidad se DESCONTARÁ del stock del pañol
-            </p>
           </div>
 
           <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-slate-800">
