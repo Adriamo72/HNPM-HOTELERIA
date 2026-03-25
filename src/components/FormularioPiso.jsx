@@ -517,81 +517,65 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       </div>
 
       {modo === 'habitacion' ? (
-        <div className="space-y-4">
-          {/* Selector de item y cantidad */}
-          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-            <p className="text-sm font-black text-slate-500 uppercase mb-4">ITEM PARA ENTREGAR</p>
-            
-            <select 
-              className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-4"
-              value={itemSeleccionadoHabitacion}
-              onChange={(e) => setItemSeleccionadoHabitacion(e.target.value)}
-            >
-              {ITEMS_HOTELERIA.map(item => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
+  <div className="space-y-4">
+    {/* Selector de item con información de stock */}
+    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+      <p className="text-sm font-black text-slate-500 uppercase mb-4">ITEM PARA ENTREGAR</p>
+      
+      <select 
+        className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-4"
+        value={itemSeleccionadoHabitacion}
+        onChange={(e) => setItemSeleccionadoHabitacion(e.target.value)}
+      >
+        {ITEMS_HOTELERIA.map(item => (
+          <option key={item} value={item}>
+            {item} - Pañol: {stocksPorItem[item] || 0} | Uso: {stocksUsoPorItem[item] || 0} | Lav: {stocksLavaderoPorItem[item] || 0}
+          </option>
+        ))}
+      </select>
 
-            <div>
-              <label className="text-sm font-black text-green-500 uppercase block mb-2">
-                CANTIDAD
-              </label>
-              <input
-                type="number"
-                min="0"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none"
-                value={cantidadHabitacion || ""}
-                onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
-                placeholder="0"
-              />
-            </div>
+      <div>
+        <label className="text-sm font-black text-green-500 uppercase block mb-2">
+          CANTIDAD
+        </label>
+        <input
+          type="number"
+          min="0"
+          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none"
+          value={cantidadHabitacion || ""}
+          onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
+          placeholder="0"
+        />
+      </div>
+    </div>
 
-            {/* Información de stock del item seleccionado */}
-            <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-800 text-center">
-              <div>
-                <p className="text-[10px] text-green-500 uppercase font-black">PAÑOL</p>
-                <p className="text-lg font-black text-green-400">{stocksPorItem[itemSeleccionadoHabitacion] || 0}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-yellow-500 uppercase font-black">EN USO</p>
-                <p className="text-lg font-black text-yellow-400">{stocksUsoPorItem[itemSeleccionadoHabitacion] || 0}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-red-500 uppercase font-black">LAVADERO</p>
-                <p className="text-lg font-black text-red-400">{stocksLavaderoPorItem[itemSeleccionadoHabitacion] || 0}</p>
-              </div>
-            </div>
-          </div>
+    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+      <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
+      <textarea 
+        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
+        rows="2" 
+        value={novedades} 
+        onChange={(e) => setNovedades(e.target.value)}
+        placeholder="Ej: No había toallón sucio..."
+      />
+    </div>
 
-          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-            <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
-            <textarea 
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
-              rows="2" 
-              value={novedades} 
-              onChange={(e) => setNovedades(e.target.value)}
-              placeholder="Ej: No había toallón sucio..."
-            />
-          </div>
+    <button 
+      onClick={ejecutarCambioEstandar}
+      disabled={registrando}
+      className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
+    >
+      {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
+    </button>
 
-          <button 
-            onClick={ejecutarCambioEstandar}
-            disabled={registrando}
-            className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
-          >
-            {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
-          </button>
-
-          <button 
-            onClick={registrarHabitacion} 
-            disabled={registrando || cantidadHabitacion <= 0}
-            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(registrando || cantidadHabitacion <= 0) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
-          >
-            {registrando ? 'REGISTRANDO...' : 'Registrar Entrega'}
-          </button>
-        </div>
+    <button 
+      onClick={registrarHabitacion} 
+      disabled={registrando || cantidadHabitacion <= 0}
+      className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(registrando || cantidadHabitacion <= 0) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
+    >
+      {registrando ? 'REGISTRANDO...' : 'Registrar Entrega'}
+    </button>
+  </div>
       ) : modo === 'lavadero' ? (
         <form onSubmit={registrarLavadero} className="space-y-4">
           <select 
