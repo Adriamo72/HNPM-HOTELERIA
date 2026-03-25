@@ -29,6 +29,97 @@ const AdminDashboard = () => {
     setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
   };
 
+  // ==================== FUNCIÓN PARA RECALCULAR STOCK DE UN PISO ====================
+  const recalcularStockPiso = async (pisoId) => {
+    try {
+      // Obtener todos los movimientos del piso ordenados cronológicamente
+      const { data: movimientos, error: mError } = await supabase
+        .from('movimientos_stock')
+        .select('*')
+        .eq('piso_id', pisoId)
+        .order('created_at', { ascending: true });
+      
+      if (mError) throw mError;
+      
+      // Inicializar stocks en 0
+      const stocksIniciales = {};
+      ITEMS_REQUERIDOS.forEach(item => {
+        stocksIniciales[item] = { pañol: 0, uso: 0, lavadero: 0 };
+      });
+      
+      // Procesar cada movimiento en orden cronológico
+      for (const mov of movimientos) {
+        const item = mov.item;
+        if (!stocksIniciales[item]) continue;
+        
+        // 1. Lavadero entrega limpio → aumenta pañol, disminuye lavadero
+        if (mov.entregado_limpio > 0) {
+          stocksIniciales[item].pañol += mov.entregado_limpio;
+          stocksIniciales[item].lavadero = Math.max(0, stocksIniciales[item].lavadero - mov.entregado_limpio);
+        }
+        
+        // 2. Pañol entrega al piso/habitación → disminuye pañol, aumenta uso
+        if (mov.egreso_limpio > 0) {
+          stocksIniciales[item].pañol -= mov.egreso_limpio;
+          stocksIniciales[item].uso += mov.egreso_limpio;
+        }
+        
+        // 3. Retiro de sucio al lavadero → disminuye uso, aumenta lavadero
+        if (mov.retirado_sucio > 0) {
+          stocksIniciales[item].uso = Math.max(0, stocksIniciales[item].uso - mov.retirado_sucio);
+          stocksIniciales[item].lavadero += mov.retirado_sucio;
+        }
+      }
+      
+      // Actualizar la tabla stock_piso para este piso
+      for (const item of ITEMS_REQUERIDOS) {
+        const { error: upsertError } = await supabase
+          .from('stock_piso')
+          .upsert({
+            piso_id: pisoId,
+            item: item,
+            stock_pañol: Math.max(0, stocksIniciales[item]?.pañol || 0),
+            stock_en_uso: Math.max(0, stocksIniciales[item]?.uso || 0),
+            stock_lavadero: Math.max(0, stocksIniciales[item]?.lavadero || 0),
+            updated_at: new Date()
+          }, { onConflict: 'piso_id,item' });
+        
+        if (upsertError) console.error(`Error actualizando ${item}:`, upsertError);
+      }
+      
+      console.log(`✅ Stock recalculado para piso ${pisoId}`);
+      return true;
+      
+    } catch (error) {
+      console.error("Error recalculando stock:", error);
+      throw error;
+    }
+  };
+
+  // ==================== FUNCIÓN PARA RECALCULAR TODO EL STOCK ====================
+  const recalcularTodoElStock = async () => {
+    try {
+      // Obtener todos los pisos
+      const { data: pisos, error: pError } = await supabase
+        .from('pisos')
+        .select('id');
+      
+      if (pError) throw pError;
+      
+      for (const piso of pisos) {
+        await recalcularStockPiso(piso.id);
+      }
+      
+      console.log("✅ Todo el stock recalculado correctamente");
+      return true;
+      
+    } catch (error) {
+      console.error("Error recalculando todo el stock:", error);
+      throw error;
+    }
+  };
+
+  // ==================== CARGAR DATOS PRINCIPAL ====================
   const cargarDatos = async () => {
     setSincronizando(true);
     mostrarSplash("🔄 SINCRONIZANDO...");
@@ -49,7 +140,7 @@ const AdminDashboard = () => {
           enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)
         `)
         .order('created_at', { ascending: false })
-        .limit(300);
+        .limit(500);
 
       const stockPañolMap = {};
       const stockUsoMap = {};
@@ -100,65 +191,47 @@ const AdminDashboard = () => {
     }
   };
 
-  const calcularTotalGlobal = () => {
-    const total = {};
-    ITEMS_REQUERIDOS.forEach(item => total[item] = 0);
-    Object.keys(stockPañol).forEach(piso => {
-      ITEMS_REQUERIDOS.forEach(item => {
-        total[item] += (stockPañol[piso]?.[item] || 0) + (stockUso[piso]?.[item] || 0) + (stockLavadero[piso]?.[item] || 0);
-      });
-    });
-    return total;
-  };
-
-  const totalGlobal = calcularTotalGlobal();
-
-  const descargarQR = (path, titulo) => {
-    const urlApp = `${window.location.origin}${path}`; 
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
-    const win = window.open('', '_blank');
-    win.document.write(`<html><head><title>${titulo}</title><style>
-      body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}
-      h1{text-transform:uppercase;font-size:24px;margin-bottom:10px;font-weight:900}
-      img{width:300px}
-      p{margin-top:15px;font-size:14px;font-weight:bold;color:#444}
-      @media print { button { display: none; } }
-    </style></head><body>
-      <h1>${titulo}</h1>
-      <img src="${qrUrl}" />
-      <p>Dpto. Hotelería - HNPM</p>
-      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:16px">🖨️ Imprimir</button>
-      <script>setTimeout(()=>{window.close()},30000)</script>
-    </body></html>`);
-    win.document.close();
-  };
-
-  const agregarHabitacionPersistente = async (pisoId, pisoSlug) => {
-    const nombre = prompt("Nombre de la Habitación (Ej: Medico Interno):");
-    if(nombre && nombre.trim()) {
-      const slugH = `${pisoSlug}-${nombre.toLowerCase().replace(/ /g, '-')}`;
-      const { error } = await supabase.from('habitaciones_especiales').insert([{ piso_id: pisoId, nombre: nombre.trim(), slug: slugH }]);
-      if(!error) { 
-        mostrarSplash("✅ Habitación Guardada"); 
-        cargarDatos(); 
-      } else {
-        mostrarSplash("❌ Error al guardar");
-      }
-    }
-  };
-
+  // ==================== ELIMINAR MOVIMIENTO CON RECÁLCULO ====================
   const eliminarMovimiento = async (id) => {
-    if (window.confirm("¿Confirma la eliminación del registro?")) {
-      const { error } = await supabase.from('movimientos_stock').delete().eq('id', id);
-      if (!error) { 
-        mostrarSplash("✅ Registro eliminado"); 
-        cargarDatos(); 
-      } else {
-        mostrarSplash("❌ Error al eliminar");
+    if (window.confirm("⚠️ ¿ELIMINAR REGISTRO?\n\nEl stock se recalculará automáticamente después de eliminar.")) {
+      mostrarSplash("🗑️ ELIMINANDO REGISTRO...");
+      
+      try {
+        // 1. Obtener el movimiento para saber qué piso afecta
+        const { data: movimiento, error: getError } = await supabase
+          .from('movimientos_stock')
+          .select('piso_id')
+          .eq('id', id)
+          .single();
+        
+        if (getError) throw getError;
+        
+        // 2. Eliminar el movimiento
+        const { error: delError } = await supabase
+          .from('movimientos_stock')
+          .delete()
+          .eq('id', id);
+        
+        if (delError) throw delError;
+        
+        mostrarSplash("🔄 RECALCULANDO STOCK...");
+        
+        // 3. Recalcular stock para ese piso específico
+        await recalcularStockPiso(movimiento.piso_id);
+        
+        mostrarSplash("✅ Registro eliminado y stock actualizado");
+        
+        // 4. Recargar la vista
+        cargarDatos();
+        
+      } catch (error) {
+        console.error("Error:", error);
+        mostrarSplash("❌ ERROR AL ELIMINAR");
       }
     }
   };
 
+  // ==================== ELIMINAR PISO COMPLETO ====================
   const eliminarPiso = async (pisoId, pisoNombre) => {
     if (window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE el piso "${pisoNombre}"?\n\nSe eliminarán:\n- Todos los movimientos de stock\n- Todo el stock registrado (pañol, uso, lavadero)\n- Todas las habitaciones especiales\n- El piso en sí\n\nEsta acción NO SE PUEDE DESHACER.`)) {
       mostrarSplash("🗑️ ELIMINANDO PISO Y REGISTROS ASOCIADOS...");
@@ -205,6 +278,7 @@ const AdminDashboard = () => {
     }
   };
 
+  // ==================== ELIMINAR PERSONAL ====================
   const eliminarPersonal = async (dni, nombre) => {
     if (window.confirm(`¿Eliminar al personal "${nombre}"?`)) {
       const { error } = await supabase.from('personal').delete().eq('dni', dni);
@@ -217,6 +291,70 @@ const AdminDashboard = () => {
     }
   };
 
+  // ==================== CALCULAR TOTAL GLOBAL ====================
+  const calcularTotalGlobal = () => {
+    const total = {};
+    ITEMS_REQUERIDOS.forEach(item => total[item] = 0);
+    Object.keys(stockPañol).forEach(piso => {
+      ITEMS_REQUERIDOS.forEach(item => {
+        total[item] += (stockPañol[piso]?.[item] || 0) + (stockUso[piso]?.[item] || 0) + (stockLavadero[piso]?.[item] || 0);
+      });
+    });
+    return total;
+  };
+
+  const totalGlobal = calcularTotalGlobal();
+
+  // ==================== GENERAR QR ====================
+  const descargarQR = (path, titulo) => {
+    const urlApp = `${window.location.origin}${path}`; 
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>${titulo}</title><style>
+      body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}
+      h1{text-transform:uppercase;font-size:24px;margin-bottom:10px;font-weight:900}
+      img{width:300px}
+      p{margin-top:15px;font-size:14px;font-weight:bold;color:#444}
+      @media print { button { display: none; } }
+    </style></head><body>
+      <h1>${titulo}</h1>
+      <img src="${qrUrl}" />
+      <p>Dpto. Hotelería - HNPM</p>
+      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:16px">🖨️ Imprimir</button>
+      <script>setTimeout(()=>{window.close()},30000)</script>
+    </body></html>`);
+    win.document.close();
+  };
+
+  // ==================== AGREGAR HABITACIÓN ESPECIAL ====================
+  const agregarHabitacionPersistente = async (pisoId, pisoSlug) => {
+    const nombre = prompt("Nombre de la Habitación (Ej: Medico Interno):");
+    if(nombre && nombre.trim()) {
+      const slugH = `${pisoSlug}-${nombre.toLowerCase().replace(/ /g, '-')}`;
+      const { error } = await supabase.from('habitaciones_especiales').insert([{ piso_id: pisoId, nombre: nombre.trim(), slug: slugH }]);
+      if(!error) { 
+        mostrarSplash("✅ Habitación Guardada"); 
+        cargarDatos(); 
+      } else {
+        mostrarSplash("❌ Error al guardar");
+      }
+    }
+  };
+
+  // ==================== ELIMINAR HABITACIÓN ESPECIAL ====================
+  const eliminarHabitacion = async (id, nombre) => {
+    if(window.confirm(`¿Eliminar habitación "${nombre}"?`)) { 
+      const { error } = await supabase.from('habitaciones_especiales').delete().eq('id', id); 
+      if(!error) { 
+        mostrarSplash("✅ Habitación eliminada"); 
+        cargarDatos(); 
+      } else {
+        mostrarSplash("❌ Error al eliminar");
+      }
+    }
+  };
+
+  // ==================== TOGGLE AUDITORÍA ====================
   const toggleAuditoria = async () => {
     const nuevoEstado = !auditoriaHabilitada;
     await supabase.from('configuracion_sistema').update({ valor: nuevoEstado.toString() }).eq('clave', 'MODO_AUDITORIA');
@@ -224,6 +362,7 @@ const AdminDashboard = () => {
     mostrarSplash(nuevoEstado ? "🔴 AUDITORÍA ACTIVADA" : "🟢 AUDITORÍA CERRADA");
   };
 
+  // ==================== AGREGAR PISO ====================
   const agregarPiso = async (e) => {
     e.preventDefault();
     if (!nuevoPiso.nombre_piso.trim()) {
@@ -241,6 +380,7 @@ const AdminDashboard = () => {
     }
   };
 
+  // ==================== AGREGAR PERSONAL ====================
   const agregarPersonal = async (e) => {
     e.preventDefault();
     if (!nuevoMiembro.dni || !nuevoMiembro.nombre || !nuevoMiembro.apellido) {
@@ -257,6 +397,7 @@ const AdminDashboard = () => {
     }
   };
 
+  // ==================== FORMATEAR FECHA ====================
   const formatearFechaGuardia = (fechaISO) => {
     const fecha = new Date(fechaISO);
     const opciones = { weekday: 'long', day: 'numeric' };
@@ -265,6 +406,7 @@ const AdminDashboard = () => {
     return `${diaYNumero.charAt(0).toUpperCase() + diaYNumero.slice(1)}, ${hora}`;
   };
 
+  // ==================== RENDER ====================
   return (
     <div className="p-6 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
       {/* Tabs */}
@@ -626,17 +768,7 @@ const AdminDashboard = () => {
                                 📱 QR
                               </button>
                               <button 
-                                onClick={async () => { 
-                                  if(window.confirm(`¿Eliminar habitación "${hab.nombre}"?`)) { 
-                                    const { error } = await supabase.from('habitaciones_especiales').delete().eq('id', hab.id); 
-                                    if(!error) { 
-                                      mostrarSplash("✅ Habitación eliminada"); 
-                                      cargarDatos(); 
-                                    } else {
-                                      mostrarSplash("❌ Error al eliminar");
-                                    }
-                                  } 
-                                }} 
+                                onClick={() => eliminarHabitacion(hab.id, hab.nombre)} 
                                 className="text-red-500 font-black text-sm px-1 hover:text-red-400 transition-all"
                               >
                                 ×
