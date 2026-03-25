@@ -80,7 +80,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const stocksLavaderoTemp = {};
         
         for (const item of ITEMS_HOTELERIA) {
-          // Obtener stock de la tabla stock_piso
           const { data: stockData, error } = await supabase
             .from('stock_piso')
             .select('stock_pañol, stock_en_uso, stock_lavadero')
@@ -92,7 +91,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             console.error(`Error cargando stock para ${item}:`, error);
           }
           
-          // Si no existe registro, crear uno con valores 0
           if (!stockData) {
             console.log(`Creando registro inicial para ${item} en piso ${pisoData.nombre_piso}`);
             const { error: insertError } = await supabase
@@ -149,7 +147,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setItemsHabitacion(nuevosItems);
   };
 
-  // Actualizar los 3 campos en una sola tabla
   const actualizarStockCompleto = async (item, nuevoPañol, nuevoUso, nuevoLavadero) => {
     const { data, error } = await supabase
       .from('stock_piso')
@@ -199,7 +196,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     console.log(`🔍 Estado actual - ${datos.item}: Pañol=${nuevoStockPañol}, Uso=${nuevoStockUso}, Lavadero=${nuevoStockLavadero}`);
     console.log(`📝 Operación - Ingreso limpio: ${ingresoLimpio}, Salida sucio: ${salidaSucio}`);
 
-    // 1. Si el lavadero recibe sucio (sale del uso, va al lavadero)
     if (salidaSucio > 0) {
       if (nuevoStockUso >= salidaSucio) {
         nuevoStockUso -= salidaSucio;
@@ -215,7 +211,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       }
     }
 
-    // 2. Si el lavadero entrega limpio (sale del lavadero, va al pañol)
     if (ingresoLimpio > 0) {
       if (nuevoStockLavadero >= ingresoLimpio) {
         nuevoStockLavadero -= ingresoLimpio;
@@ -238,7 +233,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
     console.log(`📊 Resultado final - Pañol: ${nuevoStockPañol}, Uso: ${nuevoStockUso}, Lavadero: ${nuevoStockLavadero}`);
 
-    // Insertar movimiento en historial
     const movimiento = {
       piso_id: piso.id,
       dni_pañolero: perfilUsuario.dni,
@@ -258,7 +252,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       return;
     }
 
-    // Actualizar los 3 campos en una sola tabla
     const ok = await actualizarStockCompleto(datos.item, nuevoStockPañol, nuevoStockUso, nuevoStockLavadero);
     
     if (ok) {
@@ -572,38 +565,90 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             <div className="flex justify-between items-center mb-4">
               <p className="text-sm font-black text-slate-500 uppercase">ITEMS PARA ENTREGA</p>
               <div className="flex gap-3 text-xs">
-                <span className="text-green-400">🗄️ Pañol: {stocksPorItem['SABANAS'] || 0}</span>
-                <span className="text-yellow-400">🛏️ Uso: {stocksUsoPorItem['SABANAS'] || 0}</span>
-                <span className="text-red-400">🧺 Lav: {stocksLavaderoPorItem['SABANAS'] || 0}</span>
-                <span className="text-blue-400">📊 Total: {totalRealPorItem('SABANAS')}</span>
+                <span className="text-green-400">Pañol: {stocksPorItem['SABANAS'] || 0}</span>
+                <span className="text-yellow-400">Uso: {stocksUsoPorItem['SABANAS'] || 0}</span>
+                <span className="text-red-400">Lav: {stocksLavaderoPorItem['SABANAS'] || 0}</span>
+                <span className="text-blue-400">Total: {totalRealPorItem('SABANAS')}</span>
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {itemsHabitacion.map((itemConf, index) => (
-                <div key={itemConf.item} className="bg-slate-800/30 p-4 rounded-xl border border-slate-700">
-                  <div className="flex justify-between items-center mb-3">
-                    <p className="text-lg font-black text-blue-400">{itemConf.item}</p>
-                    <div className="flex gap-2 text-xs">
-                      <span className="text-green-400">P:{stocksPorItem[itemConf.item] || 0}</span>
-                      <span className="text-yellow-400">U:{stocksUsoPorItem[itemConf.item] || 0}</span>
-                      <span className="text-red-400">L:{stocksLavaderoPorItem[itemConf.item] || 0}</span>
+            <select 
+              className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-4"
+              value={itemsHabitacion.findIndex(i => i.cantidad > 0) >= 0 ? itemsHabitacion.findIndex(i => i.cantidad > 0) : 0}
+              onChange={(e) => {
+                const idx = parseInt(e.target.value);
+                const itemSeleccionado = itemsHabitacion[idx];
+                const cantidad = prompt(`¿Cuántas ${itemSeleccionado.item} va a entregar?`, "0");
+                if (cantidad !== null && parseInt(cantidad) > 0) {
+                  const nuevosItems = [...itemsHabitacion];
+                  nuevosItems[idx].cantidad = parseInt(cantidad);
+                  setItemsHabitacion(nuevosItems);
+                }
+              }}
+            >
+              {itemsHabitacion.map((itemConf, idx) => (
+                <option key={itemConf.item} value={idx}>
+                  {itemConf.item} - Stock: {stocksPorItem[itemConf.item] || 0} | En uso: {stocksUsoPorItem[itemConf.item] || 0} | Lav: {stocksLavaderoPorItem[itemConf.item] || 0}
+                </option>
+              ))}
+            </select>
+
+            {itemsHabitacion.some(item => item.cantidad > 0) && (
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                <p className="text-xs font-black text-green-500 uppercase mb-2">ITEMS SELECCIONADOS:</p>
+                <div className="space-y-1">
+                  {itemsHabitacion.filter(item => item.cantidad > 0).map(item => (
+                    <div key={item.item} className="flex justify-between items-center">
+                      <span className="text-sm font-black text-white">{item.item}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg font-black text-green-400">{item.cantidad}</span>
+                        <button 
+                          onClick={() => {
+                            const nuevosItems = [...itemsHabitacion];
+                            const idx = itemsHabitacion.findIndex(i => i.item === item.item);
+                            nuevosItems[idx].cantidad = 0;
+                            setItemsHabitacion(nuevosItems);
+                          }}
+                          className="text-red-500 text-sm font-black px-2 py-1 rounded-lg hover:bg-red-950/30"
+                        >
+                          ✖
+                        </button>
+                      </div>
                     </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              {itemsHabitacion.map((itemConf, idx) => (
+                <div key={itemConf.item} className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nuevosItems = [...itemsHabitacion];
+                      nuevosItems[idx].cantidad = Math.max(0, (nuevosItems[idx].cantidad || 0) - 1);
+                      setItemsHabitacion(nuevosItems);
+                    }}
+                    className="bg-red-900/30 text-red-400 w-8 h-8 rounded-lg font-black text-lg hover:bg-red-900/50"
+                  >
+                    -
+                  </button>
+                  <div className="flex-1 bg-slate-800 rounded-lg px-2 py-1 text-center">
+                    <span className="text-[10px] text-slate-400 block">{itemConf.item}</span>
+                    <span className="text-sm font-black text-white">{itemConf.cantidad || 0}</span>
                   </div>
-                  
-                  <div>
-                    <label className="text-xs text-green-500 font-black uppercase block mb-2">
-                      CANTIDAD A ENTREGAR (-)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-3xl text-green-400 font-black text-center outline-none"
-                      value={itemConf.cantidad || ""}
-                      onChange={(e) => actualizarItemHabitacion(index, e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nuevosItems = [...itemsHabitacion];
+                      nuevosItems[idx].cantidad = (nuevosItems[idx].cantidad || 0) + 1;
+                      setItemsHabitacion(nuevosItems);
+                    }}
+                    className="bg-green-900/30 text-green-400 w-8 h-8 rounded-lg font-black text-lg hover:bg-green-900/50"
+                  >
+                    +
+                  </button>
                 </div>
               ))}
             </div>
@@ -625,15 +670,15 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             disabled={registrando}
             className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
           >
-            {registrando ? 'REGISTRANDO...' : '🎯 Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
+            {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
           </button>
 
           <button 
             onClick={ejecutarCambioHabitacion} 
-            disabled={registrando}
-            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 active:scale-95'}`}
+            disabled={registrando || !itemsHabitacion.some(item => item.cantidad > 0)}
+            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(registrando || !itemsHabitacion.some(item => item.cantidad > 0)) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
           >
-            {registrando ? 'REGISTRANDO...' : '📝 Registrar Entrega Personalizada'}
+            {registrando ? 'REGISTRANDO...' : 'Registrar Entrega Personalizada'}
           </button>
         </div>
       ) : modo === 'lavadero' ? (
@@ -648,22 +693,22 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <div className="grid grid-cols-3 gap-4 bg-slate-900 p-5 rounded-xl border border-slate-800 text-center">
             <div>
-              <p className="text-xs text-green-500 uppercase font-black">🗄️ PAÑOL</p>
+              <p className="text-xs text-green-500 uppercase font-black">PAÑOL</p>
               <p className="text-3xl font-black text-green-400">{stocksPorItem[datos.item] || 0}</p>
             </div>
             <div>
-              <p className="text-xs text-yellow-500 uppercase font-black">🛏️ EN USO</p>
+              <p className="text-xs text-yellow-500 uppercase font-black">EN USO</p>
               <p className="text-3xl font-black text-yellow-400">{stocksUsoPorItem[datos.item] || 0}</p>
             </div>
             <div>
-              <p className="text-xs text-red-500 uppercase font-black">🧺 LAVADERO</p>
+              <p className="text-xs text-red-500 uppercase font-black">LAVADERO</p>
               <p className="text-3xl font-black text-red-400">{stocksLavaderoPorItem[datos.item] || 0}</p>
             </div>
           </div>
 
           <div className="bg-red-900/10 p-5 rounded-xl border border-red-900/30 text-center">
             <label className="text-sm font-black text-red-500 uppercase block mb-2">
-              📤 RECIBE SUCIO DEL PISO (Uso → Lavadero)
+              RECIBE SUCIO DEL PISO (Uso → Lavadero)
             </label>
             <input 
               type="number" 
@@ -677,7 +722,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <div className="bg-green-900/10 p-5 rounded-xl border border-green-900/30 text-center">
             <label className="text-sm font-black text-green-500 uppercase block mb-2">
-              📥 ENTREGA LIMPIA AL PAÑOL (Lavadero → Pañol)
+              ENTREGA LIMPIA AL PAÑOL (Lavadero → Pañol)
             </label>
             <input 
               type="number" 
@@ -704,7 +749,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             disabled={registrando}
             className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 active:scale-95'}`}
           >
-            {registrando ? 'REGISTRANDO...' : '✅ Registrar Movimiento'}
+            {registrando ? 'REGISTRANDO...' : 'Registrar Movimiento'}
           </button>
         </form>
       ) : (
@@ -719,15 +764,15 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <div className="grid grid-cols-3 gap-4 bg-slate-900 p-5 rounded-xl border border-slate-800 text-center">
             <div>
-              <p className="text-xs text-green-500 uppercase font-black">🗄️ PAÑOL</p>
+              <p className="text-xs text-green-500 uppercase font-black">PAÑOL</p>
               <p className="text-3xl font-black text-green-400">{stocksPorItem[datos.item] || 0}</p>
             </div>
             <div>
-              <p className="text-xs text-yellow-500 uppercase font-black">🛏️ EN USO</p>
+              <p className="text-xs text-yellow-500 uppercase font-black">EN USO</p>
               <p className="text-3xl font-black text-yellow-400">{stocksUsoPorItem[datos.item] || 0}</p>
             </div>
             <div>
-              <p className="text-xs text-red-500 uppercase font-black">🧺 LAVADERO</p>
+              <p className="text-xs text-red-500 uppercase font-black">LAVADERO</p>
               <p className="text-3xl font-black text-red-400">{stocksLavaderoPorItem[datos.item] || 0}</p>
             </div>
           </div>
@@ -788,7 +833,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             disabled={!enfermeroEncontrado || registrando}
             className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(!enfermeroEncontrado || registrando) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
           >
-            {registrando ? 'REGISTRANDO...' : '📦 Entregar al Piso'}
+            {registrando ? 'REGISTRANDO...' : 'Entregar al Piso'}
           </button>
         </form>
       )}
