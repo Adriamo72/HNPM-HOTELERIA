@@ -75,13 +75,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           setHabitacionEspecial(habitacionData);
         }
         
-        // Cargar stock de las 3 tablas
         const stocksTemp = {};
         const stocksUsoTemp = {};
         const stocksLavaderoTemp = {};
         
         for (const item of ITEMS_HOTELERIA) {
-          // Stock en pañol
           const { data: stockPañol } = await supabase
             .from('stock_piso')
             .select('cantidad')
@@ -90,7 +88,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             .maybeSingle();
           stocksTemp[item] = stockPañol?.cantidad || 0;
           
-          // Stock en uso
           const { data: stockUso } = await supabase
             .from('stock_piso_uso')
             .select('cantidad')
@@ -99,7 +96,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             .maybeSingle();
           stocksUsoTemp[item] = stockUso?.cantidad || 0;
           
-          // Stock en lavadero
           const { data: stockLavadero } = await supabase
             .from('stock_lavadero')
             .select('cantidad')
@@ -112,8 +108,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         setStocksPorItem(stocksTemp);
         setStocksUsoPorItem(stocksUsoTemp);
         setStocksLavaderoPorItem(stocksLavaderoTemp);
-        
-        console.log("📊 Stocks cargados:", { stocksTemp, stocksUsoTemp, stocksLavaderoTemp });
       }
     } catch (error) {
       console.error(error);
@@ -134,7 +128,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setItemsHabitacion(nuevosItems);
   };
 
-  // ==================== ACTUALIZAR STOCK EN TABLAS ====================
   const actualizarStockPañol = async (item, nuevaCantidad) => {
     const { error } = await supabase
       .from('stock_piso')
@@ -144,7 +137,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         cantidad: nuevaCantidad,
         updated_at: new Date()
       }, { onConflict: 'piso_id,item' });
-    
     if (error) console.error("Error actualizando stock_piso:", error);
     return !error;
   };
@@ -158,7 +150,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         cantidad: nuevaCantidad,
         updated_at: new Date()
       }, { onConflict: 'piso_id,item' });
-    
     if (error) console.error("Error actualizando stock_piso_uso:", error);
     return !error;
   };
@@ -172,12 +163,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         cantidad: nuevaCantidad,
         updated_at: new Date()
       }, { onConflict: 'piso_id,item' });
-    
     if (error) console.error("Error actualizando stock_lavadero:", error);
     return !error;
   };
 
-  // ==================== REGISTRO HABITACIÓN (Entrega limpia) ====================
+  // ==================== REGISTRO HABITACIÓN ====================
   const ejecutarCambioHabitacion = async () => {
     if (!piso?.id) {
       mostrarSplash("ERROR: Piso no identificado");
@@ -204,14 +194,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const nuevoStockPañol = stockActualPañol - itemConf.cantidad;
         const nuevoStockUso = (stocksUsoPorItem[itemConf.item] || 0) + itemConf.cantidad;
 
-        console.log(`📝 ${itemConf.item}: Pañol ${stockActualPañol} → ${nuevoStockPañol}, Uso +${itemConf.cantidad}`);
-
         if (nuevoStockPañol < 0) {
-          mostrarSplash(`❌ Stock insuficiente de ${itemConf.item}. Disponible: ${stockActualPañol}`);
+          mostrarSplash(`⚠️ Stock insuficiente de ${itemConf.item}. Disponible: ${stockActualPañol}`);
           continue;
         }
 
-        // Insertar movimiento en historial
         const movimiento = {
           piso_id: piso.id,
           dni_pañolero: perfilUsuario.dni,
@@ -229,24 +216,23 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
         
         if (movError) {
-          console.error(`❌ Error en movimiento ${itemConf.item}:`, movError);
+          console.error(`❌ Error en ${itemConf.item}:`, movError);
           continue;
         }
 
-        // Actualizar stock en tablas
         const okPañol = await actualizarStockPañol(itemConf.item, nuevoStockPañol);
         const okUso = await actualizarStockUso(itemConf.item, nuevoStockUso);
         
         if (okPañol && okUso) {
           registrosExitosos++;
-          movimientosInsertados.push(itemConf.item);
+          movimientosInsertados.push(`${itemConf.item}(${itemConf.cantidad})`);
           setStocksPorItem(prev => ({ ...prev, [itemConf.item]: nuevoStockPañol }));
           setStocksUsoPorItem(prev => ({ ...prev, [itemConf.item]: nuevoStockUso }));
         }
       }
       
       if (registrosExitosos > 0) {
-        mostrarSplash(`✅ ${registrosExitosos} ITEM(S) REGISTRADO(S): ${movimientosInsertados.join(', ')}`);
+        mostrarSplash(`✅ ${registrosExitosos} ITEM(S): ${movimientosInsertados.join(', ')}`);
         setNovedades("Sin novedades");
         setItemsHabitacion(itemsHabitacion.map(item => ({ ...item, cantidad: 0 })));
       }
@@ -283,10 +269,8 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const nuevoStockPañol = stockActualPañol - i.cant;
         const nuevoStockUso = (stocksUsoPorItem[i.item] || 0) + i.cant;
 
-        console.log(`📝 Cambio estándar ${i.item}: Pañol ${stockActualPañol} → ${nuevoStockPañol}, Uso +${i.cant}`);
-
         if (nuevoStockPañol < 0) {
-          mostrarSplash(`❌ Stock insuficiente de ${i.item}. Disponible: ${stockActualPañol}`);
+          mostrarSplash(`⚠️ Stock insuficiente de ${i.item}. Disponible: ${stockActualPañol}`);
           errores = true;
           continue;
         }
@@ -309,7 +293,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         
         if (movError) {
           errores = true;
-          console.error(`❌ Error en ${i.item}:`, movError);
           continue;
         }
 
@@ -326,12 +309,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       }
       
       if (!errores && exitosos.length > 0) {
-        mostrarSplash(`✅ CAMBIO ESTÁNDAR REGISTRADO: ${exitosos.join(', ')}`);
+        mostrarSplash(`✅ CAMBIO ESTÁNDAR: ${exitosos.join(', ')}`);
         setNovedades("Sin novedades");
       } else if (exitosos.length > 0) {
-        mostrarSplash(`⚠️ REGISTRO PARCIAL: ${exitosos.join(', ')}`);
+        mostrarSplash(`⚠️ PARCIAL: ${exitosos.join(', ')}`);
       } else {
-        mostrarSplash("❌ ERROR: No hay stock suficiente");
+        mostrarSplash("❌ ERROR: Stock insuficiente");
       }
     } catch (error) {
       console.error(error);
@@ -367,15 +350,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const nuevoStockPañol = stockActualPañol - cantidadEntregada;
     const nuevoStockUso = (stocksUsoPorItem[datos.item] || 0) + cantidadEntregada;
 
-    console.log(`📦 Entrega a piso - ${datos.item}: Pañol ${stockActualPañol} → ${nuevoStockPañol}, Uso +${cantidadEntregada}`);
-
     if (nuevoStockPañol < 0) {
       mostrarSplash(`❌ Stock insuficiente. Disponible: ${stockActualPañol}`);
       setRegistrando(false);
       return;
     }
 
-    // Insertar movimiento
     const movimiento = {
       piso_id: piso.id,
       dni_pañolero: perfilUsuario.dni,
@@ -394,16 +374,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       return;
     }
 
-    // Actualizar stocks
     const okPañol = await actualizarStockPañol(datos.item, nuevoStockPañol);
     const okUso = await actualizarStockUso(datos.item, nuevoStockUso);
     
     if (okPañol && okUso) {
       setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
       setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
-      
-      mostrarSplash(`✅ ${cantidadEntregada} ${datos.item} entregados a ${enfermeroEncontrado.apellido}`);
-      
+      mostrarSplash(`✅ ${cantidadEntregada} ${datos.item} a ${enfermeroEncontrado.apellido}`);
       setDatos({ ...datos, entrega_piso: 0 });
       setBusquedaDni('');
       setEnfermeroEncontrado(null);
@@ -415,7 +392,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setRegistrando(false);
   };
 
-  // ==================== REGISTRO LAVADERO ====================
+  // ==================== REGISTRO LAVADERO (VERSIÓN FLEXIBLE) ====================
   const registrarLavadero = async (e) => {
     e.preventDefault();
     
@@ -435,37 +412,48 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setRegistrando(true);
 
     let nuevoStockPañol = stocksPorItem[datos.item] || 0;
-    let nuevoStockLavadero = stocksLavaderoPorItem[datos.item] || 0;
     let nuevoStockUso = stocksUsoPorItem[datos.item] || 0;
+    let nuevoStockLavadero = stocksLavaderoPorItem[datos.item] || 0;
     let mensajes = [];
+    let ajusteAutomatico = false;
 
     // 1. Si el lavadero recibe sucio (sale del uso, va al lavadero)
     if (salidaSucio > 0) {
-      if (nuevoStockUso < salidaSucio) {
-        mostrarSplash(`❌ No hay suficiente stock en uso. Disponible: ${nuevoStockUso}`);
-        setRegistrando(false);
-        return;
+      if (nuevoStockUso >= salidaSucio) {
+        nuevoStockUso -= salidaSucio;
+        nuevoStockLavadero += salidaSucio;
+        mensajes.push(`${salidaSucio} sucios`);
+      } else {
+        const deficit = salidaSucio - nuevoStockUso;
+        nuevoStockPañol -= deficit;
+        nuevoStockUso = 0;
+        nuevoStockLavadero += salidaSucio;
+        ajusteAutomatico = true;
+        mensajes.push(`${salidaSucio} sucios (${deficit} ajustado)`);
       }
-      nuevoStockUso -= salidaSucio;
-      nuevoStockLavadero += salidaSucio;
-      mensajes.push(`${salidaSucio} sucios retirados`);
-      console.log(`🧺 Retiro sucio: Uso ${stocksUsoPorItem[datos.item] || 0} → ${nuevoStockUso}, Lavadero +${salidaSucio}`);
     }
 
     // 2. Si el lavadero entrega limpio (sale del lavadero, va al pañol)
     if (ingresoLimpio > 0) {
-      if (nuevoStockLavadero < ingresoLimpio) {
-        mostrarSplash(`❌ No hay suficiente stock en lavadero. Disponible: ${nuevoStockLavadero}`);
-        setRegistrando(false);
-        return;
+      if (nuevoStockLavadero >= ingresoLimpio) {
+        nuevoStockLavadero -= ingresoLimpio;
+        nuevoStockPañol += ingresoLimpio;
+        mensajes.push(`${ingresoLimpio} limpios`);
+      } else {
+        const deficit = ingresoLimpio - nuevoStockLavadero;
+        nuevoStockLavadero = 0;
+        nuevoStockPañol += ingresoLimpio;
+        ajusteAutomatico = true;
+        mensajes.push(`${ingresoLimpio} limpios (${deficit} nuevo ingreso)`);
       }
-      nuevoStockLavadero -= ingresoLimpio;
-      nuevoStockPañol += ingresoLimpio;
-      mensajes.push(`${ingresoLimpio} limpios recibidos`);
-      console.log(`🧺 Entrega limpio: Lavadero ${stocksLavaderoPorItem[datos.item] || 0} → ${nuevoStockLavadero}, Pañol +${ingresoLimpio}`);
     }
 
-    // Insertar movimiento
+    if (nuevoStockPañol < 0) {
+      mostrarSplash(`❌ Error: Stock en pañol negativo. Contacte administración.`);
+      setRegistrando(false);
+      return;
+    }
+
     const movimiento = {
       piso_id: piso.id,
       dni_pañolero: perfilUsuario.dni,
@@ -473,7 +461,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       entregado_limpio: ingresoLimpio,
       retirado_sucio: salidaSucio,
       stock_fisico_piso: nuevoStockPañol,
-      novedades: novedades
+      novedades: novedades + (ajusteAutomatico ? " [Ajuste automático]" : "")
     };
 
     const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
@@ -484,7 +472,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       return;
     }
 
-    // Actualizar las 3 tablas
     const okPañol = await actualizarStockPañol(datos.item, nuevoStockPañol);
     const okUso = await actualizarStockUso(datos.item, nuevoStockUso);
     const okLavadero = await actualizarStockLavadero(datos.item, nuevoStockLavadero);
@@ -493,9 +480,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
       setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
       setStocksLavaderoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockLavadero }));
-      
-      mostrarSplash(`✅ ${datos.item}: ${mensajes.join(' / ')}`);
-      
+      mostrarSplash(`✅ ${datos.item}: ${mensajes.join(' / ')}${ajusteAutomatico ? ' ⚠️ Ajuste' : ''}`);
       setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
       setNovedades("Sin novedades");
     } else {
@@ -526,6 +511,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     }
   };
 
+  const totalRealPorItem = (item) => {
+    return (stocksPorItem[item] || 0) + (stocksUsoPorItem[item] || 0) + (stocksLavaderoPorItem[item] || 0);
+  };
+
   if (cargando) {
     return (
       <div className="p-10 text-white text-center">
@@ -553,11 +542,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     );
   }
 
-  // Calcular total real por item
-  const totalRealPorItem = (item) => {
-    return (stocksPorItem[item] || 0) + (stocksUsoPorItem[item] || 0) + (stocksLavaderoPorItem[item] || 0);
-  };
-
   return (
     <div className="p-4 md:p-6 bg-slate-950 min-h-screen text-slate-200 pb-20 font-sans">
       <div className="mb-4 bg-slate-900/50 p-3 rounded-lg border border-blue-900/30">
@@ -578,9 +562,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             <div className="flex justify-between items-center mb-3">
               <p className="text-[9px] font-black text-slate-500 uppercase">ITEMS PARA ENTREGA</p>
               <div className="flex gap-2 text-[8px]">
-                <span className="text-green-400">Pañol: {stocksPorItem['SABANAS'] || 0}</span>
-                <span className="text-yellow-400">Uso: {stocksUsoPorItem['SABANAS'] || 0}</span>
-                <span className="text-red-400">Lav: {stocksLavaderoPorItem['SABANAS'] || 0}</span>
+                <span className="text-green-400">P:{stocksPorItem['SABANAS'] || 0}</span>
+                <span className="text-yellow-400">U:{stocksUsoPorItem['SABANAS'] || 0}</span>
+                <span className="text-red-400">L:{stocksLavaderoPorItem['SABANAS'] || 0}</span>
+                <span className="text-blue-400">T:{totalRealPorItem('SABANAS')}</span>
               </div>
             </div>
             
@@ -589,11 +574,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
                 <div key={itemConf.item} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700">
                   <div className="flex justify-between items-center mb-2">
                     <p className="text-sm font-black text-blue-400">{itemConf.item}</p>
-                    <div className="flex gap-1">
-                      <span className="text-[7px] text-green-400">P:{stocksPorItem[itemConf.item] || 0}</span>
-                      <span className="text-[7px] text-yellow-400">U:{stocksUsoPorItem[itemConf.item] || 0}</span>
-                      <span className="text-[7px] text-red-400">L:{stocksLavaderoPorItem[itemConf.item] || 0}</span>
-                      <span className="text-[7px] text-blue-400">T:{totalRealPorItem(itemConf.item)}</span>
+                    <div className="flex gap-1 text-[7px]">
+                      <span className="text-green-400">P:{stocksPorItem[itemConf.item] || 0}</span>
+                      <span className="text-yellow-400">U:{stocksUsoPorItem[itemConf.item] || 0}</span>
+                      <span className="text-red-400">L:{stocksLavaderoPorItem[itemConf.item] || 0}</span>
                     </div>
                   </div>
                   
@@ -669,7 +653,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <div className="bg-red-900/10 p-4 rounded-lg border border-red-900/30 text-center">
             <label className="text-[9px] font-black text-red-500 uppercase block mb-1">
-              RECIBE SUCIO DEL PISO (Uso → Lavadero)
+              📤 RECIBE SUCIO DEL PISO (Uso → Lavadero)
             </label>
             <input 
               type="number" 
@@ -678,12 +662,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
               placeholder="0"
             />
-            <p className="text-[7px] text-slate-500 mt-1">Stock en uso disponible: {stocksUsoPorItem[datos.item] || 0}</p>
+            <p className="text-[7px] text-slate-500 mt-1">Stock en uso: {stocksUsoPorItem[datos.item] || 0}</p>
           </div>
 
           <div className="bg-green-900/10 p-4 rounded-lg border border-green-900/30 text-center">
             <label className="text-[9px] font-black text-green-500 uppercase block mb-1">
-              ENTREGA LIMPIA AL PAÑOL (Lavadero → Pañol)
+              📥 ENTREGA LIMPIA AL PAÑOL (Lavadero → Pañol)
             </label>
             <input 
               type="number" 
@@ -692,7 +676,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
               placeholder="0"
             />
-            <p className="text-[7px] text-slate-500 mt-1">Stock en lavadero disponible: {stocksLavaderoPorItem[datos.item] || 0}</p>
+            <p className="text-[7px] text-slate-500 mt-1">Stock en lavadero: {stocksLavaderoPorItem[datos.item] || 0}</p>
           </div>
 
           <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">

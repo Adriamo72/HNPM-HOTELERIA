@@ -41,7 +41,6 @@ const AdminDashboard = () => {
       const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
       setAuditoriaHabilitada(config?.valor === 'true');
 
-      // Cargar movimientos para historial
       const { data: movs } = await supabase.from('movimientos_stock')
         .select(`
           *, 
@@ -52,7 +51,6 @@ const AdminDashboard = () => {
         .order('created_at', { ascending: false })
         .limit(200);
 
-      // Cargar stocks de las 3 tablas
       const stockPañolMap = {};
       const stockUsoMap = {};
       const stockLavaderoMap = {};
@@ -64,7 +62,6 @@ const AdminDashboard = () => {
           stockLavaderoMap[piso.nombre_piso] = {};
           
           for (const item of ITEMS_REQUERIDOS) {
-            // Stock pañol
             const { data: pStock } = await supabase
               .from('stock_piso')
               .select('cantidad')
@@ -73,7 +70,6 @@ const AdminDashboard = () => {
               .maybeSingle();
             stockPañolMap[piso.nombre_piso][item] = pStock?.cantidad || 0;
             
-            // Stock en uso
             const { data: uStock } = await supabase
               .from('stock_piso_uso')
               .select('cantidad')
@@ -82,7 +78,6 @@ const AdminDashboard = () => {
               .maybeSingle();
             stockUsoMap[piso.nombre_piso][item] = uStock?.cantidad || 0;
             
-            // Stock lavadero
             const { data: lStock } = await supabase
               .from('stock_lavadero')
               .select('cantidad')
@@ -94,7 +89,6 @@ const AdminDashboard = () => {
         }
       }
 
-      // Agrupar movimientos por piso
       const agrupados = movs ? movs.reduce((acc, curr) => {
         const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
         if (!acc[nombrePiso]) acc[nombrePiso] = [];
@@ -119,16 +113,12 @@ const AdminDashboard = () => {
     }
   };
 
-  // Calcular total real por item global
   const calcularTotalGlobal = () => {
     const total = {};
     ITEMS_REQUERIDOS.forEach(item => total[item] = 0);
-    
     Object.keys(stockPañol).forEach(piso => {
       ITEMS_REQUERIDOS.forEach(item => {
-        total[item] += (stockPañol[piso]?.[item] || 0) + 
-                        (stockUso[piso]?.[item] || 0) + 
-                        (stockLavadero[piso]?.[item] || 0);
+        total[item] += (stockPañol[piso]?.[item] || 0) + (stockUso[piso]?.[item] || 0) + (stockLavadero[piso]?.[item] || 0);
       });
     });
     return total;
@@ -210,7 +200,6 @@ const AdminDashboard = () => {
             </button>
           </div>
           
-          {/* STOCK TOTAL REAL */}
           <div className="bg-blue-900/10 border border-blue-900/30 rounded-lg p-4">
             <p className="text-[10px] font-black text-blue-400 uppercase tracking-wider mb-3 text-center">
               📊 STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
@@ -226,13 +215,11 @@ const AdminDashboard = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="bg-green-900/20 p-2 rounded-lg border border-green-900/30">
-                <p className="text-[7px] font-black text-green-500 uppercase text-center">📍 PAÑOL (Limpio disponible)</p>
+                <p className="text-[7px] font-black text-green-500 uppercase text-center">📍 PAÑOL (Limpio)</p>
                 <div className="grid grid-cols-4 gap-0.5 mt-1">
                   {ITEMS_REQUERIDOS.map(item => {
                     let total = 0;
-                    Object.keys(stockPañol).forEach(piso => {
-                      total += stockPañol[piso]?.[item] || 0;
-                    });
+                    Object.keys(stockPañol).forEach(piso => { total += stockPañol[piso]?.[item] || 0; });
                     return (
                       <div key={item} className="text-center">
                         <span className="text-[5px] text-slate-500 block">{item.substring(0, 3)}</span>
@@ -243,13 +230,11 @@ const AdminDashboard = () => {
                 </div>
               </div>
               <div className="bg-yellow-900/20 p-2 rounded-lg border border-yellow-900/30">
-                <p className="text-[7px] font-black text-yellow-500 uppercase text-center">🛏️ EN USO (Habitaciones/Pisos)</p>
+                <p className="text-[7px] font-black text-yellow-500 uppercase text-center">🛏️ EN USO</p>
                 <div className="grid grid-cols-4 gap-0.5 mt-1">
                   {ITEMS_REQUERIDOS.map(item => {
                     let total = 0;
-                    Object.keys(stockUso).forEach(piso => {
-                      total += stockUso[piso]?.[item] || 0;
-                    });
+                    Object.keys(stockUso).forEach(piso => { total += stockUso[piso]?.[item] || 0; });
                     return (
                       <div key={item} className="text-center">
                         <span className="text-[5px] text-slate-500 block">{item.substring(0, 3)}</span>
@@ -260,13 +245,11 @@ const AdminDashboard = () => {
                 </div>
               </div>
               <div className="bg-red-900/20 p-2 rounded-lg border border-red-900/30">
-                <p className="text-[7px] font-black text-red-500 uppercase text-center">🧺 EN LAVADERO (Sucio)</p>
+                <p className="text-[7px] font-black text-red-500 uppercase text-center">🧺 LAVADERO</p>
                 <div className="grid grid-cols-4 gap-0.5 mt-1">
                   {ITEMS_REQUERIDOS.map(item => {
                     let total = 0;
-                    Object.keys(stockLavadero).forEach(piso => {
-                      total += stockLavadero[piso]?.[item] || 0;
-                    });
+                    Object.keys(stockLavadero).forEach(piso => { total += stockLavadero[piso]?.[item] || 0; });
                     return (
                       <div key={item} className="text-center">
                         <span className="text-[5px] text-slate-500 block">{item.substring(0, 3)}</span>
@@ -279,13 +262,10 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          {/* STOCK POR PISO - CON 3 ESTADOS */}
           {Object.keys(stockPañol).map((nombrePiso) => {
             const totalPiso = {};
             ITEMS_REQUERIDOS.forEach(item => {
-              totalPiso[item] = (stockPañol[nombrePiso]?.[item] || 0) + 
-                                (stockUso[nombrePiso]?.[item] || 0) + 
-                                (stockLavadero[nombrePiso]?.[item] || 0);
+              totalPiso[item] = (stockPañol[nombrePiso]?.[item] || 0) + (stockUso[nombrePiso]?.[item] || 0) + (stockLavadero[nombrePiso]?.[item] || 0);
             });
             
             return (
@@ -294,14 +274,11 @@ const AdminDashboard = () => {
                   <span className="text-sm font-black text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
                   <div className="flex gap-2">
                     {ITEMS_REQUERIDOS.slice(0, 3).map(item => (
-                      <span key={item} className="text-[8px] text-blue-400 font-black">
-                        {item}: {totalPiso[item] || 0}
-                      </span>
+                      <span key={item} className="text-[8px] text-blue-400 font-black">{item}: {totalPiso[item] || 0}</span>
                     ))}
                   </div>
                 </div>
                 
-                {/* 3 estados del piso */}
                 <div className="grid grid-cols-3 gap-2 p-3 bg-slate-950/50 border-b border-slate-800">
                   <div className="bg-green-900/20 p-2 rounded-lg">
                     <p className="text-[7px] font-black text-green-500 uppercase text-center">Pañol</p>
@@ -340,43 +317,31 @@ const AdminDashboard = () => {
                   </div>
                 </div>
                 
-                {/* HISTORIAL DE MOVIMIENTOS */}
                 <div className="p-2 space-y-1 max-h-[400px] overflow-y-auto bg-slate-950/20">
                   {movimientosAgrupados[nombrePiso]?.map((m) => (
                     <div key={m.id} className="bg-slate-950/50 px-2 py-1.5 rounded-md border border-slate-800/50 flex items-center group hover:bg-slate-800 transition-all text-xs">
                       <div className="w-[20%] shrink-0">
                         <p className="font-black text-white uppercase">{m.item}</p>
                         <p className="text-[6px] text-blue-500 font-black uppercase">{formatearFechaGuardia(m.created_at)}</p>
-                        {m.es_cambio_habitacion && (
-                          <span className="text-[5px] bg-purple-900/50 px-1 rounded">HAB</span>
-                        )}
+                        {m.es_cambio_habitacion && <span className="text-[5px] bg-purple-900/50 px-1 rounded">HAB</span>}
+                        {m.novedades?.includes('Ajuste automático') && <span className="text-[5px] bg-orange-900/50 px-1 rounded ml-1">⚡AJUSTE</span>}
                       </div>
-                      
                       <div className="flex-1 grid grid-cols-3 gap-1">
                         <div className="text-center">
                           <span className="text-[6px] text-green-500 font-black uppercase">Lav→Pañol</span>
-                          <p className="text-sm font-black text-green-500">
-                            {m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}
-                          </p>
+                          <p className="text-sm font-black text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
                         </div>
                         <div className="text-center">
                           <span className="text-[6px] text-orange-500 font-black uppercase">Pañol→Uso</span>
-                          <p className="text-sm font-black text-orange-500">
-                            {m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}
-                          </p>
+                          <p className="text-sm font-black text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
                         </div>
                         <div className="text-center">
                           <span className="text-[6px] text-red-500 font-black uppercase">Uso→Lav</span>
-                          <p className="text-sm font-black text-red-500">
-                            {m.retirado_sucio > 0 ? m.retirado_sucio : '—'}
-                          </p>
+                          <p className="text-sm font-black text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
                         </div>
                       </div>
-                      
                       <div className="w-[22%] flex items-center justify-end gap-1 border-l border-slate-800 pl-2">
-                        <p className="text-[6px] text-slate-400 font-black uppercase truncate">
-                          {m.pañolero?.jerarquia} {m.pañolero?.apellido}
-                        </p>
+                        <p className="text-[6px] text-slate-400 font-black uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
                         <button onClick={() => eliminarMovimiento(m.id)} className="p-0.5 bg-red-950/30 text-red-500 rounded border border-red-900/30 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
