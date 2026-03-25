@@ -16,7 +16,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   const [cargando, setCargando] = useState(true);
   const [registrando, setRegistrando] = useState(false);
   
-  // Estado para el formulario de habitación - SOLO ENTREGA LIMPIA
   const [itemsHabitacion, setItemsHabitacion] = useState([
     { item: 'SABANAS', cantidad: 0 },
     { item: 'TOALLAS', cantidad: 0 },
@@ -74,6 +73,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           setHabitacionEspecial(habitacionData);
         }
         
+        // Cargar el último stock para cada item
         const stocksTemp = {};
         for (const item of ITEMS_HOTELERIA) {
           const { data: movs } = await supabase
@@ -87,6 +87,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           stocksTemp[item] = movs?.[0]?.stock_fisico_piso || 0;
         }
         
+        console.log("📊 Stock actual:", stocksTemp);
         setStocksPorItem(stocksTemp);
       }
     } catch (error) {
@@ -134,8 +135,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const stockActual = stocksPorItem[itemConf.item] || 0;
         const nuevoStock = stockActual - itemConf.cantidad;
 
+        console.log(`📝 ${itemConf.item}: stock ${stockActual} - ${itemConf.cantidad} = ${nuevoStock}`);
+
         if (nuevoStock < 0) {
-          mostrarSplash(`Stock insuficiente de ${itemConf.item}. Disponible: ${stockActual}`);
+          mostrarSplash(`❌ Stock insuficiente de ${itemConf.item}. Disponible: ${stockActual}`);
           continue;
         }
 
@@ -153,12 +156,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           movimiento.habitacion_id = habitacionEspecial.id;
         }
 
-        console.log("Insertando movimiento:", movimiento);
+        console.log("Insertando:", movimiento);
         
-        const { data, error } = await supabase.from('movimientos_stock').insert([movimiento]).select();
+        const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
 
         if (error) {
-          console.error(`Error en ${itemConf.item}:`, error);
+          console.error(`❌ Error en ${itemConf.item}:`, error);
           mostrarSplash(`ERROR en ${itemConf.item}`);
         } else {
           registrosExitosos++;
@@ -167,22 +170,18 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             ...prev,
             [itemConf.item]: nuevoStock
           }));
+          console.log(`✅ ${itemConf.item} actualizado a ${nuevoStock}`);
         }
       }
       
       if (registrosExitosos > 0) {
-        mostrarSplash(`${registrosExitosos} ITEM(S) REGISTRADO(S): ${movimientosInsertados.join(', ')}`);
+        mostrarSplash(`✅ ${registrosExitosos} ITEM(S) REGISTRADO(S): ${movimientosInsertados.join(', ')}`);
         setNovedades("Sin novedades");
-        setItemsHabitacion(itemsHabitacion.map(item => ({
-          ...item,
-          cantidad: 0
-        })));
-      } else if (registrosExitosos === 0 && hayMovimientos) {
-        mostrarSplash("ERROR: No se pudo registrar ningún item");
+        setItemsHabitacion(itemsHabitacion.map(item => ({ ...item, cantidad: 0 })));
       }
       
     } catch (error) {
-      console.error("Error en cambio de habitación:", error);
+      console.error("Error:", error);
       mostrarSplash("ERROR EN REGISTRO");
     } finally {
       setRegistrando(false);
@@ -212,8 +211,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const stockActual = stocksPorItem[i.item] || 0;
         const nuevoStock = stockActual - i.cant;
 
+        console.log(`📝 Cambio estándar ${i.item}: ${stockActual} - ${i.cant} = ${nuevoStock}`);
+
         if (nuevoStock < 0) {
-          mostrarSplash(`Stock insuficiente de ${i.item}. Disponible: ${stockActual}`);
+          mostrarSplash(`❌ Stock insuficiente de ${i.item}. Disponible: ${stockActual}`);
           errores = true;
           continue;
         }
@@ -235,20 +236,21 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         const { error } = await supabase.from('movimientos_stock').insert([movimiento]);
         if (error) {
           errores = true;
-          console.error(`Error en ${i.item}:`, error);
+          console.error(`❌ Error en ${i.item}:`, error);
         } else {
           exitosos.push(i.item);
           setStocksPorItem(prev => ({ ...prev, [i.item]: nuevoStock }));
+          console.log(`✅ ${i.item} actualizado a ${nuevoStock}`);
         }
       }
       
       if (!errores && exitosos.length > 0) {
-        mostrarSplash(`CAMBIO ESTÁNDAR REGISTRADO: ${exitosos.join(', ')}`);
+        mostrarSplash(`✅ CAMBIO ESTÁNDAR REGISTRADO: ${exitosos.join(', ')}`);
         setNovedades("Sin novedades");
       } else if (exitosos.length > 0) {
-        mostrarSplash(`REGISTRO PARCIAL: ${exitosos.join(', ')}`);
+        mostrarSplash(`⚠️ REGISTRO PARCIAL: ${exitosos.join(', ')}`);
       } else {
-        mostrarSplash("ERROR EN REGISTRO ESTÁNDAR");
+        mostrarSplash("❌ ERROR: No hay stock suficiente");
       }
     } catch (error) {
       console.error(error);
@@ -283,8 +285,10 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     const stockActual = stocksPorItem[datos.item] || 0;
     const nuevoStock = stockActual - cantidadEntregada;
 
+    console.log(`📦 Entrega a piso - ${datos.item}: ${stockActual} - ${cantidadEntregada} = ${nuevoStock}`);
+
     if (nuevoStock < 0) {
-      mostrarSplash(`Stock insuficiente. Disponible: ${stockActual}`);
+      mostrarSplash(`❌ Stock insuficiente. Disponible: ${stockActual}`);
       setRegistrando(false);
       return;
     }
@@ -307,14 +311,14 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         [datos.item]: nuevoStock
       }));
       
-      mostrarSplash(`${cantidadEntregada} ${datos.item} entregados a ${enfermeroEncontrado.apellido}`);
+      mostrarSplash(`✅ ${cantidadEntregada} ${datos.item} entregados a ${enfermeroEncontrado.apellido}`);
       
       setDatos({ ...datos, entrega_piso: 0 });
       setBusquedaDni('');
       setEnfermeroEncontrado(null);
       setNovedades("Sin novedades");
     } else {
-      mostrarSplash("ERROR EN REGISTRO");
+      mostrarSplash("❌ ERROR EN REGISTRO");
     }
     
     setRegistrando(false);
@@ -340,7 +344,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setRegistrando(true);
 
     const stockActual = stocksPorItem[datos.item] || 0;
+    // SOLO el ingreso limpio afecta el stock
     const nuevoStock = stockActual + ingresoLimpio;
+
+    console.log(`🧺 Lavadero - ${datos.item}: ${stockActual} + ${ingresoLimpio} = ${nuevoStock}`);
+    console.log(`   Sucio retirado: ${salidaSucio} (no afecta stock)`);
 
     const movimiento = {
       piso_id: piso.id,
@@ -363,12 +371,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       let mensaje = [];
       if (ingresoLimpio > 0) mensaje.push(`+${ingresoLimpio} limpios`);
       if (salidaSucio > 0) mensaje.push(`-${salidaSucio} sucios`);
-      mostrarSplash(`${datos.item}: ${mensaje.join(' / ')}`);
+      mostrarSplash(`✅ ${datos.item}: ${mensaje.join(' / ')}`);
       
       setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
       setNovedades("Sin novedades");
     } else {
-      mostrarSplash("ERROR EN REGISTRO");
+      console.error("Error:", error);
+      mostrarSplash("❌ ERROR EN REGISTRO");
     }
     
     setRegistrando(false);
@@ -438,7 +447,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
       {modo === 'habitacion' ? (
         <div className="space-y-3">
-          {/* Selector de items para habitación */}
           <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
             <p className="text-[9px] font-black text-slate-500 uppercase mb-3">ITEMS PARA ENTREGA</p>
             
@@ -447,12 +455,14 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
                 <div key={itemConf.item} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700">
                   <div className="flex justify-between items-center mb-2">
                     <p className="text-sm font-black text-blue-400">{itemConf.item}</p>
-                    <p className="text-[9px] text-slate-500">Stock: {stocksPorItem[itemConf.item] || 0}</p>
+                    <p className={`text-[9px] font-black ${(stocksPorItem[itemConf.item] || 0) < 5 ? 'text-red-500' : 'text-slate-500'}`}>
+                      Stock: {stocksPorItem[itemConf.item] || 0}
+                    </p>
                   </div>
                   
                   <div>
                     <label className="text-[7px] text-green-500 font-black uppercase block mb-1">
-                      CANTIDAD
+                      CANTIDAD A ENTREGAR (-)
                     </label>
                     <input
                       type="number"
@@ -468,7 +478,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             </div>
           </div>
 
-          {/* Novedades */}
           <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
             <p className="text-[9px] font-black text-slate-500 uppercase mb-2">Novedades</p>
             <textarea 
@@ -480,7 +489,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             />
           </div>
 
-          {/* Botones */}
           <button 
             onClick={ejecutarCambioEstandar}
             disabled={registrando}
@@ -509,7 +517,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 text-center">
             <p className="text-[9px] font-black uppercase mb-1 text-slate-500">STOCK EN PAÑOL</p>
-            <span className="text-4xl font-black text-blue-400">{stocksPorItem[datos.item] || 0}</span>
+            <span className={`text-4xl font-black ${(stocksPorItem[datos.item] || 0) < 5 ? 'text-red-500' : 'text-blue-400'}`}>
+              {stocksPorItem[datos.item] || 0}
+            </span>
           </div>
 
           <div className="bg-green-900/10 p-4 rounded-lg border border-green-900/30 text-center">
@@ -527,7 +537,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <div className="bg-red-900/10 p-4 rounded-lg border border-red-900/30 text-center">
             <label className="text-[9px] font-black text-red-500 uppercase block mb-1">
-              RECIBE SUCIO DEL PISO ( - )
+              RECIBE SUCIO DEL PISO
             </label>
             <input 
               type="number" 
@@ -536,6 +546,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
               placeholder="0"
             />
+            <p className="text-[7px] text-slate-500 mt-1">No afecta el stock del pañol</p>
           </div>
 
           <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
@@ -568,7 +579,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 text-center">
             <p className="text-[9px] font-black uppercase mb-1 text-slate-500">STOCK EN PAÑOL</p>
-            <span className="text-4xl font-black text-blue-400">{stocksPorItem[datos.item] || 0}</span>
+            <span className={`text-4xl font-black ${(stocksPorItem[datos.item] || 0) < 5 ? 'text-red-500' : 'text-blue-400'}`}>
+              {stocksPorItem[datos.item] || 0}
+            </span>
           </div>
 
           <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
@@ -596,13 +609,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             )}
           </div>
 
-          <div className="bg-blue-900/10 p-4 rounded-lg border border-blue-900/30">
-            <label className="text-[9px] font-black text-blue-500 uppercase block text-center mb-2">
-              CANTIDAD A ENTREGAR ( - )
+          <div className="bg-orange-900/10 p-4 rounded-lg border border-orange-900/30">
+            <label className="text-[9px] font-black text-orange-500 uppercase block text-center mb-2">
+              CANTIDAD A ENTREGAR AL PISO (-)
             </label>
             <input 
               type="number" 
-              className="w-full bg-slate-950 p-3 rounded-lg text-4xl text-center font-black text-blue-400 outline-none border border-blue-900/20" 
+              className="w-full bg-slate-950 p-3 rounded-lg text-4xl text-center font-black text-orange-400 outline-none border border-orange-900/20" 
               placeholder="0" 
               value={datos.entrega_piso || ""} 
               onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
