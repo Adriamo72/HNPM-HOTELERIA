@@ -32,7 +32,6 @@ const AdminDashboard = () => {
   // ==================== FUNCIÓN PARA RECALCULAR STOCK DE UN PISO ====================
   const recalcularStockPiso = async (pisoId) => {
     try {
-      // Obtener todos los movimientos del piso ordenados cronológicamente
       const { data: movimientos, error: mError } = await supabase
         .from('movimientos_stock')
         .select('*')
@@ -41,37 +40,31 @@ const AdminDashboard = () => {
       
       if (mError) throw mError;
       
-      // Inicializar stocks en 0
       const stocksIniciales = {};
       ITEMS_REQUERIDOS.forEach(item => {
         stocksIniciales[item] = { pañol: 0, uso: 0, lavadero: 0 };
       });
       
-      // Procesar cada movimiento en orden cronológico
       for (const mov of movimientos) {
         const item = mov.item;
         if (!stocksIniciales[item]) continue;
         
-        // 1. Lavadero entrega limpio → aumenta pañol, disminuye lavadero
         if (mov.entregado_limpio > 0) {
           stocksIniciales[item].pañol += mov.entregado_limpio;
           stocksIniciales[item].lavadero = Math.max(0, stocksIniciales[item].lavadero - mov.entregado_limpio);
         }
         
-        // 2. Pañol entrega al piso/habitación → disminuye pañol, aumenta uso
         if (mov.egreso_limpio > 0) {
           stocksIniciales[item].pañol -= mov.egreso_limpio;
           stocksIniciales[item].uso += mov.egreso_limpio;
         }
         
-        // 3. Retiro de sucio al lavadero → disminuye uso, aumenta lavadero
         if (mov.retirado_sucio > 0) {
           stocksIniciales[item].uso = Math.max(0, stocksIniciales[item].uso - mov.retirado_sucio);
           stocksIniciales[item].lavadero += mov.retirado_sucio;
         }
       }
       
-      // Actualizar la tabla stock_piso para este piso
       for (const item of ITEMS_REQUERIDOS) {
         const { error: upsertError } = await supabase
           .from('stock_piso')
@@ -87,34 +80,9 @@ const AdminDashboard = () => {
         if (upsertError) console.error(`Error actualizando ${item}:`, upsertError);
       }
       
-      console.log(`✅ Stock recalculado para piso ${pisoId}`);
       return true;
-      
     } catch (error) {
       console.error("Error recalculando stock:", error);
-      throw error;
-    }
-  };
-
-  // ==================== FUNCIÓN PARA RECALCULAR TODO EL STOCK ====================
-  const recalcularTodoElStock = async () => {
-    try {
-      // Obtener todos los pisos
-      const { data: pisos, error: pError } = await supabase
-        .from('pisos')
-        .select('id');
-      
-      if (pError) throw pError;
-      
-      for (const piso of pisos) {
-        await recalcularStockPiso(piso.id);
-      }
-      
-      console.log("✅ Todo el stock recalculado correctamente");
-      return true;
-      
-    } catch (error) {
-      console.error("Error recalculando todo el stock:", error);
       throw error;
     }
   };
@@ -197,7 +165,6 @@ const AdminDashboard = () => {
       mostrarSplash("🗑️ ELIMINANDO REGISTRO...");
       
       try {
-        // 1. Obtener el movimiento para saber qué piso afecta
         const { data: movimiento, error: getError } = await supabase
           .from('movimientos_stock')
           .select('piso_id')
@@ -206,7 +173,6 @@ const AdminDashboard = () => {
         
         if (getError) throw getError;
         
-        // 2. Eliminar el movimiento
         const { error: delError } = await supabase
           .from('movimientos_stock')
           .delete()
@@ -215,13 +181,8 @@ const AdminDashboard = () => {
         if (delError) throw delError;
         
         mostrarSplash("🔄 RECALCULANDO STOCK...");
-        
-        // 3. Recalcular stock para ese piso específico
         await recalcularStockPiso(movimiento.piso_id);
-        
         mostrarSplash("✅ Registro eliminado y stock actualizado");
-        
-        // 4. Recargar la vista
         cargarDatos();
         
       } catch (error) {
@@ -237,37 +198,10 @@ const AdminDashboard = () => {
       mostrarSplash("🗑️ ELIMINANDO PISO Y REGISTROS ASOCIADOS...");
       
       try {
-        // 1. Eliminar movimientos_stock
-        const { error: errorMovs } = await supabase
-          .from('movimientos_stock')
-          .delete()
-          .eq('piso_id', pisoId);
-        
-        if (errorMovs) throw errorMovs;
-        
-        // 2. Eliminar stock_piso
-        const { error: errorStock } = await supabase
-          .from('stock_piso')
-          .delete()
-          .eq('piso_id', pisoId);
-        
-        if (errorStock) throw errorStock;
-        
-        // 3. Eliminar habitaciones_especiales
-        const { error: errorHabs } = await supabase
-          .from('habitaciones_especiales')
-          .delete()
-          .eq('piso_id', pisoId);
-        
-        if (errorHabs) throw errorHabs;
-        
-        // 4. Eliminar el piso
-        const { error: errorPiso } = await supabase
-          .from('pisos')
-          .delete()
-          .eq('id', pisoId);
-        
-        if (errorPiso) throw errorPiso;
+        await supabase.from('movimientos_stock').delete().eq('piso_id', pisoId);
+        await supabase.from('stock_piso').delete().eq('piso_id', pisoId);
+        await supabase.from('habitaciones_especiales').delete().eq('piso_id', pisoId);
+        await supabase.from('pisos').delete().eq('id', pisoId);
         
         mostrarSplash(`✅ PISO "${pisoNombre}" ELIMINADO COMPLETAMENTE`);
         cargarDatos();
@@ -413,13 +347,13 @@ const AdminDashboard = () => {
       <div className="flex gap-3 mb-8 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit">
         <button 
           onClick={() => setActiveTab('historial')} 
-          className={`px-8 py-2.5 rounded-lg text-base font-black uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           📊 Monitor
         </button>
         <button 
           onClick={() => setActiveTab('admin')} 
-          className={`px-8 py-2.5 rounded-lg text-base font-black uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           ⚙️ Administración
         </button>
@@ -429,11 +363,11 @@ const AdminDashboard = () => {
       {activeTab === 'historial' && (
         <div className="space-y-8">
           <div className="flex justify-between items-center">
-            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">📦 Control de Activos</h2>
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">📦 Control de Activos</h2>
             <button 
               onClick={cargarDatos} 
               disabled={sincronizando}
-              className={`text-sm px-5 py-2.5 rounded-xl font-black transition-all ${sincronizando ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
+              className={`text-xs px-5 py-2 rounded-xl font-semibold transition-all ${sincronizando ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
             >
               {sincronizando ? '⌛ SINCRONIZANDO...' : '🔄 SINCRONIZAR'}
             </button>
@@ -441,14 +375,14 @@ const AdminDashboard = () => {
           
           {/* Stock Total Consolidado */}
           <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6">
-            <p className="text-sm font-black text-blue-400 uppercase tracking-wider mb-4 text-center">
+            <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4 text-center">
               📊 STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
               {ITEMS_REQUERIDOS.map(item => (
                 <div key={item} className="bg-slate-900/80 p-3 rounded-xl border border-blue-800/40 text-center">
-                  <span className="text-[10px] text-slate-500 font-black uppercase block">{item}</span>
-                  <span className={`text-2xl font-black ${totalGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase block">{item}</span>
+                  <span className={`text-2xl font-semibold ${totalGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>
                     {totalGlobal[item] || 0}
                   </span>
                 </div>
@@ -457,7 +391,7 @@ const AdminDashboard = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-green-900/20 p-3 rounded-xl border border-green-900/30">
-                <p className="text-xs font-black text-green-500 uppercase text-center">📍 PAÑOL (Limpio disponible)</p>
+                <p className="text-xs font-semibold text-green-500 uppercase text-center">PAÑOL (Limpio disponible)</p>
                 <div className="grid grid-cols-4 gap-1 mt-2">
                   {ITEMS_REQUERIDOS.map(item => {
                     let total = 0;
@@ -465,14 +399,14 @@ const AdminDashboard = () => {
                     return (
                       <div key={item} className="text-center">
                         <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
-                        <span className={`text-base font-black ${total < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>{total}</span>
+                        <span className={`text-base font-semibold ${total < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>{total}</span>
                       </div>
                     );
                   })}
                 </div>
               </div>
               <div className="bg-yellow-900/20 p-3 rounded-xl border border-yellow-900/30">
-                <p className="text-xs font-black text-yellow-500 uppercase text-center">🛏️ EN USO (Habitaciones/Pisos)</p>
+                <p className="text-xs font-semibold text-yellow-500 uppercase text-center">EN USO (Habitaciones/Pisos)</p>
                 <div className="grid grid-cols-4 gap-1 mt-2">
                   {ITEMS_REQUERIDOS.map(item => {
                     let total = 0;
@@ -480,14 +414,14 @@ const AdminDashboard = () => {
                     return (
                       <div key={item} className="text-center">
                         <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
-                        <span className="text-base font-black text-yellow-400">{total}</span>
+                        <span className="text-base font-semibold text-yellow-400">{total}</span>
                       </div>
                     );
                   })}
                 </div>
               </div>
               <div className="bg-red-900/20 p-3 rounded-xl border border-red-900/30">
-                <p className="text-xs font-black text-red-500 uppercase text-center">🧺 LAVADERO (Sucio)</p>
+                <p className="text-xs font-semibold text-red-500 uppercase text-center">LAVADERO (Sucio)</p>
                 <div className="grid grid-cols-4 gap-1 mt-2">
                   {ITEMS_REQUERIDOS.map(item => {
                     let total = 0;
@@ -495,7 +429,7 @@ const AdminDashboard = () => {
                     return (
                       <div key={item} className="text-center">
                         <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
-                        <span className="text-base font-black text-red-400">{total}</span>
+                        <span className="text-base font-semibold text-red-400">{total}</span>
                       </div>
                     );
                   })}
@@ -514,10 +448,10 @@ const AdminDashboard = () => {
             return (
               <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
                 <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
-                  <span className="text-xl font-black text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
+                  <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
                   <div className="flex gap-3 flex-wrap">
                     {ITEMS_REQUERIDOS.slice(0, 4).map(item => (
-                      <span key={item} className="text-xs text-blue-400 font-black">
+                      <span key={item} className="text-xs text-blue-400 font-semibold">
                         {item}: {totalPiso[item] || 0}
                       </span>
                     ))}
@@ -526,12 +460,12 @@ const AdminDashboard = () => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
                   <div className="bg-green-900/20 p-3 rounded-xl">
-                    <p className="text-sm font-black text-green-500 uppercase text-center">🗄️ PAÑOL</p>
+                    <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
                     <div className="grid grid-cols-4 gap-1 mt-2">
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
                           <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
-                          <span className={`text-sm font-black ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
+                          <span className={`text-sm font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
                             {stockPañol[nombrePiso]?.[item] || 0}
                           </span>
                         </div>
@@ -539,23 +473,23 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                   <div className="bg-yellow-900/20 p-3 rounded-xl">
-                    <p className="text-sm font-black text-yellow-500 uppercase text-center">🛏️ EN USO</p>
+                    <p className="text-sm font-semibold text-yellow-500 uppercase text-center">EN USO</p>
                     <div className="grid grid-cols-4 gap-1 mt-2">
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
                           <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
-                          <span className="text-sm font-black text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
+                          <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                   <div className="bg-red-900/20 p-3 rounded-xl">
-                    <p className="text-sm font-black text-red-500 uppercase text-center">🧺 LAVADERO</p>
+                    <p className="text-sm font-semibold text-red-500 uppercase text-center">LAVADERO</p>
                     <div className="grid grid-cols-4 gap-1 mt-2">
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
                           <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
-                          <span className="text-sm font-black text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
+                          <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
                         </div>
                       ))}
                     </div>
@@ -563,58 +497,58 @@ const AdminDashboard = () => {
                 </div>
                 
                 {/* Historial de movimientos */}
-<div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
-  {movimientosAgrupados[nombrePiso]?.length > 0 ? (
-    movimientosAgrupados[nombrePiso].map((m) => (
-      <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
-        {/* Item y fecha */}
-        <div className="w-[22%] shrink-0 flex items-center gap-2">
-          <p className="font-black text-white text-[11px] uppercase">{m.item}</p>
-          <p className="text-[10px] text-blue-500 font-black">{formatearFechaGuardia(m.created_at)}</p>
-        </div>
-        
-        {/* Movimientos */}
-        <div className="flex-1 flex items-center justify-around gap-2">
-          <div className="text-center min-w-[50px]">
-            <span className="text-[8px] text-green-500 font-black uppercase block">Lav→Pañol</span>
-            <p className="text-sm font-black text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
-          </div>
-          <div className="text-center min-w-[50px]">
-            <span className="text-[8px] text-orange-500 font-black uppercase block">Pañol→Uso</span>
-            <p className="text-sm font-black text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
-          </div>
-          <div className="text-center min-w-[50px]">
-            <span className="text-[8px] text-red-500 font-black uppercase block">Uso→Lav</span>
-            <p className="text-sm font-black text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
-          </div>
-        </div>
-        
-        {/* Novedades, badges, operador y eliminar */}
-        <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
-          {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
-            <span className="text-[9px] text-yellow-500 font-black truncate max-w-[100px]" title={m.novedades}>
-              📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
-            </span>
-          )}
-          {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
-          {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
-          <p className="text-[9px] text-slate-400 font-black uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
-          <button 
-            onClick={() => eliminarMovimiento(m.id)} 
-            className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
-            title="Eliminar movimiento"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    ))
-  ) : (
-    <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
-  )}
-</div>
+                <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
+                  {movimientosAgrupados[nombrePiso]?.length > 0 ? (
+                    movimientosAgrupados[nombrePiso].map((m) => (
+                      <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
+                        {/* Item y fecha */}
+                        <div className="w-[22%] shrink-0 flex items-center gap-2">
+                          <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
+                          <p className="text-[8px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
+                        </div>
+                        
+                        {/* Movimientos */}
+                        <div className="flex-1 flex items-center justify-around gap-2">
+                          <div className="text-center min-w-[50px]">
+                            <span className="text-[8px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
+                            <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
+                          </div>
+                          <div className="text-center min-w-[50px]">
+                            <span className="text-[8px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
+                            <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
+                          </div>
+                          <div className="text-center min-w-[50px]">
+                            <span className="text-[8px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
+                            <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
+                          </div>
+                        </div>
+                        
+                        {/* Novedades, badges, operador y eliminar */}
+                        <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
+                          {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
+                            <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
+                              📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
+                            </span>
+                          )}
+                          {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
+                          {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
+                          <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
+                          <button 
+                            onClick={() => eliminarMovimiento(m.id)} 
+                            className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
+                            title="Eliminar movimiento"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -627,12 +561,12 @@ const AdminDashboard = () => {
           {/* Auditoría */}
           <section className="bg-slate-900 p-6 rounded-2xl border border-yellow-600/30 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="text-center sm:text-left">
-              <h3 className="text-lg font-black uppercase text-yellow-500">🔐 Mando de Auditoría</h3>
-              <p className="text-xs text-slate-500 uppercase font-bold">Ajuste manual de stock habilitado</p>
+              <h3 className="text-lg font-semibold uppercase text-yellow-500">🔐 Mando de Auditoría</h3>
+              <p className="text-xs text-slate-500 uppercase font-semibold">Ajuste manual de stock habilitado</p>
             </div>
             <button 
               onClick={toggleAuditoria} 
-              className={`px-6 py-2.5 rounded-xl font-black text-sm uppercase transition-all ${auditoriaHabilitada ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-green-600 text-white hover:bg-green-500'}`}
+              className={`px-6 py-2.5 rounded-xl font-semibold text-sm uppercase transition-all ${auditoriaHabilitada ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-green-600 text-white hover:bg-green-500'}`}
             >
               {auditoriaHabilitada ? '🔴 Desactivar' : '🟢 Activar'}
             </button>
@@ -640,7 +574,7 @@ const AdminDashboard = () => {
 
           {/* Gestión de Personal */}
           <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-            <h3 className="text-lg font-black text-slate-500 mb-4 uppercase tracking-wider">👥 Tripulación</h3>
+            <h3 className="text-lg font-semibold text-slate-500 mb-4 uppercase tracking-wider">👥 Tripulación</h3>
             <form onSubmit={agregarPersonal} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
               <input 
                 className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
@@ -671,7 +605,7 @@ const AdminDashboard = () => {
                 required 
               />
               <select 
-                className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-bold text-blue-400 uppercase focus:ring-2 focus:ring-blue-500 outline-none" 
+                className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-semibold text-blue-400 uppercase focus:ring-2 focus:ring-blue-500 outline-none" 
                 value={nuevoMiembro.rol} 
                 onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}
               >
@@ -681,7 +615,7 @@ const AdminDashboard = () => {
               </select>
               <button 
                 type="submit" 
-                className="bg-blue-600 p-3 rounded-xl font-black uppercase text-sm hover:bg-blue-500 transition-all"
+                className="bg-blue-600 p-3 rounded-xl font-semibold uppercase text-sm hover:bg-blue-500 transition-all"
               >
                 + Registrar Personal
               </button>
@@ -689,14 +623,14 @@ const AdminDashboard = () => {
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {personal.length > 0 ? (
                 personal.map(p => (
-                  <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-bold">
+                  <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
                     <span>
                       {p.jerarquia} {p.apellido}, {p.nombre} 
                       <span className="text-blue-500 opacity-50 ml-2">[{p.rol}]</span>
                     </span>
                     <button 
                       onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} 
-                      className="text-red-500 text-xs font-black uppercase hover:text-red-400 transition-all px-3 py-1 rounded-lg hover:bg-red-950/30"
+                      className="text-red-500 text-xs font-semibold uppercase hover:text-red-400 transition-all px-3 py-1 rounded-lg hover:bg-red-950/30"
                     >
                       Eliminar
                     </button>
@@ -710,7 +644,7 @@ const AdminDashboard = () => {
 
           {/* Gestión de Pisos y QRs */}
           <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-            <h3 className="text-lg font-black text-slate-500 mb-4 uppercase tracking-wider">🏥 Sectores y QRs</h3>
+            <h3 className="text-lg font-semibold text-slate-500 mb-4 uppercase tracking-wider">🏥 Sectores y QRs</h3>
             <form onSubmit={agregarPiso} className="flex flex-col sm:flex-row gap-3 mb-6">
               <input 
                 className="flex-grow bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
@@ -721,7 +655,7 @@ const AdminDashboard = () => {
               />
               <button 
                 type="submit" 
-                className="bg-blue-600 px-6 rounded-xl font-black text-sm uppercase hover:bg-blue-500 transition-all"
+                className="bg-blue-600 px-6 rounded-xl font-semibold text-sm uppercase hover:bg-blue-500 transition-all"
               >
                 + Crear Sector
               </button>
@@ -731,23 +665,23 @@ const AdminDashboard = () => {
                 pisos.map(p => (
                   <div key={p.id} className="bg-slate-950 p-5 rounded-xl border border-slate-800 hover:border-slate-700 transition-all">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-                      <span className="text-xl font-black text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
+                      <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
                       <div className="flex flex-wrap gap-2">
                         <button 
                           onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} 
-                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-bold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
+                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
                         >
                           🗄️ QR Pañol
                         </button>
                         <button 
                           onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} 
-                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-bold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
+                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
                         >
                           🧺 QR Lavadero
                         </button>
                         <button 
                           onClick={() => eliminarPiso(p.id, p.nombre_piso)} 
-                          className="text-red-500 font-black text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
+                          className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
                           title="Eliminar sector y todos sus registros"
                         >
                           🗑️ Eliminar
@@ -756,10 +690,10 @@ const AdminDashboard = () => {
                     </div>
                     <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
-                        <p className="text-sm font-black text-slate-500 uppercase tracking-wider">🏠 Habitaciones Especiales</p>
+                        <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">🏠 Habitaciones Especiales</p>
                         <button 
                           onClick={() => agregarHabitacionPersistente(p.id, p.slug)} 
-                          className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-black uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all"
+                          className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all"
                         >
                           + Agregar Habitación
                         </button>
@@ -768,16 +702,16 @@ const AdminDashboard = () => {
                         {habitacionesEspeciales.filter(h => h.piso_id === p.id).length > 0 ? (
                           habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => (
                             <div key={hab.id} className="bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 flex items-center gap-2 hover:bg-slate-800 transition-all">
-                              <span className="text-sm font-black uppercase text-slate-300">{hab.nombre}</span>
+                              <span className="text-sm font-semibold uppercase text-slate-300">{hab.nombre}</span>
                               <button 
                                 onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso}`)} 
-                                className="text-blue-500 text-xs font-bold uppercase hover:text-blue-400 transition-all"
+                                className="text-blue-500 text-xs font-semibold uppercase hover:text-blue-400 transition-all"
                               >
                                 📱 QR
                               </button>
                               <button 
                                 onClick={() => eliminarHabitacion(hab.id, hab.nombre)} 
-                                className="text-red-500 font-black text-sm px-1 hover:text-red-400 transition-all"
+                                className="text-red-500 font-semibold text-sm px-1 hover:text-red-400 transition-all"
                               >
                                 ×
                               </button>
@@ -800,7 +734,7 @@ const AdminDashboard = () => {
       
       {/* Notificaciones flotantes */}
       {notificacion.visible && (
-        <div className="fixed bottom-6 right-6 bg-blue-600 text-white px-5 py-2.5 rounded-xl shadow-2xl font-black uppercase text-sm z-[100] border border-blue-400 animate-in slide-in-from-bottom-5">
+        <div className="fixed bottom-6 right-6 bg-blue-600 text-white px-5 py-2.5 rounded-xl shadow-2xl font-semibold uppercase text-sm z-[100] border border-blue-400 animate-in slide-in-from-bottom-5">
           {notificacion.mensaje}
         </div>
       )}
