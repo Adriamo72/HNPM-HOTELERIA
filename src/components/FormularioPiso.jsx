@@ -539,13 +539,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           CANTIDAD
         </label>
         <input
-          type="number"
-          min="0"
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none"
-          value={cantidadHabitacion || ""}
-          onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
-          placeholder="0"
-        />
+  type="number"
+  min="0"
+  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+  value={cantidadHabitacion || ""}
+  onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
+  placeholder="0"
+/>
       </div>
     </div>
 
@@ -606,12 +606,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               RECIBE SUCIO DEL PISO (Uso → Lavadero)
             </label>
             <input 
-              type="number" 
-              className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center" 
-              value={datos.retirado_sucio || ""} 
-              onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
-              placeholder="0"
-            />
+  type="number" 
+  className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" 
+  value={datos.retirado_sucio || ""} 
+  onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
+  placeholder="0"
+/>
             <p className="text-xs text-slate-500 mt-2">Stock en uso: {stocksUsoPorItem[datos.item] || 0}</p>
           </div>
 
@@ -620,12 +620,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               ENTREGA LIMPIA AL PAÑOL (Lavadero → Pañol)
             </label>
             <input 
-              type="number" 
-              className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" 
-              value={datos.carga_lavadero || ""} 
-              onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
-              placeholder="0"
-            />
+  type="number" 
+  className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" 
+  value={datos.carga_lavadero || ""} 
+  onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
+  placeholder="0"
+/>
             <p className="text-xs text-slate-500 mt-2">Stock en lavadero: {stocksLavaderoPorItem[datos.item] || 0}</p>
           </div>
 
@@ -702,12 +702,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               CANTIDAD A ENTREGAR AL PISO (Pañol → Uso)
             </label>
             <input 
-              type="number" 
-              className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-orange-400 outline-none border border-orange-900/20" 
-              placeholder="0" 
-              value={datos.entrega_piso || ""} 
-              onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
-            />
+  type="number" 
+  className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-orange-400 outline-none border border-orange-900/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" 
+  placeholder="0" 
+  value={datos.entrega_piso || ""} 
+  onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
+/>
             <p className="text-sm text-slate-500 text-center mt-3">
               Stock en pañol: {stocksPorItem[datos.item] || 0}
             </p>

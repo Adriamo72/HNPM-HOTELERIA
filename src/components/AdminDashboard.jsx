@@ -563,50 +563,58 @@ const AdminDashboard = () => {
                 </div>
                 
                 {/* Historial de movimientos */}
-                <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto bg-slate-950/20">
-                  {movimientosAgrupados[nombrePiso]?.length > 0 ? (
-                    movimientosAgrupados[nombrePiso].map((m) => (
-                      <div key={m.id} className="bg-slate-950/50 px-4 py-2 rounded-xl border border-slate-800/50 flex items-center group hover:bg-slate-800 transition-all text-sm">
-                        <div className="w-[20%] shrink-0">
-                          <p className="font-black text-white text-base uppercase">{m.item}</p>
-                          <p className="text-[10px] text-blue-500 font-black uppercase">{formatearFechaGuardia(m.created_at)}</p>
-                          {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded mt-1 inline-block">🏨 HABITACIÓN</span>}
-                          {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded mt-1 ml-1 inline-block">⚡ AJUSTE</span>}
-                        </div>
-                        <div className="flex-1 grid grid-cols-3 gap-2">
-                          <div className="text-center">
-                            <span className="text-[9px] text-green-500 font-black uppercase block">Lav→Pañol</span>
-                            <p className="text-xl font-black text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
-                          </div>
-                          <div className="text-center">
-                            <span className="text-[9px] text-orange-500 font-black uppercase block">Pañol→Uso</span>
-                            <p className="text-xl font-black text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
-                          </div>
-                          <div className="text-center">
-                            <span className="text-[9px] text-red-500 font-black uppercase block">Uso→Lav</span>
-                            <p className="text-xl font-black text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
-                          </div>
-                        </div>
-                        <div className="w-[22%] flex items-center justify-end gap-2 border-l border-slate-800 pl-3">
-                          <p className="text-[10px] text-slate-400 font-black uppercase truncate">
-                            {m.pañolero?.jerarquia} {m.pañolero?.apellido}
-                          </p>
-                          <button 
-                            onClick={() => eliminarMovimiento(m.id)} 
-                            className="p-1.5 bg-red-950/30 text-red-500 rounded-lg border border-red-900/30 hover:bg-red-900/50 transition-all"
-                            title="Eliminar movimiento"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
-                  )}
-                </div>
+<div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
+  {movimientosAgrupados[nombrePiso]?.length > 0 ? (
+    movimientosAgrupados[nombrePiso].map((m) => (
+      <div key={m.id} className="bg-slate-950/50 px-2 py-1 rounded-lg border border-slate-800/50 flex items-center flex-wrap group hover:bg-slate-800 transition-all text-xs">
+        {/* Item y fecha */}
+        <div className="flex items-center gap-2 shrink-0">
+          <p className="font-black text-white text-[11px] uppercase">{m.item}</p>
+          <p className="text-[8px] text-blue-500 font-black uppercase">{formatearFechaGuardia(m.created_at)}</p>
+          {m.es_cambio_habitacion && <span className="text-[6px] bg-purple-900/50 px-1 py-0.5 rounded">HAB</span>}
+          {m.novedades?.includes('Ajuste automático') && <span className="text-[6px] bg-orange-900/50 px-1 py-0.5 rounded">AJUSTE</span>}
+        </div>
+        
+        {/* Movimientos */}
+        <div className="flex items-center gap-3 ml-auto mr-3">
+          <div className="text-center">
+            <span className="text-[6px] text-green-500 font-black uppercase block">Lav→Pañol</span>
+            <p className="text-[11px] font-black text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
+          </div>
+          <div className="text-center">
+            <span className="text-[6px] text-orange-500 font-black uppercase block">Pañol→Uso</span>
+            <p className="text-[11px] font-black text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
+          </div>
+          <div className="text-center">
+            <span className="text-[6px] text-red-500 font-black uppercase block">Uso→Lav</span>
+            <p className="text-[11px] font-black text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
+          </div>
+        </div>
+        
+        {/* Operador y novedades */}
+        <div className="flex items-center gap-2 shrink-0">
+          <p className="text-[7px] text-slate-400 font-black uppercase">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
+          {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
+            <span className="text-[7px] text-yellow-500 font-black truncate max-w-[150px]" title={m.novedades}>
+              📝 {m.novedades.length > 20 ? m.novedades.substring(0, 20) + '...' : m.novedades}
+            </span>
+          )}
+          <button 
+            onClick={() => eliminarMovimiento(m.id)} 
+            className="p-0.5 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
+            title="Eliminar movimiento"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    ))
+  ) : (
+    <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
+  )}
+</div>
               </div>
             );
           })}
