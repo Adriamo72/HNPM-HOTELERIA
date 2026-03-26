@@ -589,9 +589,8 @@ const AdminDashboard = () => {
           </div>
         </div>
         
-        {/* Operador, novedades y eliminar */}
-        <div className="w-[25%] shrink-0 flex items-center justify-end gap-2">
-          <p className="text-[9px] text-slate-400 font-black uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
+        {/* Novedades, badges, operador y eliminar */}
+        <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
           {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
             <span className="text-[9px] text-yellow-500 font-black truncate max-w-[100px]" title={m.novedades}>
               📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
@@ -599,6 +598,7 @@ const AdminDashboard = () => {
           )}
           {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
           {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
+          <p className="text-[9px] text-slate-400 font-black uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
           <button 
             onClick={() => eliminarMovimiento(m.id)} 
             className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
