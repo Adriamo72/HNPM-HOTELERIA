@@ -464,7 +464,7 @@ const AdminDashboard = () => {
                     <div className="grid grid-cols-4 gap-1 mt-2">
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
+                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
                           <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
                             {stockPañol[nombrePiso]?.[item] || 0}
                           </span>
