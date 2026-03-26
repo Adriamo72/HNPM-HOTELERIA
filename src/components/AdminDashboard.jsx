@@ -504,7 +504,7 @@ const AdminDashboard = () => {
                         {/* Item y fecha */}
                         <div className="w-[22%] shrink-0 flex items-center gap-2">
                           <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
-                          <p className="text-[8px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
+                          <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
                         </div>
                         
                         {/* Movimientos */}
