@@ -465,7 +465,7 @@ const AdminDashboard = () => {
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
                           <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
-                          <span className={`text-sm font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
+                          <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
                             {stockPañol[nombrePiso]?.[item] || 0}
                           </span>
                         </div>
@@ -510,15 +510,15 @@ const AdminDashboard = () => {
                         {/* Movimientos */}
                         <div className="flex-1 flex items-center justify-around gap-2">
                           <div className="text-center min-w-[50px]">
-                            <span className="text-[8px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
+                            <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
                             <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
                           </div>
                           <div className="text-center min-w-[50px]">
-                            <span className="text-[8px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
+                            <span className="text-[9px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
                             <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
                           </div>
                           <div className="text-center min-w-[50px]">
-                            <span className="text-[8px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
+                            <span className="text-[9px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
                             <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
                           </div>
                         </div>
