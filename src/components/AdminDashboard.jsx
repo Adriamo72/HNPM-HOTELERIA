@@ -398,7 +398,7 @@ const AdminDashboard = () => {
                     Object.keys(stockPañol).forEach(piso => { total += stockPañol[piso]?.[item] || 0; });
                     return (
                       <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
                         <span className={`text-base font-semibold ${total < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>{total}</span>
                       </div>
                     );
@@ -413,7 +413,7 @@ const AdminDashboard = () => {
                     Object.keys(stockUso).forEach(piso => { total += stockUso[piso]?.[item] || 0; });
                     return (
                       <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
                         <span className="text-base font-semibold text-yellow-400">{total}</span>
                       </div>
                     );
@@ -428,7 +428,7 @@ const AdminDashboard = () => {
                     Object.keys(stockLavadero).forEach(piso => { total += stockLavadero[piso]?.[item] || 0; });
                     return (
                       <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
                         <span className="text-base font-semibold text-red-400">{total}</span>
                       </div>
                     );
@@ -477,7 +477,7 @@ const AdminDashboard = () => {
                     <div className="grid grid-cols-4 gap-1 mt-2">
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
+                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
                           <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
                         </div>
                       ))}
@@ -488,7 +488,7 @@ const AdminDashboard = () => {
                     <div className="grid grid-cols-4 gap-1 mt-2">
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 4)}</span>
+                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
                           <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
                         </div>
                       ))}
