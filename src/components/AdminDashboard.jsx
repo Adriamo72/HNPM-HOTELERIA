@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
+import CroquisPiso from './CroquisPiso';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('historial');
@@ -37,7 +38,7 @@ const AdminDashboard = () => {
     rol: 'pañolero' 
   });
   const [nuevoPiso, setNuevoPiso] = useState({ nombre_piso: '' });
-  
+  const [pisoSeleccionado, setPisoSeleccionado] = useState('');
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STOCK_CRITICO = 5;
 
@@ -937,6 +938,12 @@ const AdminDashboard = () => {
       {/* Tabs */}
       <div className="flex gap-3 mb-8 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit">
         <button 
+          onClick={() => setActiveTab('croquis')} 
+          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'croquis' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          🗺️ Croquis
+        </button>
+        <button 
           onClick={() => setActiveTab('historial')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
@@ -949,7 +956,40 @@ const AdminDashboard = () => {
           Administración
         </button>
       </div>
-
+      {/* Panel CROQUIS - Monitor de ocupacion*/}
+      {activeTab === 'croquis' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
+              🗺️ Mapa de Ocupación por Piso
+            </h2>
+            <select
+              value={pisoSeleccionado}
+              onChange={(e) => setPisoSeleccionado(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
+            >
+              <option value="">Seleccionar piso...</option>
+              {pisos.map(p => (
+                <option key={p.id} value={p.id}>{p.nombre_piso}</option>
+              ))}
+            </select>
+          </div>
+          
+          {pisoSeleccionado ? (
+            <CroquisPiso
+              pisoId={pisoSeleccionado}
+              pisoNombre={pisos.find(p => p.id === pisoSeleccionado)?.nombre_piso}
+              habitaciones={habitacionesEspeciales.filter(h => h.piso_id === pisoSeleccionado)}
+              perfilUsuario={perfilUsuario}
+            />
+          ) : (
+            <div className="bg-slate-800 rounded-xl p-12 text-center">
+              <p className="text-slate-400">Selecciona un piso para ver su croquis</p>
+            </div>
+          )}
+        </div>
+      )}
+      
       {/* Panel HISTORIAL - Monitor de stock */}
       {activeTab === 'historial' && (
         <div className="space-y-8">
