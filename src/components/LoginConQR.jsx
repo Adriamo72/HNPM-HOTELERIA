@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
-import SimpleQRScanner from './SimpleQRScanner';
+import LiveQRScanner from './LiveQRScanner';
 
 const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   const [adminUser, setAdminUser] = useState('');
@@ -363,9 +363,9 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
         </div>
 
         {/* SimpleQRScanner */}
-        <SimpleQRScanner 
-          onScanSuccess={handleScanSuccess}
-          onScanError={handleScanError}
+        <LiveQRScanner 
+        onScanSuccess={handleScanSuccess}
+        onScanError={handleScanError}
         />
         
         <p className="text-slate-400 text-xs mt-4">
