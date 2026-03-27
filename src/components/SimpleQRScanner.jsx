@@ -5,17 +5,16 @@ import { Html5Qrcode } from 'html5-qrcode';
 const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
   const [procesando, setProcesando] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [textoManual, setTextoManual] = useState('');
-  const fileInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
 
-  // Función para redimensionar la imagen antes de procesar
+  // Función para redimensionar la imagen
   const redimensionarImagen = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          // Calcular nuevo tamaño manteniendo proporción
           let width = img.width;
           let height = img.height;
           const maxSize = 1024;
@@ -30,16 +29,14 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
             }
           }
           
-          // Crear canvas para redimensionar
           const canvas = document.createElement('canvas');
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Convertir a blob con mejor calidad
           canvas.toBlob((blob) => {
-            resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+            resolve(new File([blob], 'qr.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
           }, 'image/jpeg', 0.9);
         };
         img.onerror = reject;
@@ -57,55 +54,26 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
     setErrorMsg('');
     
     try {
-      console.log("📸 Procesando imagen:", file.name, file.size, "bytes");
-      
-      // Redimensionar imagen para mejor procesamiento
       const imagenOptimizada = await redimensionarImagen(file);
-      console.log("📸 Imagen optimizada:", imagenOptimizada.size, "bytes");
-      
       const html5QrCode = new Html5Qrcode("temp-qr-reader");
       
-      // Configuración mejorada
-      const config = {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
-        disableFlip: false,
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
-        }
-      };
-      
-      // Escanear el archivo optimizado
       const decodedText = await html5QrCode.scanFile(imagenOptimizada, true);
-      
-      console.log("✅ QR decodificado:", decodedText);
       
       if (decodedText) {
         onScanSuccess(decodedText);
       } else {
-        setErrorMsg("No se encontró un código QR en la imagen");
+        setErrorMsg("No se encontró QR. Enfoca bien y vuelve a intentar.");
         onScanError("No se encontró QR");
       }
       
       await html5QrCode.clear();
       
     } catch (err) {
-      console.error("❌ Error leyendo QR:", err);
-      setErrorMsg("No se pudo leer el QR. Asegúrate de que esté bien enfocado y con buena luz.");
+      console.error("Error:", err);
+      setErrorMsg("No se pudo leer el QR. Asegúrate de enfocar bien.");
       onScanError("Error al leer QR");
     } finally {
       setProcesando(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      await procesarImagen(file);
     }
   };
 
@@ -114,92 +82,46 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
     input.type = 'file';
     input.accept = 'image/*';
     input.capture = 'environment';
+    // No preguntar guardar, procesar inmediatamente
     input.onchange = async (e) => {
       const file = e.target.files[0];
       if (file) {
         await procesarImagen(file);
       }
+      // Limpiar input para poder tomar otra foto
+      input.value = '';
     };
     input.click();
   };
 
-  const handleTextoManual = () => {
-    if (textoManual.trim()) {
-      onScanSuccess(textoManual.trim());
-      setTextoManual('');
-    } else {
-      setErrorMsg("Ingresa el texto del QR");
-    }
-  };
-
   return (
     <div className="w-full">
-      {/* Botón para tomar foto */}
       <button
         onClick={tomarFoto}
         disabled={procesando}
-        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-4 rounded-xl mb-3 transition-all disabled:opacity-50 text-lg"
+        className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-black py-5 px-4 rounded-xl transition-all disabled:opacity-50 text-xl shadow-lg"
       >
-        {procesando ? '⏳ PROCESANDO...' : '📷 SACAR FOTO AL QR'}
+        {procesando ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            PROCESANDO QR...
+          </span>
+        ) : (
+          <span className="flex items-center justify-center gap-2">
+            📷 SACAR FOTO AL QR
+          </span>
+        )}
       </button>
       
-      {/* Instrucciones */}
-      <p className="text-xs text-slate-500 text-center mb-3">
-        💡 Enfoca bien el QR, mantén el celular firme y con buena luz
-      </p>
-      
-      {/* O subir imagen */}
-      <div className="relative mt-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          disabled={procesando}
-        />
-        <div className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 px-4 text-center text-slate-400 text-sm">
-          📁 O selecciona una imagen de la galería
-        </div>
-      </div>
-      
-      {/* Divisor */}
-      <div className="relative my-4">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-slate-700"></div>
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-slate-900 px-2 text-slate-500">Prueba manual</span>
-        </div>
-      </div>
-      
-      {/* Campo para pegar texto manual */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={textoManual}
-          onChange={(e) => setTextoManual(e.target.value)}
-          placeholder="Pega aquí la URL del QR"
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-xs outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          onClick={handleTextoManual}
-          className="bg-green-600 hover:bg-green-500 text-white font-bold px-4 rounded-xl transition-all text-sm"
-        >
-          Validar
-        </button>
-      </div>
-      
-      {procesando && (
-        <div className="mt-3 text-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="text-xs text-slate-400 mt-1">Leyendo código QR...</p>
-        </div>
-      )}
-      
       {errorMsg && (
-        <div className="mt-3 p-2 bg-red-900/50 border border-red-700 rounded-lg">
-          <p className="text-red-300 text-xs text-center">{errorMsg}</p>
+        <div className="mt-4 p-3 bg-red-900/50 border border-red-700 rounded-xl">
+          <p className="text-red-300 text-sm text-center">{errorMsg}</p>
+          <p className="text-red-400 text-[10px] text-center mt-1">
+            💡 Enfoca bien el código QR y mantén el celular firme
+          </p>
         </div>
       )}
       
