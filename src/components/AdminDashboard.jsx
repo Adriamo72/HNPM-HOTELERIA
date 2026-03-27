@@ -362,7 +362,8 @@ const AdminDashboard = () => {
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
     const nombreArchivo = `Credencial_${personal.jerarquia}_${personal.apellido}_${personal.nombre}.png`;
     
-    const win = window.open('', '_blank', 'width=600,height=800,menubar=no,toolbar=no,location=no');
+    // Abrir ventana con la credencial
+    const win = window.open('', '_blank', 'width=600,height=700,menubar=no,toolbar=no,location=no');
     
     if (!win) {
       mostrarSplash("❌ El navegador bloqueó la ventana emergente. Permite popups para este sitio.");
@@ -392,12 +393,11 @@ const AdminDashboard = () => {
               padding: 40px;
             }
             
-            /* Contenedor principal */
             .container {
               text-align: center;
             }
             
-            /* Tarjeta tamaño crédito para captura */
+            /* Tarjeta tamaño crédito */
             .credencial {
               width: 85.6mm;
               height: 53.98mm;
@@ -471,6 +471,22 @@ const AdminDashboard = () => {
               width: 12mm;
               height: auto;
               margin-bottom: 1mm;
+              display: inline-block;
+            }
+            
+            /* SVG alternativo si no hay logo */
+            .logo-placeholder {
+              width: 12mm;
+              height: 12mm;
+              margin: 0 auto 1mm;
+              background: #3b82f6;
+              border-radius: 2mm;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-size: 5mm;
+              font-weight: bold;
             }
             
             .hospital {
@@ -545,20 +561,18 @@ const AdminDashboard = () => {
               margin-top: 1mm;
             }
             
-            /* Botones */
             .botones {
               margin-top: 20px;
               display: flex;
               gap: 10px;
               justify-content: center;
-              flex-wrap: wrap;
             }
             
             button {
               background: #2563eb;
               color: white;
               border: none;
-              padding: 10px 20px;
+              padding: 12px 24px;
               border-radius: 10px;
               font-size: 14px;
               font-weight: bold;
@@ -571,24 +585,17 @@ const AdminDashboard = () => {
               transform: scale(1.02);
             }
             
-            button.secundario {
-              background: #475569;
-            }
-            
-            button.secundario:hover {
-              background: #334155;
-            }
-            
             .info {
-              margin-top: 15px;
-              padding: 10px;
+              margin-top: 20px;
+              padding: 12px;
               background: #334155;
               border-radius: 8px;
               font-size: 12px;
               color: #cbd5e1;
+              text-align: left;
             }
             
-            .info a {
+            .info strong {
               color: #60a5fa;
             }
           </style>
@@ -608,7 +615,7 @@ const AdminDashboard = () => {
                 
                 <div class="lado-info">
                   <div class="header">
-                    <img src="/images/logo-hospital.png" class="logo" alt="Logo" onerror="this.style.display='none'">
+                    <div id="logo-container"></div>
                     <div class="hospital">HOSPITAL NAVAL</div>
                     <div class="hospital" style="font-size:2.5mm">BUENOS AIRES</div>
                     <div class="departamento">DEPARTAMENTO HOTELERÍA</div>
@@ -633,41 +640,104 @@ const AdminDashboard = () => {
             </div>
             
             <div class="botones">
-              <button onclick="capturarImagen()">📸 GUARDAR COMO IMAGEN</button>
-              <button onclick="window.print()">🖨️ IMPRIMIR</button>
-              <button onclick="window.close()" class="secundario">✖️ CERRAR</button>
+              <button id="btnGuardar">📸 GUARDAR COMO IMAGEN</button>
+              <button id="btnCerrar" style="background:#475569">✖️ CERRAR</button>
             </div>
             
             <div class="info">
-              💡 <strong>Para Word:</strong> Guarda la imagen y luego inserta en Word.<br>
-              📄 En una hoja A4 entran 8 credenciales (4x2). Ajusta el tamaño de la imagen a 8.56cm x 5.4cm.
+              <strong>💡 Para Word:</strong> Guarda la imagen y luego inserta en Word.<br>
+              <strong>📄 En una hoja A4 entran 8 credenciales (4x2).</strong> Ajusta el tamaño de la imagen a <strong>8.56cm x 5.4cm</strong>.
             </div>
           </div>
           
           <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
           <script>
-            function capturarImagen() {
+            // Función para cargar el logo
+            function cargarLogo() {
+              const logoContainer = document.getElementById('logo-container');
+              const img = new Image();
+              img.crossOrigin = "Anonymous";
+              img.onload = function() {
+                img.className = 'logo';
+                img.style.width = '12mm';
+                img.style.height = 'auto';
+                logoContainer.appendChild(img);
+              };
+              img.onerror = function() {
+                // Si no hay logo, mostrar un placeholder
+                const placeholder = document.createElement('div');
+                placeholder.className = 'logo-placeholder';
+                placeholder.innerHTML = '🏥';
+                placeholder.style.width = '12mm';
+                placeholder.style.height = '12mm';
+                placeholder.style.margin = '0 auto 1mm';
+                placeholder.style.background = '#3b82f6';
+                placeholder.style.borderRadius = '2mm';
+                placeholder.style.display = 'flex';
+                placeholder.style.alignItems = 'center';
+                placeholder.style.justifyContent = 'center';
+                placeholder.style.color = 'white';
+                placeholder.style.fontSize = '6mm';
+                logoContainer.appendChild(placeholder);
+              };
+              img.src = '/images/logo-hospital.png?' + Date.now(); // Agregar timestamp para evitar caché
+            }
+            
+            // Función para guardar imagen
+            function guardarImagen() {
               const element = document.getElementById('credencial');
+              
+              // Mostrar indicador de carga
+              const btn = document.getElementById('btnGuardar');
+              const textoOriginal = btn.innerHTML;
+              btn.innerHTML = '⏳ GENERANDO...';
+              btn.disabled = true;
               
               html2canvas(element, {
                 scale: 4,
                 backgroundColor: null,
                 logging: false,
-                useCORS: true
+                useCORS: true,
+                allowTaint: false
               }).then(canvas => {
                 // Crear link de descarga
                 const link = document.createElement('a');
                 link.download = '${nombreArchivo}';
                 link.href = canvas.toDataURL('image/png');
+                document.body.appendChild(link);
                 link.click();
+                document.body.removeChild(link);
                 
-                // Mostrar mensaje
-                alert('✅ Imagen guardada: ${nombreArchivo}\\n\\n📌 Para insertar en Word:\\n1. Abrir Word\\n2. Insertar → Imagen\\n3. Seleccionar este archivo\\n4. Ajustar tamaño a 8.56cm x 5.4cm\\n5. Copiar y pegar para las 8 credenciales');
+                // Restaurar botón
+                btn.innerHTML = textoOriginal;
+                btn.disabled = false;
+                
+                // Mostrar mensaje de éxito
+                const infoDiv = document.querySelector('.info');
+                const oldHTML = infoDiv.innerHTML;
+                infoDiv.innerHTML = '<strong>✅ IMAGEN GUARDADA CORRECTAMENTE</strong><br>' + oldHTML;
+                setTimeout(() => {
+                  infoDiv.innerHTML = oldHTML;
+                }, 3000);
+                
               }).catch(error => {
                 console.error('Error:', error);
-                alert('❌ Error al capturar la imagen');
+                btn.innerHTML = textoOriginal;
+                btn.disabled = false;
+                alert('❌ Error al capturar la imagen. Intenta nuevamente.');
               });
             }
+            
+            // Configurar eventos cuando la página cargue
+            window.onload = function() {
+              cargarLogo();
+              
+              const btnGuardar = document.getElementById('btnGuardar');
+              const btnCerrar = document.getElementById('btnCerrar');
+              
+              btnGuardar.onclick = guardarImagen;
+              btnCerrar.onclick = function() { window.close(); };
+            };
           </script>
         </body>
       </html>
