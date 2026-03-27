@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 
-const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, perfilUsuario }) => {
+const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   const [croquis, setCroquis] = useState(null);
   const [coordenadas, setCoordenadas] = useState({});
   const [modoEdicion, setModoEdicion] = useState(false);
@@ -104,7 +104,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, perfilUsuario }) => {
           piso_id: pisoId,
           nombre_archivo: fileName,
           imagen_url: urlData.publicUrl,
-          subido_por: perfilUsuario?.dni,
           subido_en: new Date().toISOString()
         });
       

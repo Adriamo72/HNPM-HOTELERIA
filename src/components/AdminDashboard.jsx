@@ -980,7 +980,6 @@ const AdminDashboard = () => {
               pisoId={pisoSeleccionado}
               pisoNombre={pisos.find(p => p.id === pisoSeleccionado)?.nombre_piso}
               habitaciones={habitacionesEspeciales.filter(h => h.piso_id === pisoSeleccionado)}
-              perfilUsuario={perfilUsuario}
             />
           ) : (
             <div className="bg-slate-800 rounded-xl p-12 text-center">
@@ -989,7 +988,7 @@ const AdminDashboard = () => {
           )}
         </div>
       )}
-      
+
       {/* Panel HISTORIAL - Monitor de stock */}
       {activeTab === 'historial' && (
         <div className="space-y-8">
