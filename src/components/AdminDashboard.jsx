@@ -359,13 +359,10 @@ const AdminDashboard = () => {
     }
     
     const qrUrl = `${window.location.origin}/auth/${token}`;
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrUrl)}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
+    const nombreArchivo = `Credencial_${personal.jerarquia}_${personal.apellido}_${personal.nombre}.png`;
     
-    // Nombre del archivo para PDF
-    const nombreArchivo = `Credencial_${personal.jerarquia}_${personal.apellido}_${personal.nombre}.pdf`;
-    
-    // Abrir ventana con diseño tamaño tarjeta
-    const win = window.open('', '_blank', 'width=400,height=600,menubar=no,toolbar=no,location=no');
+    const win = window.open('', '_blank', 'width=600,height=800,menubar=no,toolbar=no,location=no');
     
     if (!win) {
       mostrarSplash("❌ El navegador bloqueó la ventana emergente. Permite popups para este sitio.");
@@ -386,41 +383,43 @@ const AdminDashboard = () => {
             }
             
             body {
-              background: #e5e7eb;
+              background: #1e293b;
               display: flex;
               justify-content: center;
               align-items: center;
               min-height: 100vh;
-              font-family: 'Segoe UI', 'Roboto', system-ui, -apple-system, sans-serif;
-              padding: 20px;
+              font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+              padding: 40px;
             }
             
-            /* Tarjeta tamaño crédito: 85.6mm x 53.98mm */
+            /* Contenedor principal */
+            .container {
+              text-align: center;
+            }
+            
+            /* Tarjeta tamaño crédito para captura */
             .credencial {
               width: 85.6mm;
               height: 53.98mm;
-              background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+              background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
               border-radius: 3mm;
-              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+              box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
               position: relative;
               overflow: hidden;
-              border: 1px solid #e2e8f0;
-              page-break-after: avoid;
-              break-inside: avoid;
+              border: 1px solid #334155;
+              margin-bottom: 20px;
             }
             
-            /* Borde decorativo */
             .credencial::before {
               content: '';
               position: absolute;
               top: 0;
               left: 0;
               right: 0;
-              height: 4px;
-              background: linear-gradient(90deg, #1e3a8a, #3b82f6, #1e3a8a);
+              height: 3px;
+              background: linear-gradient(90deg, #3b82f6, #60a5fa, #3b82f6);
             }
             
-            /* Contenido */
             .contenido {
               padding: 4mm 3mm;
               height: 100%;
@@ -428,7 +427,6 @@ const AdminDashboard = () => {
               gap: 3mm;
             }
             
-            /* Lado izquierdo - QR */
             .lado-qr {
               flex-shrink: 0;
               width: 28mm;
@@ -439,7 +437,7 @@ const AdminDashboard = () => {
               background: white;
               padding: 2mm;
               border-radius: 2mm;
-              border: 1px solid #e2e8f0;
+              border: 1px solid #334155;
             }
             
             .qr-container img {
@@ -450,14 +448,13 @@ const AdminDashboard = () => {
             
             .qr-label {
               font-size: 2mm;
-              color: #64748b;
+              color: #94a3b8;
               margin-top: 1.5mm;
               font-weight: 500;
               text-transform: uppercase;
               letter-spacing: 0.5px;
             }
             
-            /* Lado derecho - Info */
             .lado-info {
               flex: 1;
               display: flex;
@@ -465,7 +462,6 @@ const AdminDashboard = () => {
               justify-content: space-between;
             }
             
-            /* Logo y título */
             .header {
               text-align: center;
               margin-bottom: 2mm;
@@ -475,25 +471,23 @@ const AdminDashboard = () => {
               width: 12mm;
               height: auto;
               margin-bottom: 1mm;
-              filter: brightness(0) invert(1); /* Esto convierte blanco a negro */
             }
             
             .hospital {
               font-size: 3mm;
               font-weight: 800;
-              color: #0f172a;
+              color: white;
               letter-spacing: 0.5px;
               line-height: 1.2;
             }
             
             .departamento {
               font-size: 2.2mm;
-              color: #3b82f6;
+              color: #60a5fa;
               font-weight: 600;
               letter-spacing: 0.3px;
             }
             
-            /* Datos del personal */
             .datos {
               text-align: center;
               margin: 2mm 0;
@@ -502,7 +496,7 @@ const AdminDashboard = () => {
             .jerarquia {
               font-size: 2.8mm;
               font-weight: 800;
-              color: #1e40af;
+              color: #60a5fa;
               text-transform: uppercase;
               letter-spacing: 0.5px;
               margin-bottom: 1mm;
@@ -511,14 +505,14 @@ const AdminDashboard = () => {
             .nombre {
               font-size: 3.2mm;
               font-weight: 700;
-              color: #0f172a;
+              color: white;
               line-height: 1.3;
             }
             
             .rol {
               display: inline-block;
-              background: #dbeafe;
-              color: #1e40af;
+              background: #1e40af;
+              color: #93c5fd;
               font-size: 2mm;
               font-weight: 700;
               padding: 0.5mm 2mm;
@@ -527,155 +521,153 @@ const AdminDashboard = () => {
               text-transform: uppercase;
             }
             
-            /* Footer */
             .footer {
               text-align: center;
-              border-top: 0.5px solid #e2e8f0;
+              border-top: 0.5px solid #334155;
               padding-top: 1.5mm;
               margin-top: 1mm;
             }
             
             .valido {
               font-size: 2mm;
-              color: #475569;
+              color: #94a3b8;
               font-weight: 500;
             }
             
             .valido span {
               font-weight: 700;
-              color: #059669;
+              color: #34d399;
             }
             
             .mensaje {
               font-size: 1.8mm;
-              color: #94a3b8;
+              color: #64748b;
               margin-top: 1mm;
             }
             
             /* Botones */
             .botones {
-              position: fixed;
-              bottom: 20px;
-              left: 50%;
-              transform: translateX(-50%);
+              margin-top: 20px;
               display: flex;
               gap: 10px;
-              z-index: 100;
+              justify-content: center;
+              flex-wrap: wrap;
             }
             
             button {
-              background: #1e40af;
+              background: #2563eb;
               color: white;
               border: none;
-              padding: 8px 16px;
-              border-radius: 8px;
-              font-size: 12px;
+              padding: 10px 20px;
+              border-radius: 10px;
+              font-size: 14px;
               font-weight: bold;
               cursor: pointer;
               transition: all 0.2s;
             }
             
             button:hover {
-              background: #1e3a8a;
+              background: #1d4ed8;
               transform: scale(1.02);
             }
             
-            button.cerrar {
+            button.secundario {
               background: #475569;
             }
             
-            button.cerrar:hover {
+            button.secundario:hover {
               background: #334155;
             }
             
-            /* Configuración de impresión */
-            @media print {
-              body {
-                background: white;
-                padding: 0;
-                margin: 0;
-              }
-              
-              .credencial {
-                box-shadow: none;
-                border: 1px solid #ccc;
-                page-break-after: avoid;
-                page-break-inside: avoid;
-                margin: 0;
-              }
-              
-              .botones {
-                display: none;
-              }
+            .info {
+              margin-top: 15px;
+              padding: 10px;
+              background: #334155;
+              border-radius: 8px;
+              font-size: 12px;
+              color: #cbd5e1;
+            }
+            
+            .info a {
+              color: #60a5fa;
             }
           </style>
         </head>
         <body>
-          <div class="credencial">
-            <div class="contenido">
-              <!-- Lado izquierdo - QR -->
-              <div class="lado-qr">
-                <div class="qr-container">
-                  <img src="${qrCodeUrl}" alt="QR de acceso" />
-                </div>
-                <div class="qr-label">
-                  ACCESO<br>HOTELERÍA
-                </div>
-              </div>
-              
-              <!-- Lado derecho - Información -->
-              <div class="lado-info">
-                <div class="header">
-                  <img src="/images/logo-hospital.png" class="logo" alt="Logo" onerror="this.style.display='none'">
-                  <div class="hospital">HOSPITAL NAVAL</div>
-                  <div class="hospital" style="font-size:2.5mm">BUENOS AIRES</div>
-                  <div class="departamento">DEPARTAMENTO HOTELERÍA</div>
-                </div>
-                
-                <div class="datos">
-                  <div class="jerarquia">${personal.jerarquia || 'OPERADOR'}</div>
-                  <div class="nombre">${personal.apellido}, ${personal.nombre}</div>
-                  <div class="rol">${personal.rol?.toUpperCase() || 'PAÑOLERO'}</div>
-                </div>
-                
-                <div class="footer">
-                  <div class="valido">
-                    VÁLIDO HASTA: <span>${expiraEn.toLocaleDateString('es-AR')}</span>
+          <div class="container">
+            <div id="credencial" class="credencial">
+              <div class="contenido">
+                <div class="lado-qr">
+                  <div class="qr-container">
+                    <img src="${qrCodeUrl}" alt="QR de acceso" />
                   </div>
-                  <div class="mensaje">
-                    PERSONAL E INTRANSFERIBLE
+                  <div class="qr-label">
+                    ACCESO<br>HOTELERÍA
+                  </div>
+                </div>
+                
+                <div class="lado-info">
+                  <div class="header">
+                    <img src="/images/logo-hospital.png" class="logo" alt="Logo" onerror="this.style.display='none'">
+                    <div class="hospital">HOSPITAL NAVAL</div>
+                    <div class="hospital" style="font-size:2.5mm">BUENOS AIRES</div>
+                    <div class="departamento">DEPARTAMENTO HOTELERÍA</div>
+                  </div>
+                  
+                  <div class="datos">
+                    <div class="jerarquia">${personal.jerarquia || 'OPERADOR'}</div>
+                    <div class="nombre">${personal.apellido}, ${personal.nombre}</div>
+                    <div class="rol">${personal.rol?.toUpperCase() || 'PAÑOLERO'}</div>
+                  </div>
+                  
+                  <div class="footer">
+                    <div class="valido">
+                      VÁLIDO HASTA: <span>${expiraEn.toLocaleDateString('es-AR')}</span>
+                    </div>
+                    <div class="mensaje">
+                      PERSONAL E INTRANSFERIBLE
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-          
-          <div class="botones">
-            <button onclick="generarPDF()">📄 GENERAR PDF</button>
-            <button onclick="window.print()">🖨️ IMPRIMIR</button>
-            <button onclick="window.close()" class="cerrar">✖️ CERRAR</button>
-          </div>
-          
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-          <script>
-            function generarPDF() {
-              const element = document.querySelector('.credencial');
-              const opt = {
-                margin: [0, 0, 0, 0],
-                filename: '${nombreArchivo}',
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 3, letterRendering: true },
-                jsPDF: { 
-                  unit: 'mm', 
-                  format: [85.6, 53.98], 
-                  orientation: 'landscape'
-                }
-              };
-              html2pdf().set(opt).from(element).save();
-            }
             
-            // Opcional: auto-generar PDF al cargar
-            // setTimeout(() => generarPDF(), 500);
+            <div class="botones">
+              <button onclick="capturarImagen()">📸 GUARDAR COMO IMAGEN</button>
+              <button onclick="window.print()">🖨️ IMPRIMIR</button>
+              <button onclick="window.close()" class="secundario">✖️ CERRAR</button>
+            </div>
+            
+            <div class="info">
+              💡 <strong>Para Word:</strong> Guarda la imagen y luego inserta en Word.<br>
+              📄 En una hoja A4 entran 8 credenciales (4x2). Ajusta el tamaño de la imagen a 8.56cm x 5.4cm.
+            </div>
+          </div>
+          
+          <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+          <script>
+            function capturarImagen() {
+              const element = document.getElementById('credencial');
+              
+              html2canvas(element, {
+                scale: 4,
+                backgroundColor: null,
+                logging: false,
+                useCORS: true
+              }).then(canvas => {
+                // Crear link de descarga
+                const link = document.createElement('a');
+                link.download = '${nombreArchivo}';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                
+                // Mostrar mensaje
+                alert('✅ Imagen guardada: ${nombreArchivo}\\n\\n📌 Para insertar en Word:\\n1. Abrir Word\\n2. Insertar → Imagen\\n3. Seleccionar este archivo\\n4. Ajustar tamaño a 8.56cm x 5.4cm\\n5. Copiar y pegar para las 8 credenciales');
+              }).catch(error => {
+                console.error('Error:', error);
+                alert('❌ Error al capturar la imagen');
+              });
+            }
           </script>
         </body>
       </html>
