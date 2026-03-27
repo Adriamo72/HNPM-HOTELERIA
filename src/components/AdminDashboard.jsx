@@ -349,13 +349,13 @@ const AdminDashboard = () => {
           onClick={() => setActiveTab('historial')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
-          📊 Monitor
+          Monitor
         </button>
         <button 
           onClick={() => setActiveTab('admin')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
-          ⚙️ Administración
+          Administración
         </button>
       </div>
 
@@ -363,7 +363,7 @@ const AdminDashboard = () => {
       {activeTab === 'historial' && (
         <div className="space-y-8">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">📦 Control de Activos</h2>
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Control de Activos</h2>
             <button 
               onClick={cargarDatos} 
               disabled={sincronizando}
@@ -376,7 +376,7 @@ const AdminDashboard = () => {
           {/* Stock Total Consolidado */}
           <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6">
             <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4 text-center">
-              📊 STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
+              STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
               {ITEMS_REQUERIDOS.map(item => (
@@ -449,13 +449,6 @@ const AdminDashboard = () => {
               <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
                 <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
                   <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
-                  <div className="flex gap-3 flex-wrap">
-                    {ITEMS_REQUERIDOS.slice(0, 4).map(item => (
-                      <span key={item} className="text-xs text-blue-400 font-semibold">
-                        {item}: {totalPiso[item] || 0}
-                      </span>
-                    ))}
-                  </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
