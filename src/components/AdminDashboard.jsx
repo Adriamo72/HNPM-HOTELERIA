@@ -340,6 +340,214 @@ const AdminDashboard = () => {
     return `${diaYNumero.charAt(0).toUpperCase() + diaYNumero.slice(1)}, ${hora}`;
   };
 
+  const generarQRPersonal = async (personal) => {
+  try {
+    // Generar token único
+    const token = crypto.randomUUID ? crypto.randomUUID() : 
+      Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    
+    // Expira en 6 meses
+    const expiraEn = new Date();
+    expiraEn.setMonth(expiraEn.getMonth() + 6);
+    
+    // Desactivar tokens anteriores del mismo usuario
+    const { error: updateError } = await supabase
+      .from('tokens_acceso')
+      .update({ activo: false })
+      .eq('dni', personal.dni);
+    
+    if (updateError) {
+      console.error("Error desactivando tokens anteriores:", updateError);
+    }
+    
+    // Guardar nuevo token
+    const { error: insertError } = await supabase
+      .from('tokens_acceso')
+      .insert({
+        dni: personal.dni,
+        token: token,
+        activo: true,
+        tipo: 'personal',
+        creado_en: new Date().toISOString(),
+        expira_en: expiraEn.toISOString()
+      });
+    
+    if (insertError) {
+      console.error("Error insertando token:", insertError);
+      mostrarSplash("❌ Error al generar QR: " + insertError.message);
+      return;
+    }
+    
+    const qrUrl = `${window.location.origin}/auth/${token}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qrUrl)}`;
+    
+    // Abrir ventana para imprimir credencial
+    const win = window.open('', '_blank');
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Credencial ${personal.apellido} - HNPM</title>
+          <meta charset="UTF-8">
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              font-family: 'Segoe UI', system-ui, -apple-system, monospace;
+              background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              padding: 20px;
+            }
+            .credencial {
+              background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+              border-radius: 28px;
+              padding: 28px;
+              width: 400px;
+              text-align: center;
+              box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+              border: 1px solid #3b82f6;
+              position: relative;
+              overflow: hidden;
+            }
+            .credencial::before {
+              content: '';
+              position: absolute;
+              top: -50%;
+              right: -50%;
+              width: 200%;
+              height: 200%;
+              background: radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%);
+              pointer-events: none;
+            }
+            .header {
+              border-bottom: 2px solid #3b82f6;
+              padding-bottom: 16px;
+              margin-bottom: 20px;
+              position: relative;
+            }
+            .header h2 {
+              color: #3b82f6;
+              font-size: 11px;
+              letter-spacing: 4px;
+              font-weight: 900;
+              text-transform: uppercase;
+            }
+            .header h1 {
+              color: white;
+              font-size: 16px;
+              margin-top: 6px;
+              font-weight: 800;
+            }
+            .qr {
+              background: white;
+              padding: 20px;
+              border-radius: 24px;
+              margin: 20px 0;
+              display: inline-block;
+              box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            }
+            .qr img {
+              width: 240px;
+              height: 240px;
+            }
+            .nombre {
+              color: white;
+              font-size: 20px;
+              font-weight: bold;
+              margin: 15px 0 5px;
+            }
+            .jerarquia {
+              color: #60a5fa;
+              font-size: 13px;
+              font-weight: bold;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .info {
+              margin-top: 20px;
+              padding-top: 16px;
+              border-top: 1px solid #334155;
+              font-size: 10px;
+              color: #64748b;
+            }
+            .badge {
+              background: #3b82f6;
+              color: white;
+              padding: 5px 14px;
+              border-radius: 30px;
+              font-size: 10px;
+              font-weight: bold;
+              display: inline-block;
+              margin-top: 12px;
+              letter-spacing: 1px;
+            }
+            .fecha {
+              margin-top: 12px;
+              font-size: 9px;
+              color: #475569;
+            }
+            @media print {
+              body { background: white; padding: 0; margin: 0; }
+              .credencial { 
+                box-shadow: none; 
+                border: 1px solid #ccc; 
+                background: white;
+                page-break-inside: avoid;
+              }
+              .header h1 { color: black; }
+              .nombre { color: black; }
+              .jerarquia { color: #2563eb; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="credencial">
+            <div class="header">
+              <h2>HOSPITAL NACIONAL</h2>
+              <h1>DEPARTAMENTO HOTELERÍA</h1>
+            </div>
+            <div class="qr">
+              <img src="${qrCodeUrl}" alt="QR de acceso" />
+            </div>
+            <div class="nombre">
+              ${personal.apellido}, ${personal.nombre}
+            </div>
+            <div class="jerarquia">
+              ${personal.jerarquia || 'OPERADOR'}
+            </div>
+            <div class="badge">
+              ${personal.rol?.toUpperCase() || 'PAÑOLERO'}
+            </div>
+            <div class="info">
+              <p>🔐 Escanea este QR para acceder al sistema</p>
+              <p>⚠️ Personal e intransferible</p>
+            </div>
+            <div class="fecha">
+              📅 Válido hasta: ${expiraEn.toLocaleDateString('es-AR')}
+            </div>
+          </div>
+          <script>
+            setTimeout(() => {
+              window.print();
+              setTimeout(() => window.close(), 2000);
+            }, 500);
+          </script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    
+    mostrarSplash(`✅ Credencial generada para ${personal.apellido}`);
+    
+  } catch (error) {
+    console.error("Error generando QR:", error);
+    mostrarSplash("❌ Error al generar credencial");
+  }
+};
+
   // ==================== RENDER ====================
   return (
     <div className="p-6 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
@@ -614,24 +822,29 @@ const AdminDashboard = () => {
               </button>
             </form>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {personal.length > 0 ? (
-                personal.map(p => (
-                  <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
-                    <span>
-                      {p.jerarquia} {p.apellido}, {p.nombre} 
-                      <span className="text-blue-500 opacity-50 ml-2">[{p.rol}]</span>
-                    </span>
-                    <button 
-                      onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} 
-                      className="text-red-500 text-xs font-semibold uppercase hover:text-red-400 transition-all px-3 py-1 rounded-lg hover:bg-red-950/30"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center text-slate-500 text-sm py-4">📭 No hay personal registrado</div>
-              )}
+              {personal.map(p => (
+  <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
+    <span>
+      {p.jerarquia} {p.apellido}, {p.nombre} 
+      <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{p.rol}]</span>
+    </span>
+    <div className="flex gap-2">
+      <button 
+        onClick={() => generarQRPersonal(p)}
+        className="bg-green-600/20 text-green-400 text-xs font-semibold uppercase hover:bg-green-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
+        title="Generar credencial QR"
+      >
+        📱 QR
+      </button>
+      <button 
+        onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} 
+        className="bg-red-600/20 text-red-400 text-xs font-semibold uppercase hover:bg-red-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
+      >
+        Eliminar
+      </button>
+    </div>
+  </div>
+))}
             </div>
           </section>
 
