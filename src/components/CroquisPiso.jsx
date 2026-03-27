@@ -1,8 +1,6 @@
 // components/CroquisPiso.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import ReactCrop from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
 
 const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   // Estados principales
@@ -13,24 +11,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState('');
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0]);
-  const [modoVisualizacion, setModoVisualizacion] = useState('cad'); // 'cad', 'original', 'vector'
-  
-  // Estados para recorte
-  const [mostrarRecortador, setMostrarRecortador] = useState(false);
-  const [imagenTemp, setImagenTemp] = useState(null);
-  const [crop, setCrop] = useState({
-    unit: '%',
-    width: 100,
-    height: 70,
-    x: 0,
-    y: 15
-  });
   
   // Refs
   const imageRef = useRef(null);
   const containerRef = useRef(null);
-  const canvasRef = useRef(null);
-  const imgElementRef = useRef(null);
 
   // Cargar ocupación al cambiar fecha
   useEffect(() => {
@@ -43,13 +27,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   useEffect(() => {
     cargarCroquis();
   }, [pisoId]);
-
-  // Aplicar filtro CAD cuando cambia la imagen o modo de visualización
-  useEffect(() => {
-    if (croquis?.imagen_url && modoVisualizacion === 'cad' && canvasRef.current) {
-      aplicarFiltroCAD();
-    }
-  }, [croquis, modoVisualizacion]);
 
   const cargarOcupacion = async () => {
     if (!habitaciones.length) return;
@@ -107,189 +84,109 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   };
 
   const eliminarCroquis = async () => {
-  if (!croquis) return;
-  
-  const confirmar = window.confirm(
-    `¿Eliminar el croquis actual de ${pisoNombre}?\n\n` +
-    `Se eliminarán también todas las coordenadas de habitaciones.\n\n` +
-    `Esta acción NO SE PUEDE DESHACER.`
-  );
-  
-  if (!confirmar) return;
-  
-  setMensaje("🗑️ Eliminando croquis...");
-  
-  try {
-    // Eliminar coordenadas primero
-    const { error: coordsError } = await supabase
-      .from('habitacion_coordenadas')
-      .delete()
-      .eq('croquis_id', croquis.id);
+    if (!croquis) return;
     
-    if (coordsError) throw coordsError;
+    const confirmar = window.confirm(
+      `⚠️ ¿ELIMINAR CROQUIS?\n\n` +
+      `Piso: ${pisoNombre}\n` +
+      `Se eliminarán también todas las coordenadas de habitaciones.\n\n` +
+      `Esta acción NO SE PUEDE DESHACER.`
+    );
     
-    // Eliminar el croquis de la BD
-    const { error: deleteError } = await supabase
-      .from('croquis_pisos')
-      .delete()
-      .eq('id', croquis.id);
+    if (!confirmar) return;
     
-    if (deleteError) throw deleteError;
+    setMensaje("🗑️ Eliminando croquis...");
     
-    // Eliminar archivo del Storage
-    const { error: storageError } = await supabase.storage
-      .from('croquis')
-      .remove([croquis.nombre_archivo]);
-    
-    if (storageError) console.warn("Error eliminando archivo:", storageError);
-    
-    setMensaje("✅ Croquis eliminado correctamente");
-    setCroquis(null);
-    setCoordenadas({});
-    setTimeout(() => setMensaje(''), 2000);
-    
-  } catch (error) {
-    console.error("Error eliminando croquis:", error);
-    setMensaje("❌ Error al eliminar croquis");
-    setTimeout(() => setMensaje(''), 2000);
-  }
-};
-
-  const aplicarFiltroCAD = () => {
-  if (!canvasRef.current || !imgElementRef.current) return;
-  
-  const canvas = canvasRef.current;
-  const ctx = canvas.getContext('2d');
-  const img = imgElementRef.current;
-  
-  // Ajustar tamaño del canvas al de la imagen
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  
-  // Dibujar imagen original
-  ctx.drawImage(img, 0, 0);
-  
-  // Obtener datos de píxeles
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  
-  // Aplicar filtro estilo CAD mejorado
-  for (let i = 0; i < data.length; i += 4) {
-    // Calcular brillo
-    const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
-    
-    if (brightness > 200) {
-      // Áreas blancas (fondo) → negro/azul oscuro
-      data[i] = 15;     // R
-      data[i+1] = 25;   // G
-      data[i+2] = 45;   // B
-    } else if (brightness > 150) {
-      // Grises claros → gris oscuro
-      data[i] = 30;
-      data[i+1] = 40;
-      data[i+2] = 60;
-    } else if (brightness > 80) {
-      // Grises medios → gris medio oscuro
-      data[i] = 50;
-      data[i+1] = 70;
-      data[i+2] = 90;
-    } else if (brightness > 40) {
-      // Grises oscuros → azul eléctrico (líneas)
-      data[i] = 0;
-      data[i+1] = 150;
-      data[i+2] = 255;
-    } else {
-      // Negros → cyan brillante (líneas importantes)
-      data[i] = 0;
-      data[i+1] = 200;
-      data[i+2] = 255;
+    try {
+      // Eliminar coordenadas primero
+      const { error: coordsError } = await supabase
+        .from('habitacion_coordenadas')
+        .delete()
+        .eq('croquis_id', croquis.id);
+      
+      if (coordsError) throw coordsError;
+      
+      // Eliminar el croquis de la BD
+      const { error: deleteError } = await supabase
+        .from('croquis_pisos')
+        .delete()
+        .eq('id', croquis.id);
+      
+      if (deleteError) throw deleteError;
+      
+      // Eliminar archivo del Storage
+      const { error: storageError } = await supabase.storage
+        .from('croquis')
+        .remove([croquis.nombre_archivo]);
+      
+      if (storageError) console.warn("Error eliminando archivo:", storageError);
+      
+      setMensaje("✅ Croquis eliminado correctamente");
+      setCroquis(null);
+      setCoordenadas({});
+      setTimeout(() => setMensaje(''), 2000);
+      
+    } catch (error) {
+      console.error("Error eliminando croquis:", error);
+      setMensaje("❌ Error al eliminar croquis");
+      setTimeout(() => setMensaje(''), 2000);
     }
-  }
-  
-  ctx.putImageData(imageData, 0, 0);
-};
-
-  const recortarImagen = async () => {
-    if (!imagenTemp || !crop) return;
-    
-    setMensaje("✂️ Recortando imagen...");
-    
-    const canvas = document.createElement('canvas');
-    const img = new Image();
-    
-    img.onload = async () => {
-      const cropX = (crop.x / 100) * img.width;
-      const cropY = (crop.y / 100) * img.height;
-      const cropWidth = (crop.width / 100) * img.width;
-      const cropHeight = (crop.height / 100) * img.height;
-      
-      canvas.width = cropWidth;
-      canvas.height = cropHeight;
-      
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(
-        img,
-        cropX, cropY, cropWidth, cropHeight,
-        0, 0, cropWidth, cropHeight
-      );
-      
-      // Convertir canvas a blob
-      canvas.toBlob(async (blob) => {
-        const fileName = `croquis_${pisoId}_${Date.now()}.png`;
-        
-        try {
-          // Subir imagen recortada
-          const { data, error } = await supabase.storage
-            .from('croquis')
-            .upload(fileName, blob);
-          
-          if (error) throw error;
-          
-          const { data: urlData } = supabase.storage
-            .from('croquis')
-            .getPublicUrl(fileName);
-          
-          // Guardar referencia en BD
-          const { error: insertError } = await supabase
-            .from('croquis_pisos')
-            .insert({
-              piso_id: pisoId,
-              nombre_archivo: fileName,
-              imagen_url: urlData.publicUrl,
-              version: 1,
-              activo: true,
-              subido_en: new Date().toISOString()
-            });
-          
-          if (insertError) throw insertError;
-          
-          setMensaje("✅ Croquis recortado y subido correctamente");
-          setMostrarRecortador(false);
-          setImagenTemp(null);
-          cargarCroquis();
-          
-        } catch (error) {
-          console.error("Error:", error);
-          setMensaje("❌ Error al subir imagen recortada");
-        } finally {
-          setTimeout(() => setMensaje(''), 2000);
-        }
-      }, 'image/png');
-    };
-    
-    img.src = imagenTemp;
   };
 
   const subirCroquis = async (file) => {
     if (!file) return;
     
-    // Leer la imagen para mostrar en el recortador
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagenTemp(e.target.result);
-      setMostrarRecortador(true);
-    };
-    reader.readAsDataURL(file);
+    // Verificar formato
+    const fileType = file.type;
+    const isValid = fileType === 'image/png' || 
+                    fileType === 'image/jpeg' || 
+                    fileType === 'image/jpg';
+    
+    if (!isValid) {
+      setMensaje("❌ Formato no soportado. Usa PNG o JPG");
+      setTimeout(() => setMensaje(''), 2000);
+      return;
+    }
+    
+    setMensaje("📤 Subiendo croquis...");
+    
+    try {
+      const fileName = `croquis_${pisoId}_${Date.now()}.png`;
+      
+      // Subir a Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('croquis')
+        .upload(fileName, file);
+      
+      if (error) throw error;
+      
+      const { data: urlData } = supabase.storage
+        .from('croquis')
+        .getPublicUrl(fileName);
+      
+      // Guardar referencia en BD
+      const { error: insertError } = await supabase
+        .from('croquis_pisos')
+        .insert({
+          piso_id: pisoId,
+          nombre_archivo: fileName,
+          imagen_url: urlData.publicUrl,
+          version: 1,
+          activo: true,
+          subido_en: new Date().toISOString()
+        });
+      
+      if (insertError) throw insertError;
+      
+      setMensaje("✅ Croquis subido correctamente");
+      setTimeout(() => setMensaje(''), 2000);
+      cargarCroquis();
+      
+    } catch (error) {
+      console.error("Error subiendo:", error);
+      setMensaje("❌ Error al subir croquis");
+      setTimeout(() => setMensaje(''), 2000);
+    }
   };
 
   const guardarCoordenada = async (habitacionId, x, y) => {
@@ -321,31 +218,21 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   };
 
   const handleImageClick = async (e) => {
-    if (!modoEdicion || !croquis) return;
+    if (!modoEdicion || !croquis || !imageRef.current) return;
     
-    let imgElement;
-    let scaleX, scaleY;
+    const rect = imageRef.current.getBoundingClientRect();
+    const imgElement = imageRef.current;
+    const scaleX = imgElement.naturalWidth / rect.width;
+    const scaleY = imgElement.naturalHeight / rect.height;
     
-    if (modoVisualizacion === 'cad' && canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      imgElement = canvasRef.current;
-      scaleX = imgElement.width / rect.width;
-      scaleY = imgElement.height / rect.height;
-    } else if (imageRef.current) {
-      const rect = imageRef.current.getBoundingClientRect();
-      imgElement = imageRef.current;
-      scaleX = imgElement.naturalWidth / rect.width;
-      scaleY = imgElement.naturalHeight / rect.height;
-    } else {
-      return;
-    }
-    
-    const rect = imgElement.getBoundingClientRect();
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
     
+    // Mostrar selector de habitaciones
     const habitacionNombre = prompt(
-      `¿Qué habitación está en esta ubicación?\n\nHabitaciones disponibles:\n${habitaciones.map(h => `- ${h.nombre}`).join('\n')}\n\nIngresa el nombre exacto:`
+      `¿Qué habitación está en esta ubicación?\n\n` +
+      `Habitaciones disponibles:\n${habitaciones.map(h => `- ${h.nombre}`).join('\n')}\n\n` +
+      `Ingresa el nombre exacto:`
     );
     
     if (habitacionNombre) {
@@ -363,25 +250,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     }
   };
 
-  const getColorPorOcupacion = (pacientes, modo) => {
-    if (modo === 'cad') {
-      if (pacientes === 0) return 'bg-green-500/90 border-green-300 text-white';
-      if (pacientes === 1) return 'bg-yellow-500/90 border-yellow-300 text-black';
-      if (pacientes === 2) return 'bg-orange-500/90 border-orange-300 text-white';
-      return 'bg-red-500/90 border-red-300 text-white';
-    } else {
-      if (pacientes === 0) return 'bg-green-500/80 border-green-400 text-white';
-      if (pacientes === 1) return 'bg-yellow-500/80 border-yellow-400 text-black';
-      if (pacientes === 2) return 'bg-orange-500/80 border-orange-400 text-white';
-      return 'bg-red-500/80 border-red-400 text-white';
-    }
-  };
-
-  const getFiltroImagen = () => {
-    if (modoVisualizacion === 'vector') {
-      return 'brightness(1.2) contrast(1.5) saturate(0) grayscale(1)';
-    }
-    return 'none';
+  const getColorPorOcupacion = (pacientes) => {
+    if (pacientes === 0) return 'bg-green-500/90 border-green-300 text-white';
+    if (pacientes === 1) return 'bg-yellow-500/90 border-yellow-300 text-black';
+    if (pacientes === 2) return 'bg-orange-500/90 border-orange-300 text-white';
+    return 'bg-red-500/90 border-red-300 text-white';
   };
 
   if (cargando) {
@@ -394,69 +267,24 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     );
   }
 
-  // Pantalla de recorte
-  if (mostrarRecortador && imagenTemp) {
-    return (
-      <div className="bg-slate-800 rounded-xl p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-blue-400">✂️ Recortar Croquis</h3>
-          <button
-            onClick={() => setMostrarRecortador(false)}
-            className="text-slate-400 hover:text-white"
-          >
-            ✖️ Cancelar
-          </button>
-        </div>
-        
-        <p className="text-slate-400 text-sm mb-3">
-          📐 Ajusta el área de recorte (elimina bordes superiores e inferiores)
-        </p>
-        
-        <ReactCrop
-          crop={crop}
-          onChange={setCrop}
-          aspect={undefined}
-          className="max-h-[60vh] overflow-auto"
-        >
-          <img
-            src={imagenTemp}
-            alt="Croquis a recortar"
-            className="max-w-full"
-          />
-        </ReactCrop>
-        
-        <div className="flex gap-3 mt-4">
-          <button
-            onClick={recortarImagen}
-            className="bg-green-600 hover:bg-green-500 px-6 py-2 rounded-lg font-bold"
-          >
-            ✅ Aplicar recorte y subir
-          </button>
-          <button
-            onClick={() => setMostrarRecortador(false)}
-            className="bg-slate-700 hover:bg-slate-600 px-6 py-2 rounded-lg font-bold"
-          >
-            Cancelar
-          </button>
-        </div>
-        
-        {mensaje && (
-          <p className="text-center text-sm mt-3 text-blue-400">{mensaje}</p>
-        )}
-      </div>
-    );
-  }
-
   // Pantalla cuando no hay croquis
   if (!croquis) {
     return (
       <div className="bg-slate-800 rounded-xl p-8 text-center border border-dashed border-slate-600">
         <div className="text-6xl mb-4">🗺️</div>
         <h3 className="text-xl font-bold text-white mb-2">Croquis no disponible</h3>
-        <p className="text-slate-400 mb-4">Sube la imagen del croquis para comenzar</p>
-        <p className="text-slate-500 text-sm mb-4">
-          💡 Recomendación: La imagen debe ser horizontal (panorámica). Puedes recortarla después.
+        <p className="text-slate-400 mb-4">
+          Sube la imagen del croquis exportada desde nanoCAD
         </p>
+        <div className="bg-slate-900/50 rounded-lg p-3 mb-4 text-left max-w-md mx-auto">
+          <p className="text-xs text-blue-400 font-bold mb-2">💡 Recomendaciones para exportar desde nanoCAD:</p>
+          <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+            <li>Fondo NEGRO o gris oscuro</li>
+            <li>Líneas en BLANCO, CYAN o AMARILLO</li>
+            <li>Exportar como PNG con resolución alta (2000-3000px)</li>
+            <li>Usar comando JPGOUT para mejor calidad</li>
+          </ul>
+        </div>
         <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition-all">
           📤 Subir croquis (PNG/JPG)
           <input
@@ -478,24 +306,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         <div>
           <h3 className="text-xl font-bold text-blue-400">{pisoNombre}</h3>
           <p className="text-xs text-slate-500">
-            {modoVisualizacion === 'cad' && '🎨 Modo CAD (Fondo oscuro)'}
-            {modoVisualizacion === 'original' && '📷 Modo Original'}
-            {modoVisualizacion === 'vector' && '📐 Modo Vectorial'}
-            {' - '}
-            {modoEdicion ? '✎ Modo Edición Activado' : '👁️ Modo Visualización'}
+            {modoEdicion ? '✎ Modo Edición - Click en el croquis para posicionar habitaciones' : '👁️ Modo Visualización'}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <select
-            value={modoVisualizacion}
-            onChange={(e) => setModoVisualizacion(e.target.value)}
-            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
-          >
-            <option value="cad">🎨 Modo CAD (Fondo oscuro)</option>
-            <option value="original">📷 Original</option>
-            <option value="vector">📐 Vectorial</option>
-          </select>
-          
           <input
             type="date"
             value={fechaSeleccionada}
@@ -513,15 +327,14 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
           >
             {modoEdicion ? '✓ Terminar Edición' : '✎ Editar posiciones'}
           </button>
-            {croquis && (
-            <button
-                onClick={eliminarCroquis}
-                className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600 hover:bg-red-500 transition-all"
-                title="Eliminar croquis actual"
-            >
-                🗑️ Eliminar croquis
-            </button>
-            )}
+          
+          <button
+            onClick={eliminarCroquis}
+            className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600 hover:bg-red-500 transition-all"
+            title="Eliminar croquis actual"
+          >
+            🗑️ Eliminar
+          </button>
         </div>
       </div>
 
@@ -531,33 +344,14 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         className="relative overflow-auto bg-slate-950"
         style={{ maxHeight: '70vh', cursor: modoEdicion ? 'crosshair' : 'default' }}
       >
-        {modoVisualizacion === 'cad' ? (
-          <canvas
-            ref={canvasRef}
-            className="w-full h-auto"
-            onClick={handleImageClick}
-            style={{ pointerEvents: modoEdicion ? 'auto' : 'none' }}
-          />
-        ) : (
-          <img
-            ref={(el) => {
-              imageRef.current = el;
-              if (el && modoVisualizacion === 'cad') {
-                imgElementRef.current = el;
-              }
-            }}
-            src={croquis.imagen_url}
-            alt={`Croquis ${pisoNombre}`}
-            className="w-full h-auto"
-            style={{ filter: getFiltroImagen() }}
-            onClick={handleImageClick}
-            onLoad={() => {
-              if (modoVisualizacion === 'cad' && imgElementRef.current) {
-                setTimeout(aplicarFiltroCAD, 100);
-              }
-            }}
-          />
-        )}
+        <img
+          ref={imageRef}
+          src={croquis.imagen_url}
+          alt={`Croquis ${pisoNombre}`}
+          className="w-full h-auto"
+          onClick={handleImageClick}
+          style={{ pointerEvents: modoEdicion ? 'auto' : 'none' }}
+        />
         
         {/* Marcadores de habitaciones */}
         {habitaciones.map(hab => {
@@ -566,17 +360,17 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
           
           const ocup = ocupacion[hab.id];
           const pacientes = ocup?.pacientes ?? 0;
-          const estiloColor = getColorPorOcupacion(pacientes, modoVisualizacion);
+          const estiloColor = getColorPorOcupacion(pacientes);
           
           return (
             <div
               key={hab.id}
               className={`absolute rounded-lg border-2 ${estiloColor} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 cursor-pointer`}
               style={{
-                left: `${(coord.x / (imgElementRef.current?.naturalWidth || imageRef.current?.naturalWidth || 1)) * 100}%`,
-                top: `${(coord.y / (imgElementRef.current?.naturalHeight || imageRef.current?.naturalHeight || 1)) * 100}%`,
-                width: `${(coord.ancho / (imgElementRef.current?.naturalWidth || imageRef.current?.naturalWidth || 1)) * 100}%`,
-                height: `${(coord.alto / (imgElementRef.current?.naturalHeight || imageRef.current?.naturalHeight || 1)) * 100}%`,
+                left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
+                top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
+                width: `${(coord.ancho / (imageRef.current?.naturalWidth || 1)) * 100}%`,
+                height: `${(coord.alto / (imageRef.current?.naturalHeight || 1)) * 100}%`,
                 transform: 'translate(-50%, -50%)'
               }}
               title={`${hab.nombre}: ${pacientes} paciente${pacientes !== 1 ? 's' : ''}${ocup?.observaciones ? ` - ${ocup.observaciones}` : ''}`}
@@ -598,12 +392,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500"></div> 3 pacientes</span>
           </div>
           <div className="text-xs text-slate-500">
-            {modoVisualizacion === 'cad' && '🎨 Fondo oscuro estilo CAD'}
-            {modoVisualizacion === 'original' && '📷 Imagen original'}
-            {modoVisualizacion === 'vector' && '📐 Modo vectorial (alto contraste)'}
+            💡 Croquis exportado desde nanoCAD con fondo negro/líneas blancas
           </div>
           {modoEdicion && (
-            <p className="text-yellow-400 text-xs">💡 Click en el croquis para posicionar habitaciones</p>
+            <p className="text-yellow-400 text-xs">✏️ Click en el croquis para posicionar habitaciones</p>
           )}
         </div>
         {mensaje && (
