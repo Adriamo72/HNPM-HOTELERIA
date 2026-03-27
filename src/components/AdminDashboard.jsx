@@ -327,171 +327,228 @@ const AdminDashboard = () => {
 
   // ==================== GENERAR QR PERSONAL ====================
   const generarQRPersonal = async (personal) => {
-    try {
-      const token = crypto.randomUUID ? crypto.randomUUID() : 
-        Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
-      const expiraEn = new Date();
-      expiraEn.setMonth(expiraEn.getMonth() + 6);
-      
-      await supabase
-        .from('tokens_acceso')
-        .update({ activo: false })
-        .eq('dni', personal.dni);
-      
-      const { error } = await supabase
-        .from('tokens_acceso')
-        .insert({
-          dni: personal.dni,
-          token: token,
-          activo: true,
-          tipo: 'personal',
-          creado_en: new Date().toISOString(),
-          expira_en: expiraEn.toISOString()
-        });
-      
-      if (error) {
-        mostrarSplash("❌ Error al generar QR");
-        return;
-      }
-      
-      const qrUrl = `${window.location.origin}/auth/${token}`;
-      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qrUrl)}`;
-      
-      const win = window.open('', '_blank');
-      win.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Credencial ${personal.apellido}</title>
-            <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              body {
-                font-family: system-ui, -apple-system, monospace;
-                background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-                padding: 20px;
-              }
-              .credencial {
-                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-                border-radius: 28px;
-                padding: 28px;
-                width: 400px;
-                text-align: center;
-                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
-                border: 1px solid #3b82f6;
-              }
-              .header {
-                border-bottom: 2px solid #3b82f6;
-                padding-bottom: 16px;
-                margin-bottom: 20px;
-              }
-              .header h2 {
-                color: #3b82f6;
-                font-size: 11px;
-                letter-spacing: 4px;
-                font-weight: 900;
-                text-transform: uppercase;
-              }
-              .header h1 {
-                color: white;
-                font-size: 16px;
-                margin-top: 6px;
-              }
-              .qr {
-                background: white;
-                padding: 20px;
-                border-radius: 24px;
-                margin: 20px 0;
-                display: inline-block;
-              }
-              .qr img {
-                width: 240px;
-                height: 240px;
-              }
-              .nombre {
-                color: white;
-                font-size: 20px;
-                font-weight: bold;
-                margin: 15px 0 5px;
-              }
-              .jerarquia {
-                color: #60a5fa;
-                font-size: 13px;
-                font-weight: bold;
-                text-transform: uppercase;
-              }
-              .info {
-                margin-top: 20px;
-                padding-top: 16px;
-                border-top: 1px solid #334155;
-                font-size: 10px;
-                color: #64748b;
-              }
-              .badge {
-                background: #3b82f6;
-                color: white;
-                padding: 5px 14px;
-                border-radius: 30px;
-                font-size: 10px;
-                font-weight: bold;
-                display: inline-block;
-                margin-top: 12px;
-              }
-              @media print {
-                body { background: white; }
-                .credencial { box-shadow: none; border: 1px solid #ccc; background: white; }
-                .header h1 { color: black; }
-                .nombre { color: black; }
-                button { display: none; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="credencial">
-              <div class="header">
-                <h2>HOSPITAL NACIONAL</h2>
-                <h1>DEPARTAMENTO HOTELERÍA</h1>
-              </div>
-              <div class="qr">
-                <img src="${qrCodeUrl}" alt="QR de acceso" />
-              </div>
-              <div class="nombre">
-                ${personal.apellido}, ${personal.nombre}
-              </div>
-              <div class="jerarquia">
-                ${personal.jerarquia || 'OPERADOR'}
-              </div>
-              <div class="badge">
-                ${personal.rol?.toUpperCase() || 'PAÑOLERO'}
-              </div>
-              <div class="info">
-                <p>🔐 Escanea este QR para acceder al sistema</p>
-                <p>⚠️ Personal e intransferible</p>
-                <p>📅 Válido hasta: ${expiraEn.toLocaleDateString('es-AR')}</p>
-              </div>
-            </div>
-            <script>
-              setTimeout(() => {
-                window.print();
-                setTimeout(() => window.close(), 2000);
-              }, 500);
-            </script>
-          </body>
-        </html>
-      `);
-      win.document.close();
-      
-      mostrarSplash(`✅ Credencial generada para ${personal.apellido}`);
-      
-    } catch (error) {
-      console.error("Error:", error);
-      mostrarSplash("❌ Error al generar credencial");
+  try {
+    // Generar token único
+    const token = crypto.randomUUID ? crypto.randomUUID() : 
+      Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    
+    // Expira en 6 meses
+    const expiraEn = new Date();
+    expiraEn.setMonth(expiraEn.getMonth() + 6);
+    
+    // Desactivar tokens anteriores del mismo usuario
+    await supabase
+      .from('tokens_acceso')
+      .update({ activo: false })
+      .eq('dni', personal.dni);
+    
+    // Guardar nuevo token
+    const { error } = await supabase
+      .from('tokens_acceso')
+      .insert({
+        dni: personal.dni,
+        token: token,
+        activo: true,
+        tipo: 'personal',
+        creado_en: new Date().toISOString(),
+        expira_en: expiraEn.toISOString()
+      });
+    
+    if (error) {
+      console.error("Error insertando token:", error);
+      mostrarSplash("❌ Error al generar QR: " + error.message);
+      return;
     }
-  };
+    
+    const qrUrl = `${window.location.origin}/auth/${token}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qrUrl)}`;
+    
+    // Abrir ventana con el QR para imprimir
+    const win = window.open('', '_blank', 'width=500,height=700,menubar=no,toolbar=no,location=no');
+    
+    if (!win) {
+      mostrarSplash("❌ El navegador bloqueó la ventana emergente. Permite popups para este sitio.");
+      return;
+    }
+    
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Credencial ${personal.apellido} - HNPM</title>
+          <meta charset="UTF-8">
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              font-family: 'Segoe UI', system-ui, monospace;
+              background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              padding: 20px;
+            }
+            .credencial {
+              background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+              border-radius: 28px;
+              padding: 28px;
+              width: 400px;
+              text-align: center;
+              box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+              border: 1px solid #3b82f6;
+            }
+            .header {
+              border-bottom: 2px solid #3b82f6;
+              padding-bottom: 16px;
+              margin-bottom: 20px;
+            }
+            .header h2 {
+              color: #3b82f6;
+              font-size: 11px;
+              letter-spacing: 4px;
+              font-weight: 900;
+              text-transform: uppercase;
+            }
+            .header h1 {
+              color: white;
+              font-size: 16px;
+              margin-top: 6px;
+            }
+            .qr-container {
+              background: white;
+              padding: 20px;
+              border-radius: 24px;
+              margin: 20px 0;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+            }
+            .qr-container img {
+              width: 240px;
+              height: 240px;
+            }
+            .nombre {
+              color: white;
+              font-size: 20px;
+              font-weight: bold;
+              margin: 15px 0 5px;
+            }
+            .jerarquia {
+              color: #60a5fa;
+              font-size: 13px;
+              font-weight: bold;
+              text-transform: uppercase;
+            }
+            .info {
+              margin-top: 20px;
+              padding-top: 16px;
+              border-top: 1px solid #334155;
+              font-size: 10px;
+              color: #64748b;
+            }
+            .badge {
+              background: #3b82f6;
+              color: white;
+              padding: 5px 14px;
+              border-radius: 30px;
+              font-size: 10px;
+              font-weight: bold;
+              display: inline-block;
+              margin-top: 12px;
+            }
+            .fecha {
+              margin-top: 12px;
+              font-size: 9px;
+              color: #475569;
+            }
+            .button-group {
+              margin-top: 20px;
+              display: flex;
+              gap: 10px;
+              justify-content: center;
+            }
+            button {
+              background: #3b82f6;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 12px;
+              font-size: 12px;
+              font-weight: bold;
+              cursor: pointer;
+              transition: all 0.2s;
+            }
+            button:hover {
+              background: #2563eb;
+              transform: scale(1.02);
+            }
+            @media print {
+              body { background: white; padding: 0; margin: 0; }
+              .credencial { 
+                box-shadow: none; 
+                border: 1px solid #ccc; 
+                background: white;
+                page-break-inside: avoid;
+              }
+              .header h1 { color: black; }
+              .nombre { color: black; }
+              .jerarquia { color: #2563eb; }
+              .button-group { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="credencial">
+            <div class="header">
+              <h2>HOSPITAL NACIONAL</h2>
+              <h1>DEPARTAMENTO HOTELERÍA</h1>
+            </div>
+            <div class="qr-container">
+              <img id="qr-img" src="${qrCodeUrl}" alt="QR de acceso" />
+            </div>
+            <div class="nombre">
+              ${personal.apellido}, ${personal.nombre}
+            </div>
+            <div class="jerarquia">
+              ${personal.jerarquia || 'OPERADOR'}
+            </div>
+            <div class="badge">
+              ${personal.rol?.toUpperCase() || 'PAÑOLERO'}
+            </div>
+            <div class="info">
+              <p>🔐 Escanea este QR para acceder al sistema</p>
+              <p>⚠️ Personal e intransferible</p>
+            </div>
+            <div class="fecha">
+              📅 Válido hasta: ${expiraEn.toLocaleDateString('es-AR')}
+            </div>
+            <div class="button-group">
+              <button onclick="window.print()">🖨️ Imprimir Credencial</button>
+              <button onclick="window.close()">✖️ Cerrar</button>
+            </div>
+          </div>
+          <script>
+            // Esperar a que cargue la imagen
+            const img = document.getElementById('qr-img');
+            if (img.complete) {
+              console.log('QR cargado correctamente');
+            } else {
+              img.onload = () => console.log('QR cargado');
+              img.onerror = () => alert('Error al cargar el QR. Verifica tu conexión a internet.');
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    
+    mostrarSplash(`✅ Credencial generada para ${personal.apellido}`);
+    
+  } catch (error) {
+    console.error("Error generando QR:", error);
+    mostrarSplash("❌ Error al generar credencial");
+  }
+};
 
   // ==================== ELIMINAR MOVIMIENTO ====================
   const eliminarMovimiento = async (id) => {
