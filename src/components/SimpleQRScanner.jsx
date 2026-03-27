@@ -4,58 +4,71 @@ import { Html5Qrcode } from 'html5-qrcode';
 
 const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
   const [procesando, setProcesando] = useState(false);
-  const [archivoSeleccionado, setArchivoSeleccionado] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
   const fileInputRef = useRef(null);
 
   const procesarImagen = async (file) => {
     if (!file) return;
     
     setProcesando(true);
+    setErrorMsg('');
+    
+    console.log("Procesando imagen:", file.name, file.type, file.size);
     
     try {
       const html5QrCode = new Html5Qrcode("temp-qr-reader");
       
+      // Configuración para mejor detección
+      const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+        disableFlip: false
+      };
+      
       // Escanear el archivo
       const decodedText = await html5QrCode.scanFile(file, true);
       
+      console.log("QR decodificado:", decodedText);
+      
       if (decodedText) {
         onScanSuccess(decodedText);
+      } else {
+        setErrorMsg("No se encontró un código QR en la imagen");
+        onScanError("No se encontró QR");
       }
       
       // Limpiar
-      html5QrCode.clear();
-      setArchivoSeleccionado(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      await html5QrCode.clear();
       
     } catch (err) {
       console.error("Error leyendo QR:", err);
-      onScanError("No se pudo leer el código QR. Asegúrate de que la imagen tenga un QR visible.");
+      setErrorMsg("Error al leer el QR: " + (err.message || "Imagen no válida"));
+      onScanError("Error al leer QR");
     } finally {
       setProcesando(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      setArchivoSeleccionado(file);
-      procesarImagen(file);
+      await procesarImagen(file);
     }
   };
 
   const tomarFoto = () => {
-    // Crear input de tipo file que acepta captura de cámara
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.capture = 'environment'; // Forzar cámara trasera
-    input.onchange = (e) => {
+    input.capture = 'environment';
+    input.onchange = async (e) => {
       const file = e.target.files[0];
       if (file) {
-        setArchivoSeleccionado(file);
-        procesarImagen(file);
+        await procesarImagen(file);
       }
     };
     input.click();
@@ -67,13 +80,13 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
       <button
         onClick={tomarFoto}
         disabled={procesando}
-        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-4 rounded-xl mb-3 transition-all disabled:opacity-50"
+        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-4 rounded-xl mb-3 transition-all disabled:opacity-50 text-lg"
       >
-        {procesando ? '📷 PROCESANDO...' : '📷 SACAR FOTO AL QR'}
+        {procesando ? '⏳ PROCESANDO...' : '📷 SACAR FOTO AL QR'}
       </button>
       
       {/* O subir imagen */}
-      <div className="relative">
+      <div className="relative mt-2">
         <input
           ref={fileInputRef}
           type="file"
@@ -91,6 +104,15 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
         <div className="mt-3 text-center">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
           <p className="text-xs text-slate-400 mt-1">Leyendo código QR...</p>
+        </div>
+      )}
+      
+      {errorMsg && (
+        <div className="mt-3 p-2 bg-red-900/50 border border-red-700 rounded-lg">
+          <p className="text-red-300 text-xs text-center">{errorMsg}</p>
+          <p className="text-red-400 text-[10px] text-center mt-1">
+            💡 Asegúrate de que el QR esté bien enfocado y con buena iluminación
+          </p>
         </div>
       )}
       

@@ -24,79 +24,94 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   }, []);
 
   const handleScanSuccess = async (decodedText) => {
-    if (verificando) return;
-    setVerificando(true);
-    
-    try {
-      console.log("QR escaneado:", decodedText);
+  console.log("=== QR ESCANEADO ===");
+  console.log("Texto decodificado:", decodedText);
+  console.log("Longitud:", decodedText?.length);
+  console.log("Contiene /auth/?", decodedText?.includes('/auth/'));
+  
+  if (verificando) {
+    console.log("Ya está verificando, ignorando...");
+    return;
+  }
+  
+  setVerificando(true);
+  
+  try {
+    if (decodedText.includes('/auth/')) {
+      const token = decodedText.split('/auth/')[1];
+      console.log("Token extraído:", token);
       
-      if (decodedText.includes('/auth/')) {
-        const token = decodedText.split('/auth/')[1];
-        
-        const { data: tokenData, error: tokenError } = await supabase
-          .from('tokens_acceso')
-          .select('dni, activo, expira_en')
-          .eq('token', token)
-          .eq('activo', true)
-          .maybeSingle();
-        
-        if (tokenError || !tokenData) {
-          setError("QR inválido. Contacta al administrador.");
-          setVerificando(false);
-          return;
-        }
-        
-        if (tokenData.expira_en && new Date(tokenData.expira_en) < new Date()) {
-          setError("Credencial expirada. Solicita renovación.");
-          setVerificando(false);
-          return;
-        }
-        
-        const { data: usuario, error: userError } = await supabase
-          .from('personal')
-          .select('*')
-          .eq('dni', tokenData.dni)
-          .maybeSingle();
-        
-        if (userError || !usuario) {
-          setError("Usuario no encontrado.");
-          setVerificando(false);
-          return;
-        }
-        
-        // Verificar que NO sea admin
-        if (usuario.es_admin || usuario.rol === 'ADMIN') {
-          setError("Acceso no autorizado. Los administradores deben usar el acceso por PIN en la página principal.");
-          setVerificando(false);
-          return;
-        }
-        
-        await supabase
-          .from('tokens_acceso')
-          .update({ ultimo_uso: new Date().toISOString() })
-          .eq('token', token);
-        
-        const sesion = {
-          usuario: usuario,
-          expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
-        };
-        localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
-        
-        onLoginSuccess(usuario);
-        
-      } else {
-        setError("❌ Escanea tu CREDENCIAL PERSONAL");
-        setTimeout(() => {
-          setError('');
-          setVerificando(false);
-        }, 2000);
+      const { data: tokenData, error: tokenError } = await supabase
+        .from('tokens_acceso')
+        .select('dni, activo, expira_en')
+        .eq('token', token)
+        .eq('activo', true)
+        .maybeSingle();
+      
+      console.log("TokenData:", tokenData);
+      console.log("TokenError:", tokenError);
+      
+      if (tokenError || !tokenData) {
+        setError("QR inválido. Contacta al administrador.");
+        setVerificando(false);
+        return;
       }
-    } catch (err) {
-      console.error("Error:", err);
-      setError("Error al verificar credencial.");
-      setVerificando(false);
+      
+      if (tokenData.expira_en && new Date(tokenData.expira_en) < new Date()) {
+        setError("Credencial expirada. Solicita renovación.");
+        setVerificando(false);
+        return;
+      }
+      
+      const { data: usuario, error: userError } = await supabase
+        .from('personal')
+        .select('*')
+        .eq('dni', tokenData.dni)
+        .maybeSingle();
+      
+      console.log("Usuario encontrado:", usuario);
+      console.log("UserError:", userError);
+      
+      if (userError || !usuario) {
+        setError("Usuario no encontrado.");
+        setVerificando(false);
+        return;
+      }
+      
+      if (usuario.es_admin || usuario.rol === 'ADMIN') {
+        setError("Acceso no autorizado.");
+        setVerificando(false);
+        return;
+      }
+      
+      await supabase
+        .from('tokens_acceso')
+        .update({ ultimo_uso: new Date().toISOString() })
+        .eq('token', token);
+      
+      const sesion = {
+        usuario: usuario,
+        expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+      };
+      localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
+      
+      console.log("✅ Login exitoso para:", usuario.apellido);
+      onLoginSuccess(usuario);
+      
+    } else {
+      console.log("❌ No es un QR de autenticación");
+      setError("❌ Escanea tu CREDENCIAL PERSONAL (debe contener /auth/)");
+      setTimeout(() => {
+        setError('');
+        setVerificando(false);
+      }, 3000);
     }
-  };
+  } catch (err) {
+    console.error("Error en handleScanSuccess:", err);
+    setError("Error al verificar credencial: " + err.message);
+    setVerificando(false);
+  }
+};
 
   const handleScanError = (err) => {
     console.warn("Error scanner:", err);
