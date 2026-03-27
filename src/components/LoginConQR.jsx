@@ -3,27 +3,33 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
 
-const LoginConQR = ({ onLoginSuccess }) => {
-  const [modo, setModo] = useState('qr'); // 'qr' o 'admin'
+const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   const [adminUser, setAdminUser] = useState('');
   const [adminPin, setAdminPin] = useState('');
   const [error, setError] = useState('');
   const [verificando, setVerificando] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
   const [tiempoRestante, setTiempoRestante] = useState(0);
+  const [camaraActiva, setCamaraActiva] = useState(false);
   const scannerRef = useRef(null);
   const timerRef = useRef(null);
+
+  // Determinar si estamos en modo admin (solo en raíz)
+  const esModoAdmin = modoAcceso === null;
 
   // Limpiar timer al desmontar
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch(console.error);
+      }
     };
   }, []);
 
-  // Cargar scanner solo en modo QR
+  // Cargar scanner SOLO en modo operador (cuando hay un sector)
   useEffect(() => {
-    if (modo !== 'qr') return;
+    if (esModoAdmin) return; // No cargar scanner en modo admin
     
     const loadScanner = async () => {
       try {
@@ -42,14 +48,41 @@ const LoginConQR = ({ onLoginSuccess }) => {
             aspectRatio: 1.0,
             showTorchButtonIfSupported: true,
             showZoomSliderIfSupported: true,
+            defaultZoomValueIfSupported: 2,
+            formatsToSupport: [ Html5QrcodeScanner.QR_CODE ],
+            videoConstraints: {
+              facingMode: { exact: "environment" }
+            }
           },
           false
         );
         
         scannerRef.current.render(onScanSuccess, onScanError);
+        setCamaraActiva(true);
+        
       } catch (err) {
         console.error("Error cargando scanner:", err);
-        setError("Error al iniciar la cámara. Verifica permisos.");
+        try {
+          const { Html5QrcodeScanner } = await import('html5-qrcode');
+          
+          scannerRef.current = new Html5QrcodeScanner(
+            "qr-reader",
+            {
+              fps: 10,
+              qrbox: { width: 280, height: 280 },
+              aspectRatio: 1.0,
+              showTorchButtonIfSupported: true,
+              showZoomSliderIfSupported: true,
+              formatsToSupport: [ Html5QrcodeScanner.QR_CODE ]
+            },
+            false
+          );
+          
+          scannerRef.current.render(onScanSuccess, onScanError);
+          setCamaraActiva(true);
+        } catch (err2) {
+          setError("Error al iniciar la cámara. Verifica permisos.");
+        }
       }
     };
     
@@ -60,13 +93,15 @@ const LoginConQR = ({ onLoginSuccess }) => {
         scannerRef.current.clear().catch(console.error);
       }
     };
-  }, [modo]);
+  }, [esModoAdmin]);
 
   const onScanSuccess = async (decodedText) => {
     if (verificando) return;
     setVerificando(true);
     
     try {
+      console.log("QR escaneado:", decodedText);
+      
       if (decodedText.includes('/auth/')) {
         const token = decodedText.split('/auth/')[1];
         
@@ -101,11 +136,10 @@ const LoginConQR = ({ onLoginSuccess }) => {
           return;
         }
         
-        // Si es admin, redirigir a login por PIN
+        // Verificar que NO sea admin (los admins no pueden usar QR)
         if (usuario.es_admin || usuario.rol === 'ADMIN') {
-          setError("Los administradores deben usar el acceso por PIN.");
+          setError("Acceso no autorizado. Los administradores deben usar el acceso por PIN en la página principal.");
           setVerificando(false);
-          setModo('admin');
           return;
         }
         
@@ -140,6 +174,10 @@ const LoginConQR = ({ onLoginSuccess }) => {
     }
   };
 
+  const onScanError = (err) => {
+    console.warn("Error de escaneo:", err);
+  };
+
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     
@@ -157,7 +195,6 @@ const LoginConQR = ({ onLoginSuccess }) => {
     setError('');
     
     try {
-      // Buscar admin en la tabla admin_acceso
       const { data: admin, error: adminError } = await supabase
         .from('admin_acceso')
         .select('*')
@@ -171,7 +208,6 @@ const LoginConQR = ({ onLoginSuccess }) => {
         return;
       }
       
-      // Verificar si está bloqueado
       if (admin.bloqueado_hasta && new Date(admin.bloqueado_hasta) > new Date()) {
         const segundosRestantes = Math.ceil((new Date(admin.bloqueado_hasta) - new Date()) / 1000);
         setTiempoRestante(segundosRestantes);
@@ -182,7 +218,6 @@ const LoginConQR = ({ onLoginSuccess }) => {
         return;
       }
       
-      // Verificar PIN hasheado
       if (!admin.pin_hash) {
         setError("PIN no configurado. Contacta al administrador del sistema.");
         setVerificando(false);
@@ -218,7 +253,6 @@ const LoginConQR = ({ onLoginSuccess }) => {
         return;
       }
       
-      // Login exitoso - Resetear intentos
       await supabase
         .from('admin_acceso')
         .update({ 
@@ -228,7 +262,6 @@ const LoginConQR = ({ onLoginSuccess }) => {
         })
         .eq('id', admin.id);
       
-      // Obtener datos del admin desde tabla personal (para tener jerarquía, nombre, etc)
       const { data: usuarioAdmin, error: userError } = await supabase
         .from('personal')
         .select('*')
@@ -244,14 +277,12 @@ const LoginConQR = ({ onLoginSuccess }) => {
         es_admin: true
       };
       
-      // Guardar sesión
       const sesion = {
         usuario: adminData,
         expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
       };
       localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
       
-      // Limpiar scanner si existe
       if (scannerRef.current) {
         await scannerRef.current.clear();
       }
@@ -279,31 +310,12 @@ const LoginConQR = ({ onLoginSuccess }) => {
       });
     }, 1000);
   };
-  
-  const onScanError = (err) => {
-    console.warn("Error de escaneo:", err);
-  };
 
-  // Pantalla de login admin (solo con usuario y PIN)
-  if (modo === 'admin') {
+  // ========== PANTALLA ADMIN (RAÍZ) ==========
+  if (esModoAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
         <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-8 max-w-md w-full shadow-2xl border border-red-900/30">
-          <button
-            onClick={() => {
-              setModo('qr');
-              setError('');
-              setAdminUser('');
-              setAdminPin('');
-              setBloqueado(false);
-              setTiempoRestante(0);
-              if (timerRef.current) clearInterval(timerRef.current);
-            }}
-            className="text-blue-400 text-sm mb-4 hover:text-blue-300 flex items-center gap-1"
-          >
-            ← Volver a acceso por QR
-          </button>
-          
           <div className="text-center mb-6">
             <div className="bg-gradient-to-r from-red-600 to-red-500 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-red-900/40">
               <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -311,10 +323,13 @@ const LoginConQR = ({ onLoginSuccess }) => {
               </svg>
             </div>
             <h1 className="text-2xl font-black text-white uppercase tracking-wider">
-              ACCESO ADMIN
+              HNPM HOTELERÍA
             </h1>
             <p className="text-red-400 text-xs uppercase tracking-wider mt-2 font-semibold">
               Panel de Administración
+            </p>
+            <p className="text-slate-500 text-[10px] mt-2">
+              Acceso restringido a administradores
             </p>
           </div>
           
@@ -332,7 +347,6 @@ const LoginConQR = ({ onLoginSuccess }) => {
                 required
                 disabled={bloqueado}
                 autoCapitalize="none"
-                autoCorrect="off"
               />
             </div>
             
@@ -378,24 +392,17 @@ const LoginConQR = ({ onLoginSuccess }) => {
           </form>
           
           <p className="text-slate-600 text-[10px] uppercase text-center mt-6">
-            Acceso restringido - Solo personal autorizado
+            Sistema de Trazabilidad Hospitalaria - HNPM
           </p>
         </div>
       </div>
     );
   }
 
-  // Pantalla de QR para pañoleros
+  // ========== PANTALLA OPERADOR (QR) ==========
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
       <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-8 max-w-md w-full text-center shadow-2xl border border-blue-900/30">
-        <button
-          onClick={() => setModo('admin')}
-          className="text-red-400 text-sm mb-4 hover:text-red-300 flex items-center gap-1 ml-auto"
-        >
-          🔐 Acceso Admin →
-        </button>
-        
         <div className="mb-6">
           <div className="bg-gradient-to-r from-blue-600 to-blue-500 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-900/40">
             <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -408,9 +415,28 @@ const LoginConQR = ({ onLoginSuccess }) => {
           <p className="text-blue-400 text-xs uppercase tracking-wider mt-2 font-semibold">
             Acceso con Credencial
           </p>
+          <p className="text-slate-500 text-[10px] mt-1">
+            Usa la cámara TRASERA de tu celular
+          </p>
+        </div>
+
+        {/* Indicador del sector */}
+        <div className="mb-3">
+          <span className="inline-block bg-blue-600/20 text-blue-400 px-3 py-1 rounded-full text-xs font-semibold uppercase">
+            {modoAcceso === 'piso' ? '📦 PAÑOL' : modoAcceso === 'lavadero' ? '🧺 LAVADERO' : '🏠 HABITACIÓN'}
+          </span>
         </div>
 
         <div id="qr-reader" className="bg-black rounded-2xl overflow-hidden mb-4"></div>
+        
+        {!camaraActiva && !error && (
+          <div className="text-center py-2">
+            <div className="animate-pulse">
+              <p className="text-slate-400 text-xs">Iniciando cámara trasera...</p>
+            </div>
+          </div>
+        )}
+        
         <p className="text-slate-400 text-sm">
           📱 Escanea el código QR de tu credencial personal
         </p>

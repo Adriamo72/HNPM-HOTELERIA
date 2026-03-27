@@ -88,8 +88,8 @@ function App() {
   }
 
   if (!usuarioLogueado) {
-    return <LoginConQR onLoginSuccess={manejarLogin} />;
-  }
+  return <LoginConQR onLoginSuccess={manejarLogin} modoAcceso={modoAcceso} />;
+}
 
   return (
     <div className="App bg-slate-950 min-h-screen font-sans text-slate-200">
