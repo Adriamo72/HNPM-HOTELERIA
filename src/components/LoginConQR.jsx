@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
+import SimpleQRScanner from './SimpleQRScanner';
 
 const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   const [adminUser, setAdminUser] = useState('');
@@ -10,8 +11,6 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   const [verificando, setVerificando] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
   const [tiempoRestante, setTiempoRestante] = useState(0);
-  const [camaraActiva, setCamaraActiva] = useState(false);
-  const scannerRef = useRef(null);
   const timerRef = useRef(null);
 
   // Determinar si estamos en modo admin (solo en raíz)
@@ -21,64 +20,10 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(console.error);
-      }
     };
   }, []);
 
-  // Cargar scanner SOLO en modo operador (cuando hay un sector)
-  useEffect(() => {
-  if (esModoAdmin) return; // No cargar scanner en modo admin
-  
-  const loadScanner = async () => {
-    try {
-      const { Html5QrcodeScanner } = await import('html5-qrcode');
-      
-      const container = document.getElementById("qr-reader");
-      if (container) {
-        container.innerHTML = '';
-      }
-      
-      // Configuración que permite cualquier cámara, priorizando trasera
-      scannerRef.current = new Html5QrcodeScanner(
-        "qr-reader",
-        {
-          fps: 10,
-          qrbox: { width: 280, height: 280 },
-          aspectRatio: 1.0,
-          showTorchButtonIfSupported: true,
-          showZoomSliderIfSupported: true,
-          defaultZoomValueIfSupported: 2,
-          formatsToSupport: [ Html5QrcodeScanner.QR_CODE ],
-          // No forzar facingMode exacto, dejar que el usuario elija
-          videoConstraints: {
-            // Usar 'environment' como preferencia, no como obligación
-            facingMode: { ideal: "environment" }
-          }
-        },
-        false
-      );
-      
-      scannerRef.current.render(onScanSuccess, onScanError);
-      setCamaraActiva(true);
-      
-    } catch (err) {
-      console.error("Error cargando scanner:", err);
-      setError("Error al iniciar la cámara. Verifica permisos.");
-    }
-  };
-  
-  loadScanner();
-  
-  return () => {
-    if (scannerRef.current) {
-      scannerRef.current.clear().catch(console.error);
-    }
-  };
-}, [esModoAdmin]);
-
-  const onScanSuccess = async (decodedText) => {
+  const handleScanSuccess = async (decodedText) => {
     if (verificando) return;
     setVerificando(true);
     
@@ -119,7 +64,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
           return;
         }
         
-        // Verificar que NO sea admin (los admins no pueden usar QR)
+        // Verificar que NO sea admin
         if (usuario.es_admin || usuario.rol === 'ADMIN') {
           setError("Acceso no autorizado. Los administradores deben usar el acceso por PIN en la página principal.");
           setVerificando(false);
@@ -137,10 +82,6 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
         };
         localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
         
-        if (scannerRef.current) {
-          await scannerRef.current.clear();
-        }
-        
         onLoginSuccess(usuario);
         
       } else {
@@ -157,8 +98,11 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     }
   };
 
-  const onScanError = (err) => {
-    console.warn("Error de escaneo:", err);
+  const handleScanError = (err) => {
+    console.warn("Error scanner:", err);
+    if (err && typeof err === 'string' && err.includes("cámara")) {
+      setError("No se pudo acceder a la cámara. Verifica permisos.");
+    }
   };
 
   const handleAdminLogin = async (e) => {
@@ -266,10 +210,6 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
       };
       localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
       
-      if (scannerRef.current) {
-        await scannerRef.current.clear();
-      }
-      
       onLoginSuccess(adminData);
       
     } catch (err) {
@@ -326,7 +266,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
                 value={adminUser}
                 onChange={(e) => setAdminUser(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-lg outline-none focus:ring-2 focus:ring-red-500"
-                placeholder="Ingrese usuario"
+                placeholder="admin"
                 required
                 disabled={bloqueado}
                 autoCapitalize="none"
@@ -382,67 +322,59 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     );
   }
 
-  // ========== PANTALLA OPERADOR (QR) ==========
+  // ========== PANTALLA OPERADOR (QR) con SimpleQRScanner ==========
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
-      <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-8 max-w-md w-full text-center shadow-2xl border border-blue-900/30">
-        <div className="mb-6">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-500 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-900/40">
-            <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-6 max-w-md w-full text-center shadow-2xl border border-blue-900/30">
+        <div className="mb-4">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-900/40">
+            <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-black text-white uppercase tracking-wider">
+          <h1 className="text-xl font-black text-white uppercase tracking-wider">
             HNPM HOTELERÍA
           </h1>
-          <p className="text-blue-400 text-xs uppercase tracking-wider mt-2 font-semibold">
+          <p className="text-blue-400 text-[10px] uppercase tracking-wider mt-1 font-semibold">
             Acceso con Credencial
-          </p>
-          <p className="text-slate-500 text-[10px] mt-1">
-            Usa la cámara TRASERA de tu celular
           </p>
         </div>
 
         {/* Indicador del sector */}
         <div className="mb-3">
-          <span className="inline-block bg-blue-600/20 text-blue-400 px-3 py-1 rounded-full text-xs font-semibold uppercase">
+          <span className="inline-block bg-blue-600/20 text-blue-400 px-3 py-1 rounded-full text-[10px] font-semibold uppercase">
             {modoAcceso === 'piso' ? '📦 PAÑOL' : modoAcceso === 'lavadero' ? '🧺 LAVADERO' : '🏠 HABITACIÓN'}
           </span>
         </div>
 
-        <div id="qr-reader" className="bg-black rounded-2xl overflow-hidden mb-4"></div>
+        {/* SimpleQRScanner */}
+        <SimpleQRScanner 
+          onScanSuccess={handleScanSuccess}
+          onScanError={handleScanError}
+        />
         
-        {!camaraActiva && !error && (
-          <div className="text-center py-2">
-            <div className="animate-pulse">
-              <p className="text-slate-400 text-xs">Iniciando cámara trasera...</p>
-            </div>
-          </div>
-        )}
-        
-        <p className="text-slate-400 text-sm">
+        <p className="text-slate-400 text-xs mt-4">
           📱 Escanea el código QR de tu credencial personal
         </p>
-        <p className="text-slate-600 text-xs mt-2">
+        <p className="text-slate-500 text-[10px] mt-1">
           (El QR está en tu carnet de identificación)
         </p>
 
         {error && (
-          <div className="mt-4 p-4 bg-red-900/30 border border-red-800 rounded-xl">
-            <p className="text-red-400 text-sm font-medium">{error}</p>
+          <div className="mt-4 p-3 bg-red-900/30 border border-red-800 rounded-xl">
+            <p className="text-red-400 text-xs font-medium">{error}</p>
             <button 
               onClick={() => {
                 setError('');
-                window.location.reload();
               }}
-              className="mt-3 text-xs text-blue-400 hover:text-blue-300 underline font-semibold"
+              className="mt-2 text-[10px] text-blue-400 hover:text-blue-300 underline font-semibold"
             >
-              Intentar de nuevo
+              Reintentar
             </button>
           </div>
         )}
 
-        <p className="text-slate-700 text-[10px] uppercase mt-6 tracking-wider">
+        <p className="text-slate-600 text-[9px] uppercase mt-4 tracking-wider">
           Subdirección Administrativa - Departamento Hotelería
         </p>
       </div>
