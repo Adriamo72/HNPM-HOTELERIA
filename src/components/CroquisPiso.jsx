@@ -106,48 +106,108 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     }
   };
 
+  const eliminarCroquis = async () => {
+  if (!croquis) return;
+  
+  const confirmar = window.confirm(
+    `¿Eliminar el croquis actual de ${pisoNombre}?\n\n` +
+    `Se eliminarán también todas las coordenadas de habitaciones.\n\n` +
+    `Esta acción NO SE PUEDE DESHACER.`
+  );
+  
+  if (!confirmar) return;
+  
+  setMensaje("🗑️ Eliminando croquis...");
+  
+  try {
+    // Eliminar coordenadas primero
+    const { error: coordsError } = await supabase
+      .from('habitacion_coordenadas')
+      .delete()
+      .eq('croquis_id', croquis.id);
+    
+    if (coordsError) throw coordsError;
+    
+    // Eliminar el croquis de la BD
+    const { error: deleteError } = await supabase
+      .from('croquis_pisos')
+      .delete()
+      .eq('id', croquis.id);
+    
+    if (deleteError) throw deleteError;
+    
+    // Eliminar archivo del Storage
+    const { error: storageError } = await supabase.storage
+      .from('croquis')
+      .remove([croquis.nombre_archivo]);
+    
+    if (storageError) console.warn("Error eliminando archivo:", storageError);
+    
+    setMensaje("✅ Croquis eliminado correctamente");
+    setCroquis(null);
+    setCoordenadas({});
+    setTimeout(() => setMensaje(''), 2000);
+    
+  } catch (error) {
+    console.error("Error eliminando croquis:", error);
+    setMensaje("❌ Error al eliminar croquis");
+    setTimeout(() => setMensaje(''), 2000);
+  }
+};
+
   const aplicarFiltroCAD = () => {
-    if (!canvasRef.current || !imgElementRef.current) return;
+  if (!canvasRef.current || !imgElementRef.current) return;
+  
+  const canvas = canvasRef.current;
+  const ctx = canvas.getContext('2d');
+  const img = imgElementRef.current;
+  
+  // Ajustar tamaño del canvas al de la imagen
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  
+  // Dibujar imagen original
+  ctx.drawImage(img, 0, 0);
+  
+  // Obtener datos de píxeles
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  
+  // Aplicar filtro estilo CAD mejorado
+  for (let i = 0; i < data.length; i += 4) {
+    // Calcular brillo
+    const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
     
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const img = imgElementRef.current;
-    
-    // Ajustar tamaño del canvas al de la imagen
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    
-    // Dibujar imagen original
-    ctx.drawImage(img, 0, 0);
-    
-    // Obtener datos de píxeles
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    
-    // Aplicar filtro estilo CAD (inversión + contraste)
-    for (let i = 0; i < data.length; i += 4) {
-      // Invertir colores (blanco se vuelve negro, negro se vuelve blanco)
-      data[i] = 255 - data[i];     // R
-      data[i+1] = 255 - data[i+1]; // G
-      data[i+2] = 255 - data[i+2]; // B
-      
-      // Aumentar contraste para líneas más definidas
-      const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
-      if (brightness > 128) {
-        // Aclarar líneas (hacerlas más blancas)
-        data[i] = Math.min(255, data[i] + 50);
-        data[i+1] = Math.min(255, data[i+1] + 50);
-        data[i+2] = Math.min(255, data[i+2] + 50);
-      } else {
-        // Oscurecer fondo
-        data[i] = Math.max(0, data[i] - 40);
-        data[i+1] = Math.max(0, data[i+1] - 40);
-        data[i+2] = Math.max(0, data[i+2] - 40);
-      }
+    if (brightness > 200) {
+      // Áreas blancas (fondo) → negro/azul oscuro
+      data[i] = 15;     // R
+      data[i+1] = 25;   // G
+      data[i+2] = 45;   // B
+    } else if (brightness > 150) {
+      // Grises claros → gris oscuro
+      data[i] = 30;
+      data[i+1] = 40;
+      data[i+2] = 60;
+    } else if (brightness > 80) {
+      // Grises medios → gris medio oscuro
+      data[i] = 50;
+      data[i+1] = 70;
+      data[i+2] = 90;
+    } else if (brightness > 40) {
+      // Grises oscuros → azul eléctrico (líneas)
+      data[i] = 0;
+      data[i+1] = 150;
+      data[i+2] = 255;
+    } else {
+      // Negros → cyan brillante (líneas importantes)
+      data[i] = 0;
+      data[i+1] = 200;
+      data[i+2] = 255;
     }
-    
-    ctx.putImageData(imageData, 0, 0);
-  };
+  }
+  
+  ctx.putImageData(imageData, 0, 0);
+};
 
   const recortarImagen = async () => {
     if (!imagenTemp || !crop) return;
@@ -453,6 +513,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
           >
             {modoEdicion ? '✓ Terminar Edición' : '✎ Editar posiciones'}
           </button>
+            {croquis && (
+            <button
+                onClick={eliminarCroquis}
+                className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600 hover:bg-red-500 transition-all"
+                title="Eliminar croquis actual"
+            >
+                🗑️ Eliminar croquis
+            </button>
+            )}
         </div>
       </div>
 
