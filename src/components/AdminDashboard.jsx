@@ -1,11 +1,14 @@
+// components/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import bcrypt from 'bcryptjs';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('historial');
   const [personal, setPersonal] = useState([]);
   const [pisos, setPisos] = useState([]);
-  const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]); 
+  const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
+  const [admins, setAdmins] = useState([]);
   const [movimientosAgrupados, setMovimientosAgrupados] = useState({});
   const [stockPañol, setStockPañol] = useState({});
   const [stockUso, setStockUso] = useState({});
@@ -14,14 +17,33 @@ const AdminDashboard = () => {
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [sincronizando, setSincronizando] = useState(false);
   
+  // Estados para modales
+  const [mostrarModalAdmin, setMostrarModalAdmin] = useState(false);
+  const [mostrarModalCambioPin, setMostrarModalCambioPin] = useState(false);
+  const [mostrarModalPersonal, setMostrarModalPersonal] = useState(false);
+  const [mostrarModalPiso, setMostrarModalPiso] = useState(false);
+  const [adminSeleccionado, setAdminSeleccionado] = useState(null);
+  
+  // Estados para formularios
+  const [nuevoAdmin, setNuevoAdmin] = useState({ usuario: '', pin: '', confirmarPin: '' });
+  const [nuevoPin, setNuevoPin] = useState('');
+  const [confirmarNuevoPin, setConfirmarNuevoPin] = useState('');
+  const [nuevoMiembro, setNuevoMiembro] = useState({ 
+    dni: '', 
+    nombre: '', 
+    apellido: '', 
+    jerarquia: '', 
+    celular: '', 
+    rol: 'pañolero' 
+  });
+  const [nuevoPiso, setNuevoPiso] = useState({ nombre_piso: '' });
+  
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STOCK_CRITICO = 5;
 
-  const [nuevoMiembro, setNuevoMiembro] = useState({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
-  const [nuevoPiso, setNuevoPiso] = useState({ nombre_piso: '' });
-
   useEffect(() => {
     cargarDatos();
+    cargarAdmins();
   }, []);
 
   const mostrarSplash = (mensaje) => {
@@ -159,7 +181,319 @@ const AdminDashboard = () => {
     }
   };
 
-  // ==================== ELIMINAR MOVIMIENTO CON RECÁLCULO ====================
+  // ==================== GESTIÓN DE ADMINISTRADORES ====================
+  const cargarAdmins = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_acceso')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setAdmins(data || []);
+    } catch (error) {
+      console.error("Error cargando admins:", error);
+    }
+  };
+
+  const agregarAdmin = async () => {
+    if (!nuevoAdmin.usuario.trim()) {
+      mostrarSplash("Ingrese un nombre de usuario");
+      return;
+    }
+    
+    if (nuevoAdmin.pin.length < 4) {
+      mostrarSplash("El PIN debe tener al menos 4 dígitos");
+      return;
+    }
+    
+    if (nuevoAdmin.pin !== nuevoAdmin.confirmarPin) {
+      mostrarSplash("Los PINs no coinciden");
+      return;
+    }
+    
+    try {
+      const salt = bcrypt.genSaltSync(10);
+      const pinHash = bcrypt.hashSync(nuevoAdmin.pin, salt);
+      
+      const { error } = await supabase
+        .from('admin_acceso')
+        .insert({
+          usuario: nuevoAdmin.usuario.toLowerCase().trim(),
+          pin_hash: pinHash,
+          activo: true,
+          created_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        if (error.code === '23505') {
+          mostrarSplash("❌ El usuario ya existe");
+        } else {
+          mostrarSplash("❌ Error al crear administrador");
+        }
+        return;
+      }
+      
+      mostrarSplash(`✅ Administrador ${nuevoAdmin.usuario} creado`);
+      setNuevoAdmin({ usuario: '', pin: '', confirmarPin: '' });
+      setMostrarModalAdmin(false);
+      cargarAdmins();
+      
+    } catch (error) {
+      console.error("Error:", error);
+      mostrarSplash("❌ Error al crear administrador");
+    }
+  };
+
+  const cambiarEstadoAdmin = async (adminId, estadoActual) => {
+    try {
+      const { error } = await supabase
+        .from('admin_acceso')
+        .update({ 
+          activo: !estadoActual,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', adminId);
+      
+      if (error) throw error;
+      
+      mostrarSplash(estadoActual ? "✅ Administrador desactivado" : "✅ Administrador activado");
+      cargarAdmins();
+      
+    } catch (error) {
+      console.error("Error:", error);
+      mostrarSplash("❌ Error al cambiar estado");
+    }
+  };
+
+  const cambiarPinAdmin = async () => {
+    if (nuevoPin.length < 4) {
+      mostrarSplash("El PIN debe tener al menos 4 dígitos");
+      return;
+    }
+    
+    if (nuevoPin !== confirmarNuevoPin) {
+      mostrarSplash("Los PINs no coinciden");
+      return;
+    }
+    
+    try {
+      const salt = bcrypt.genSaltSync(10);
+      const pinHash = bcrypt.hashSync(nuevoPin, salt);
+      
+      const { error } = await supabase
+        .from('admin_acceso')
+        .update({ 
+          pin_hash: pinHash,
+          intentos_fallidos: 0,
+          bloqueado_hasta: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', adminSeleccionado.id);
+      
+      if (error) throw error;
+      
+      mostrarSplash(`✅ PIN cambiado para ${adminSeleccionado.usuario}`);
+      setMostrarModalCambioPin(false);
+      setNuevoPin('');
+      setConfirmarNuevoPin('');
+      cargarAdmins();
+      
+    } catch (error) {
+      console.error("Error:", error);
+      mostrarSplash("❌ Error al cambiar PIN");
+    }
+  };
+
+  const eliminarAdmin = async (adminId, usuario) => {
+    if (window.confirm(`¿Eliminar permanentemente al administrador "${usuario}"?\n\nEsta acción no se puede deshacer.`)) {
+      try {
+        const { error } = await supabase
+          .from('admin_acceso')
+          .delete()
+          .eq('id', adminId);
+        
+        if (error) throw error;
+        
+        mostrarSplash(`✅ Administrador ${usuario} eliminado`);
+        cargarAdmins();
+        
+      } catch (error) {
+        console.error("Error:", error);
+        mostrarSplash("❌ Error al eliminar administrador");
+      }
+    }
+  };
+
+  // ==================== GENERAR QR PERSONAL ====================
+  const generarQRPersonal = async (personal) => {
+    try {
+      const token = crypto.randomUUID ? crypto.randomUUID() : 
+        Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
+      const expiraEn = new Date();
+      expiraEn.setMonth(expiraEn.getMonth() + 6);
+      
+      await supabase
+        .from('tokens_acceso')
+        .update({ activo: false })
+        .eq('dni', personal.dni);
+      
+      const { error } = await supabase
+        .from('tokens_acceso')
+        .insert({
+          dni: personal.dni,
+          token: token,
+          activo: true,
+          tipo: 'personal',
+          creado_en: new Date().toISOString(),
+          expira_en: expiraEn.toISOString()
+        });
+      
+      if (error) {
+        mostrarSplash("❌ Error al generar QR");
+        return;
+      }
+      
+      const qrUrl = `${window.location.origin}/auth/${token}`;
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qrUrl)}`;
+      
+      const win = window.open('', '_blank');
+      win.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Credencial ${personal.apellido}</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body {
+                font-family: system-ui, -apple-system, monospace;
+                background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                padding: 20px;
+              }
+              .credencial {
+                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                border-radius: 28px;
+                padding: 28px;
+                width: 400px;
+                text-align: center;
+                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+                border: 1px solid #3b82f6;
+              }
+              .header {
+                border-bottom: 2px solid #3b82f6;
+                padding-bottom: 16px;
+                margin-bottom: 20px;
+              }
+              .header h2 {
+                color: #3b82f6;
+                font-size: 11px;
+                letter-spacing: 4px;
+                font-weight: 900;
+                text-transform: uppercase;
+              }
+              .header h1 {
+                color: white;
+                font-size: 16px;
+                margin-top: 6px;
+              }
+              .qr {
+                background: white;
+                padding: 20px;
+                border-radius: 24px;
+                margin: 20px 0;
+                display: inline-block;
+              }
+              .qr img {
+                width: 240px;
+                height: 240px;
+              }
+              .nombre {
+                color: white;
+                font-size: 20px;
+                font-weight: bold;
+                margin: 15px 0 5px;
+              }
+              .jerarquia {
+                color: #60a5fa;
+                font-size: 13px;
+                font-weight: bold;
+                text-transform: uppercase;
+              }
+              .info {
+                margin-top: 20px;
+                padding-top: 16px;
+                border-top: 1px solid #334155;
+                font-size: 10px;
+                color: #64748b;
+              }
+              .badge {
+                background: #3b82f6;
+                color: white;
+                padding: 5px 14px;
+                border-radius: 30px;
+                font-size: 10px;
+                font-weight: bold;
+                display: inline-block;
+                margin-top: 12px;
+              }
+              @media print {
+                body { background: white; }
+                .credencial { box-shadow: none; border: 1px solid #ccc; background: white; }
+                .header h1 { color: black; }
+                .nombre { color: black; }
+                button { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="credencial">
+              <div class="header">
+                <h2>HOSPITAL NACIONAL</h2>
+                <h1>DEPARTAMENTO HOTELERÍA</h1>
+              </div>
+              <div class="qr">
+                <img src="${qrCodeUrl}" alt="QR de acceso" />
+              </div>
+              <div class="nombre">
+                ${personal.apellido}, ${personal.nombre}
+              </div>
+              <div class="jerarquia">
+                ${personal.jerarquia || 'OPERADOR'}
+              </div>
+              <div class="badge">
+                ${personal.rol?.toUpperCase() || 'PAÑOLERO'}
+              </div>
+              <div class="info">
+                <p>🔐 Escanea este QR para acceder al sistema</p>
+                <p>⚠️ Personal e intransferible</p>
+                <p>📅 Válido hasta: ${expiraEn.toLocaleDateString('es-AR')}</p>
+              </div>
+            </div>
+            <script>
+              setTimeout(() => {
+                window.print();
+                setTimeout(() => window.close(), 2000);
+              }, 500);
+            </script>
+          </body>
+        </html>
+      `);
+      win.document.close();
+      
+      mostrarSplash(`✅ Credencial generada para ${personal.apellido}`);
+      
+    } catch (error) {
+      console.error("Error:", error);
+      mostrarSplash("❌ Error al generar credencial");
+    }
+  };
+
+  // ==================== ELIMINAR MOVIMIENTO ====================
   const eliminarMovimiento = async (id) => {
     if (window.confirm("⚠️ ¿ELIMINAR REGISTRO?\n\nEl stock se recalculará automáticamente después de eliminar.")) {
       mostrarSplash("🗑️ ELIMINANDO REGISTRO...");
@@ -192,10 +526,10 @@ const AdminDashboard = () => {
     }
   };
 
-  // ==================== ELIMINAR PISO COMPLETO ====================
+  // ==================== ELIMINAR PISO ====================
   const eliminarPiso = async (pisoId, pisoNombre) => {
-    if (window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE el piso "${pisoNombre}"?\n\nSe eliminarán:\n- Todos los movimientos de stock\n- Todo el stock registrado (pañol, uso, lavadero)\n- Todas las habitaciones especiales\n- El piso en sí\n\nEsta acción NO SE PUEDE DESHACER.`)) {
-      mostrarSplash("🗑️ ELIMINANDO PISO Y REGISTROS ASOCIADOS...");
+    if (window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE el piso "${pisoNombre}"?\n\nSe eliminarán todos los registros asociados.\n\nEsta acción NO SE PUEDE DESHACER.`)) {
+      mostrarSplash("🗑️ ELIMINANDO PISO...");
       
       try {
         await supabase.from('movimientos_stock').delete().eq('piso_id', pisoId);
@@ -203,7 +537,7 @@ const AdminDashboard = () => {
         await supabase.from('habitaciones_especiales').delete().eq('piso_id', pisoId);
         await supabase.from('pisos').delete().eq('id', pisoId);
         
-        mostrarSplash(`✅ PISO "${pisoNombre}" ELIMINADO COMPLETAMENTE`);
+        mostrarSplash(`✅ PISO "${pisoNombre}" ELIMINADO`);
         cargarDatos();
       } catch (error) {
         console.error("Error:", error);
@@ -212,7 +546,24 @@ const AdminDashboard = () => {
     }
   };
 
-  // ==================== ELIMINAR PERSONAL ====================
+  // ==================== GESTIÓN DE PERSONAL ====================
+  const agregarPersonal = async (e) => {
+    e.preventDefault();
+    if (!nuevoMiembro.dni || !nuevoMiembro.nombre || !nuevoMiembro.apellido) {
+      mostrarSplash("Complete todos los campos");
+      return;
+    }
+    const { error } = await supabase.from('personal').insert([nuevoMiembro]);
+    if (!error) {
+      setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
+      mostrarSplash("✅ Personal registrado");
+      setMostrarModalPersonal(false);
+      cargarDatos();
+    } else {
+      mostrarSplash("❌ Error al registrar");
+    }
+  };
+
   const eliminarPersonal = async (dni, nombre) => {
     if (window.confirm(`¿Eliminar al personal "${nombre}"?`)) {
       const { error } = await supabase.from('personal').delete().eq('dni', dni);
@@ -225,19 +576,51 @@ const AdminDashboard = () => {
     }
   };
 
-  // ==================== CALCULAR TOTAL GLOBAL ====================
-  const calcularTotalGlobal = () => {
-    const total = {};
-    ITEMS_REQUERIDOS.forEach(item => total[item] = 0);
-    Object.keys(stockPañol).forEach(piso => {
-      ITEMS_REQUERIDOS.forEach(item => {
-        total[item] += (stockPañol[piso]?.[item] || 0) + (stockUso[piso]?.[item] || 0) + (stockLavadero[piso]?.[item] || 0);
-      });
-    });
-    return total;
+  // ==================== GESTIÓN DE PISOS ====================
+  const agregarPiso = async (e) => {
+    e.preventDefault();
+    if (!nuevoPiso.nombre_piso.trim()) {
+      mostrarSplash("Ingrese un nombre para el sector");
+      return;
+    }
+    const slug = nuevoPiso.nombre_piso.toLowerCase().replace(/ /g, '-');
+    const { error } = await supabase.from('pisos').insert([{ nombre_piso: nuevoPiso.nombre_piso.trim(), slug }]);
+    if (!error) {
+      setNuevoPiso({ nombre_piso: '' });
+      mostrarSplash("✅ Sector creado");
+      setMostrarModalPiso(false);
+      cargarDatos();
+    } else {
+      mostrarSplash("❌ Error al crear sector");
+    }
   };
 
-  const totalGlobal = calcularTotalGlobal();
+  // ==================== GESTIÓN DE HABITACIONES ====================
+  const agregarHabitacion = async (pisoId, pisoSlug) => {
+    const nombre = prompt("Nombre de la Habitación (Ej: Medico Interno):");
+    if(nombre && nombre.trim()) {
+      const slugH = `${pisoSlug}-${nombre.toLowerCase().replace(/ /g, '-')}`;
+      const { error } = await supabase.from('habitaciones_especiales').insert([{ piso_id: pisoId, nombre: nombre.trim(), slug: slugH }]);
+      if(!error) { 
+        mostrarSplash("✅ Habitación Guardada"); 
+        cargarDatos(); 
+      } else {
+        mostrarSplash("❌ Error al guardar");
+      }
+    }
+  };
+
+  const eliminarHabitacion = async (id, nombre) => {
+    if(window.confirm(`¿Eliminar habitación "${nombre}"?`)) { 
+      const { error } = await supabase.from('habitaciones_especiales').delete().eq('id', id); 
+      if(!error) { 
+        mostrarSplash("✅ Habitación eliminada"); 
+        cargarDatos(); 
+      } else {
+        mostrarSplash("❌ Error al eliminar");
+      }
+    }
+  };
 
   // ==================== GENERAR QR ====================
   const descargarQR = (path, titulo) => {
@@ -260,293 +643,34 @@ const AdminDashboard = () => {
     win.document.close();
   };
 
-  // ==================== AGREGAR HABITACIÓN ESPECIAL ====================
-  const agregarHabitacionPersistente = async (pisoId, pisoSlug) => {
-    const nombre = prompt("Nombre de la Habitación (Ej: Medico Interno):");
-    if(nombre && nombre.trim()) {
-      const slugH = `${pisoSlug}-${nombre.toLowerCase().replace(/ /g, '-')}`;
-      const { error } = await supabase.from('habitaciones_especiales').insert([{ piso_id: pisoId, nombre: nombre.trim(), slug: slugH }]);
-      if(!error) { 
-        mostrarSplash("✅ Habitación Guardada"); 
-        cargarDatos(); 
-      } else {
-        mostrarSplash("❌ Error al guardar");
-      }
-    }
-  };
-
-  // ==================== ELIMINAR HABITACIÓN ESPECIAL ====================
-  const eliminarHabitacion = async (id, nombre) => {
-    if(window.confirm(`¿Eliminar habitación "${nombre}"?`)) { 
-      const { error } = await supabase.from('habitaciones_especiales').delete().eq('id', id); 
-      if(!error) { 
-        mostrarSplash("✅ Habitación eliminada"); 
-        cargarDatos(); 
-      } else {
-        mostrarSplash("❌ Error al eliminar");
-      }
-    }
-  };
-
   // ==================== TOGGLE AUDITORÍA ====================
   const toggleAuditoria = async () => {
     const nuevoEstado = !auditoriaHabilitada;
-    await supabase.from('configuracion_sistema').update({ valor: nuevoEstado.toString() }).eq('clave', 'MODO_AUDITORIA');
+    await supabase.from('configuracion_sistema').upsert({ clave: 'MODO_AUDITORIA', valor: nuevoEstado.toString() });
     setAuditoriaHabilitada(nuevoEstado);
     mostrarSplash(nuevoEstado ? "🔴 AUDITORÍA ACTIVADA" : "🟢 AUDITORÍA CERRADA");
   };
 
-  // ==================== AGREGAR PISO ====================
-  const agregarPiso = async (e) => {
-    e.preventDefault();
-    if (!nuevoPiso.nombre_piso.trim()) {
-      mostrarSplash("Ingrese un nombre para el sector");
-      return;
-    }
-    const slug = nuevoPiso.nombre_piso.toLowerCase().replace(/ /g, '-');
-    const { error } = await supabase.from('pisos').insert([{ nombre_piso: nuevoPiso.nombre_piso.trim(), slug }]);
-    if (!error) {
-      setNuevoPiso({ nombre_piso: '' });
-      mostrarSplash("✅ Sector creado");
-      cargarDatos();
-    } else {
-      mostrarSplash("❌ Error al crear sector");
-    }
+  // ==================== CALCULAR TOTAL GLOBAL ====================
+  const calcularTotalGlobal = () => {
+    const total = {};
+    ITEMS_REQUERIDOS.forEach(item => total[item] = 0);
+    Object.keys(stockPañol).forEach(piso => {
+      ITEMS_REQUERIDOS.forEach(item => {
+        total[item] += (stockPañol[piso]?.[item] || 0) + (stockUso[piso]?.[item] || 0) + (stockLavadero[piso]?.[item] || 0);
+      });
+    });
+    return total;
   };
 
-  // ==================== AGREGAR PERSONAL ====================
-  const agregarPersonal = async (e) => {
-    e.preventDefault();
-    if (!nuevoMiembro.dni || !nuevoMiembro.nombre || !nuevoMiembro.apellido) {
-      mostrarSplash("Complete todos los campos");
-      return;
-    }
-    const { error } = await supabase.from('personal').insert([nuevoMiembro]);
-    if (!error) {
-      setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
-      mostrarSplash("✅ Personal registrado");
-      cargarDatos();
-    } else {
-      mostrarSplash("❌ Error al registrar");
-    }
-  };
+  const totalGlobal = calcularTotalGlobal();
 
   // ==================== FORMATEAR FECHA ====================
   const formatearFechaGuardia = (fechaISO) => {
     const fecha = new Date(fechaISO);
-    const opciones = { weekday: 'long', day: 'numeric' };
-    const diaYNumero = fecha.toLocaleDateString('es-AR', opciones);
-    const hora = fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-    return `${diaYNumero.charAt(0).toUpperCase() + diaYNumero.slice(1)}, ${hora}`;
+    const opciones = { weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return fecha.toLocaleDateString('es-AR', opciones);
   };
-
-  const generarQRPersonal = async (personal) => {
-  try {
-    // Generar token único
-    const token = crypto.randomUUID ? crypto.randomUUID() : 
-      Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    
-    // Expira en 6 meses
-    const expiraEn = new Date();
-    expiraEn.setMonth(expiraEn.getMonth() + 6);
-    
-    // Desactivar tokens anteriores del mismo usuario
-    const { error: updateError } = await supabase
-      .from('tokens_acceso')
-      .update({ activo: false })
-      .eq('dni', personal.dni);
-    
-    if (updateError) {
-      console.error("Error desactivando tokens anteriores:", updateError);
-    }
-    
-    // Guardar nuevo token
-    const { error: insertError } = await supabase
-      .from('tokens_acceso')
-      .insert({
-        dni: personal.dni,
-        token: token,
-        activo: true,
-        tipo: 'personal',
-        creado_en: new Date().toISOString(),
-        expira_en: expiraEn.toISOString()
-      });
-    
-    if (insertError) {
-      console.error("Error insertando token:", insertError);
-      mostrarSplash("❌ Error al generar QR: " + insertError.message);
-      return;
-    }
-    
-    const qrUrl = `${window.location.origin}/auth/${token}`;
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qrUrl)}`;
-    
-    // Abrir ventana para imprimir credencial
-    const win = window.open('', '_blank');
-    win.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Credencial ${personal.apellido} - HNPM</title>
-          <meta charset="UTF-8">
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-              font-family: 'Segoe UI', system-ui, -apple-system, monospace;
-              background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              padding: 20px;
-            }
-            .credencial {
-              background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-              border-radius: 28px;
-              padding: 28px;
-              width: 400px;
-              text-align: center;
-              box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
-              border: 1px solid #3b82f6;
-              position: relative;
-              overflow: hidden;
-            }
-            .credencial::before {
-              content: '';
-              position: absolute;
-              top: -50%;
-              right: -50%;
-              width: 200%;
-              height: 200%;
-              background: radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%);
-              pointer-events: none;
-            }
-            .header {
-              border-bottom: 2px solid #3b82f6;
-              padding-bottom: 16px;
-              margin-bottom: 20px;
-              position: relative;
-            }
-            .header h2 {
-              color: #3b82f6;
-              font-size: 11px;
-              letter-spacing: 4px;
-              font-weight: 900;
-              text-transform: uppercase;
-            }
-            .header h1 {
-              color: white;
-              font-size: 16px;
-              margin-top: 6px;
-              font-weight: 800;
-            }
-            .qr {
-              background: white;
-              padding: 20px;
-              border-radius: 24px;
-              margin: 20px 0;
-              display: inline-block;
-              box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-            }
-            .qr img {
-              width: 240px;
-              height: 240px;
-            }
-            .nombre {
-              color: white;
-              font-size: 20px;
-              font-weight: bold;
-              margin: 15px 0 5px;
-            }
-            .jerarquia {
-              color: #60a5fa;
-              font-size: 13px;
-              font-weight: bold;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-            }
-            .info {
-              margin-top: 20px;
-              padding-top: 16px;
-              border-top: 1px solid #334155;
-              font-size: 10px;
-              color: #64748b;
-            }
-            .badge {
-              background: #3b82f6;
-              color: white;
-              padding: 5px 14px;
-              border-radius: 30px;
-              font-size: 10px;
-              font-weight: bold;
-              display: inline-block;
-              margin-top: 12px;
-              letter-spacing: 1px;
-            }
-            .fecha {
-              margin-top: 12px;
-              font-size: 9px;
-              color: #475569;
-            }
-            @media print {
-              body { background: white; padding: 0; margin: 0; }
-              .credencial { 
-                box-shadow: none; 
-                border: 1px solid #ccc; 
-                background: white;
-                page-break-inside: avoid;
-              }
-              .header h1 { color: black; }
-              .nombre { color: black; }
-              .jerarquia { color: #2563eb; }
-              button { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="credencial">
-            <div class="header">
-              <h2>HOSPITAL NACIONAL</h2>
-              <h1>DEPARTAMENTO HOTELERÍA</h1>
-            </div>
-            <div class="qr">
-              <img src="${qrCodeUrl}" alt="QR de acceso" />
-            </div>
-            <div class="nombre">
-              ${personal.apellido}, ${personal.nombre}
-            </div>
-            <div class="jerarquia">
-              ${personal.jerarquia || 'OPERADOR'}
-            </div>
-            <div class="badge">
-              ${personal.rol?.toUpperCase() || 'PAÑOLERO'}
-            </div>
-            <div class="info">
-              <p>🔐 Escanea este QR para acceder al sistema</p>
-              <p>⚠️ Personal e intransferible</p>
-            </div>
-            <div class="fecha">
-              📅 Válido hasta: ${expiraEn.toLocaleDateString('es-AR')}
-            </div>
-          </div>
-          <script>
-            setTimeout(() => {
-              window.print();
-              setTimeout(() => window.close(), 2000);
-            }, 500);
-          </script>
-        </body>
-      </html>
-    `);
-    win.document.close();
-    
-    mostrarSplash(`✅ Credencial generada para ${personal.apellido}`);
-    
-  } catch (error) {
-    console.error("Error generando QR:", error);
-    mostrarSplash("❌ Error al generar credencial");
-  }
-};
 
   // ==================== RENDER ====================
   return (
@@ -606,7 +730,7 @@ const AdminDashboard = () => {
                     Object.keys(stockPañol).forEach(piso => { total += stockPañol[piso]?.[item] || 0; });
                     return (
                       <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
                         <span className={`text-base font-semibold ${total < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>{total}</span>
                       </div>
                     );
@@ -614,14 +738,14 @@ const AdminDashboard = () => {
                 </div>
               </div>
               <div className="bg-yellow-900/20 p-3 rounded-xl border border-yellow-900/30">
-                <p className="text-xs font-semibold text-yellow-500 uppercase text-center">EN USO (Habitaciones/Pisos)</p>
+                <p className="text-xs font-semibold text-yellow-500 uppercase text-center">EN USO</p>
                 <div className="grid grid-cols-4 gap-1 mt-2">
                   {ITEMS_REQUERIDOS.map(item => {
                     let total = 0;
                     Object.keys(stockUso).forEach(piso => { total += stockUso[piso]?.[item] || 0; });
                     return (
                       <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
                         <span className="text-base font-semibold text-yellow-400">{total}</span>
                       </div>
                     );
@@ -629,14 +753,14 @@ const AdminDashboard = () => {
                 </div>
               </div>
               <div className="bg-red-900/20 p-3 rounded-xl border border-red-900/30">
-                <p className="text-xs font-semibold text-red-500 uppercase text-center">LAVADERO (Sucio)</p>
+                <p className="text-xs font-semibold text-red-500 uppercase text-center">LAVADERO</p>
                 <div className="grid grid-cols-4 gap-1 mt-2">
                   {ITEMS_REQUERIDOS.map(item => {
                     let total = 0;
                     Object.keys(stockLavadero).forEach(piso => { total += stockLavadero[piso]?.[item] || 0; });
                     return (
                       <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
                         <span className="text-base font-semibold text-red-400">{total}</span>
                       </div>
                     );
@@ -665,7 +789,7 @@ const AdminDashboard = () => {
                     <div className="grid grid-cols-4 gap-1 mt-2">
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
+                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
                           <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
                             {stockPañol[nombrePiso]?.[item] || 0}
                           </span>
@@ -678,7 +802,7 @@ const AdminDashboard = () => {
                     <div className="grid grid-cols-4 gap-1 mt-2">
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
+                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
                           <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
                         </div>
                       ))}
@@ -689,7 +813,7 @@ const AdminDashboard = () => {
                     <div className="grid grid-cols-4 gap-1 mt-2">
                       {ITEMS_REQUERIDOS.map(item => (
                         <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 10)}</span>
+                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
                           <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
                         </div>
                       ))}
@@ -702,13 +826,10 @@ const AdminDashboard = () => {
                   {movimientosAgrupados[nombrePiso]?.length > 0 ? (
                     movimientosAgrupados[nombrePiso].map((m) => (
                       <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
-                        {/* Item y fecha */}
                         <div className="w-[22%] shrink-0 flex items-center gap-2">
                           <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
                           <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
                         </div>
-                        
-                        {/* Movimientos */}
                         <div className="flex-1 flex items-center justify-around gap-2">
                           <div className="text-center min-w-[50px]">
                             <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
@@ -723,8 +844,6 @@ const AdminDashboard = () => {
                             <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
                           </div>
                         </div>
-                        
-                        {/* Novedades, badges, operador y eliminar */}
                         <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
                           {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
                             <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
@@ -773,99 +892,150 @@ const AdminDashboard = () => {
             </button>
           </section>
 
+          {/* Gestión de Administradores */}
+          <section className="bg-slate-900 p-6 rounded-2xl border border-purple-800/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-purple-400 uppercase tracking-wider">
+                  👑 Administradores del Sistema
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Gestiona los accesos de administradores</p>
+              </div>
+              <button
+                onClick={() => setMostrarModalAdmin(true)}
+                className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
+              >
+                + Nuevo Admin
+              </button>
+            </div>
+            
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {admins.length > 0 ? (
+                admins.map(admin => (
+                  <div key={admin.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 hover:border-purple-800/50 transition-all">
+                    <div className="flex justify-between items-center flex-wrap gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-white uppercase">
+                            {admin.usuario}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            admin.activo ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
+                          }`}>
+                            {admin.activo ? 'ACTIVO' : 'INACTIVO'}
+                          </span>
+                        </div>
+                        <div className="flex gap-3 mt-1 text-[10px] text-slate-500 flex-wrap">
+                          <span>🕐 Creado: {new Date(admin.created_at).toLocaleDateString()}</span>
+                          {admin.ultimo_acceso && (
+                            <span>📱 Último acceso: {new Date(admin.ultimo_acceso).toLocaleString()}</span>
+                          )}
+                          {admin.intentos_fallidos > 0 && (
+                            <span className="text-orange-400">⚠️ Intentos fallidos: {admin.intentos_fallidos}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setAdminSeleccionado(admin);
+                            setMostrarModalCambioPin(true);
+                          }}
+                          className="px-3 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg text-xs font-semibold hover:bg-yellow-600 hover:text-white transition-all"
+                          title="Cambiar PIN"
+                        >
+                          🔑 Cambiar PIN
+                        </button>
+                        <button
+                          onClick={() => cambiarEstadoAdmin(admin.id, admin.activo)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                            admin.activo 
+                              ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600 hover:text-white'
+                              : 'bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white'
+                          }`}
+                        >
+                          {admin.activo ? '🔴 Desactivar' : '🟢 Activar'}
+                        </button>
+                        <button
+                          onClick={() => eliminarAdmin(admin.id, admin.usuario)}
+                          className="px-3 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-600 hover:text-white transition-all"
+                          title="Eliminar permanentemente"
+                        >
+                          🗑️ Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-slate-500 text-sm py-8">
+                  📭 No hay administradores registrados
+                </div>
+              )}
+            </div>
+          </section>
+
           {/* Gestión de Personal */}
           <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-            <h3 className="text-lg font-semibold text-slate-500 mb-4 uppercase tracking-wider">👥 Tripulación</h3>
-            <form onSubmit={agregarPersonal} className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-              <input 
-                className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Jerarquía (Ej: Enfermero)" 
-                value={nuevoMiembro.jerarquia} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, jerarquia: e.target.value})} 
-                required 
-              />
-              <input 
-                className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Nombre" 
-                value={nuevoMiembro.nombre} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, nombre: e.target.value})} 
-                required 
-              />
-              <input 
-                className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Apellido" 
-                value={nuevoMiembro.apellido} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, apellido: e.target.value})} 
-                required 
-              />
-              <input 
-                className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-mono focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="DNI" 
-                value={nuevoMiembro.dni} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, dni: e.target.value})} 
-                required 
-              />
-              <select 
-                className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-semibold text-blue-400 uppercase focus:ring-2 focus:ring-blue-500 outline-none" 
-                value={nuevoMiembro.rol} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">👥 Tripulación</h3>
+                <p className="text-xs text-slate-500 mt-1">Personal operativo del sistema</p>
+              </div>
+              <button
+                onClick={() => setMostrarModalPersonal(true)}
+                className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
               >
-                <option value="pañolero">🧺 Pañolero / Operador</option>
-                <option value="enfermero">🩺 Encargado de Piso</option>
-                <option value="ADMIN">⚙️ Administrador</option>
-              </select>
-              <button 
-                type="submit" 
-                className="bg-blue-600 p-3 rounded-xl font-semibold uppercase text-sm hover:bg-blue-500 transition-all"
-              >
-                + Registrar Personal
+                + Nuevo Personal
               </button>
-            </form>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {personal.map(p => (
-  <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
-    <span>
-      {p.jerarquia} {p.apellido}, {p.nombre} 
-      <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{p.rol}]</span>
-    </span>
-    <div className="flex gap-2">
-      <button 
-        onClick={() => generarQRPersonal(p)}
-        className="bg-green-600/20 text-green-400 text-xs font-semibold uppercase hover:bg-green-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
-        title="Generar credencial QR"
-      >
-        📱 QR
-      </button>
-      <button 
-        onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} 
-        className="bg-red-600/20 text-red-400 text-xs font-semibold uppercase hover:bg-red-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
-      >
-        Eliminar
-      </button>
-    </div>
-  </div>
-))}
+            </div>
+            
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {personal.length > 0 ? (
+                personal.map(p => (
+                  <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
+                    <span>
+                      {p.jerarquia} {p.apellido}, {p.nombre} 
+                      <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{p.rol}]</span>
+                    </span>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => generarQRPersonal(p)}
+                        className="bg-green-600/20 text-green-400 text-xs font-semibold uppercase hover:bg-green-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
+                        title="Generar credencial QR"
+                      >
+                        📱 QR
+                      </button>
+                      <button 
+                        onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} 
+                        className="bg-red-600/20 text-red-400 text-xs font-semibold uppercase hover:bg-red-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-slate-500 text-sm py-4">📭 No hay personal registrado</div>
+              )}
             </div>
           </section>
 
           {/* Gestión de Pisos y QRs */}
           <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-            <h3 className="text-lg font-semibold text-slate-500 mb-4 uppercase tracking-wider">🏥 Sectores y QRs</h3>
-            <form onSubmit={agregarPiso} className="flex flex-col sm:flex-row gap-3 mb-6">
-              <input 
-                className="flex-grow bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Nuevo Sector (Ej: Piso 1, Terapia, Guardia...)" 
-                value={nuevoPiso.nombre_piso} 
-                onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} 
-                required 
-              />
-              <button 
-                type="submit" 
-                className="bg-blue-600 px-6 rounded-xl font-semibold text-sm uppercase hover:bg-blue-500 transition-all"
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">🏥 Sectores y QRs</h3>
+                <p className="text-xs text-slate-500 mt-1">Pisos, habitaciones y códigos QR</p>
+              </div>
+              <button
+                onClick={() => setMostrarModalPiso(true)}
+                className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
               >
-                + Crear Sector
+                + Nuevo Sector
               </button>
-            </form>
+            </div>
+            
             <div className="grid grid-cols-1 gap-5">
               {pisos.length > 0 ? (
                 pisos.map(p => (
@@ -898,7 +1068,7 @@ const AdminDashboard = () => {
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
                         <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">🏠 Habitaciones Especiales</p>
                         <button 
-                          onClick={() => agregarHabitacionPersistente(p.id, p.slug)} 
+                          onClick={() => agregarHabitacion(p.id, p.slug)} 
                           className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all"
                         >
                           + Agregar Habitación
@@ -931,10 +1101,235 @@ const AdminDashboard = () => {
                   </div>
                 ))
               ) : (
-                <div className="text-center text-slate-500 text-base py-8">📭 No hay sectores registrados. Crea el primer sector usando el formulario arriba.</div>
+                <div className="text-center text-slate-500 text-base py-8">📭 No hay sectores registrados. Crea el primer sector usando el botón arriba.</div>
               )}
             </div>
           </section>
+        </div>
+      )}
+      
+      {/* Modal para crear nuevo admin */}
+      {mostrarModalAdmin && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-purple-800">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-black text-purple-400">Nuevo Administrador</h3>
+              <button 
+                onClick={() => setMostrarModalAdmin(false)}
+                className="text-slate-500 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                  Usuario
+                </label>
+                <input
+                  type="text"
+                  value={nuevoAdmin.usuario}
+                  onChange={(e) => setNuevoAdmin({...nuevoAdmin, usuario: e.target.value})}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="ej: admin, juan, etc"
+                  autoComplete="off"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                  PIN (mínimo 4 dígitos)
+                </label>
+                <input
+                  type="password"
+                  value={nuevoAdmin.pin}
+                  onChange={(e) => setNuevoAdmin({...nuevoAdmin, pin: e.target.value})}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="••••"
+                  maxLength="6"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                  Confirmar PIN
+                </label>
+                <input
+                  type="password"
+                  value={nuevoAdmin.confirmarPin}
+                  onChange={(e) => setNuevoAdmin({...nuevoAdmin, confirmarPin: e.target.value})}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="••••"
+                  maxLength="6"
+                />
+              </div>
+              
+              <button
+                onClick={agregarAdmin}
+                className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-xl transition-all mt-4"
+              >
+                Crear Administrador
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para cambiar PIN */}
+      {mostrarModalCambioPin && adminSeleccionado && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-yellow-800">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-black text-yellow-400">
+                Cambiar PIN - {adminSeleccionado.usuario}
+              </h3>
+              <button 
+                onClick={() => {
+                  setMostrarModalCambioPin(false);
+                  setNuevoPin('');
+                  setConfirmarNuevoPin('');
+                }}
+                className="text-slate-500 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                  Nuevo PIN (mínimo 4 dígitos)
+                </label>
+                <input
+                  type="password"
+                  value={nuevoPin}
+                  onChange={(e) => setNuevoPin(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-yellow-500"
+                  placeholder="••••"
+                  maxLength="6"
+                  autoFocus
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                  Confirmar nuevo PIN
+                </label>
+                <input
+                  type="password"
+                  value={confirmarNuevoPin}
+                  onChange={(e) => setConfirmarNuevoPin(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-yellow-500"
+                  placeholder="••••"
+                  maxLength="6"
+                />
+              </div>
+              
+              <button
+                onClick={cambiarPinAdmin}
+                className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-black py-3 rounded-xl transition-all mt-4"
+              >
+                Cambiar PIN
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para nuevo personal */}
+      {mostrarModalPersonal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-blue-800">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-black text-blue-400">Nuevo Personal</h3>
+              <button 
+                onClick={() => setMostrarModalPersonal(false)}
+                className="text-slate-500 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <form onSubmit={agregarPersonal} className="space-y-3">
+              <input 
+                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
+                placeholder="Jerarquía (Ej: Enfermero)" 
+                value={nuevoMiembro.jerarquia} 
+                onChange={e => setNuevoMiembro({...nuevoMiembro, jerarquia: e.target.value})} 
+                required 
+              />
+              <input 
+                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
+                placeholder="Nombre" 
+                value={nuevoMiembro.nombre} 
+                onChange={e => setNuevoMiembro({...nuevoMiembro, nombre: e.target.value})} 
+                required 
+              />
+              <input 
+                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
+                placeholder="Apellido" 
+                value={nuevoMiembro.apellido} 
+                onChange={e => setNuevoMiembro({...nuevoMiembro, apellido: e.target.value})} 
+                required 
+              />
+              <input 
+                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-mono focus:ring-2 focus:ring-blue-500 outline-none" 
+                placeholder="DNI" 
+                value={nuevoMiembro.dni} 
+                onChange={e => setNuevoMiembro({...nuevoMiembro, dni: e.target.value})} 
+                required 
+              />
+              <select 
+                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-semibold text-blue-400 uppercase focus:ring-2 focus:ring-blue-500 outline-none" 
+                value={nuevoMiembro.rol} 
+                onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}
+              >
+                <option value="pañolero">🧺 Pañolero / Operador</option>
+                <option value="enfermero">🩺 Encargado de Piso</option>
+                <option value="ADMIN">⚙️ Administrador</option>
+              </select>
+              <button 
+                type="submit" 
+                className="w-full bg-blue-600 p-3 rounded-xl font-semibold uppercase text-sm hover:bg-blue-500 transition-all"
+              >
+                Registrar Personal
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para nuevo piso */}
+      {mostrarModalPiso && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-blue-800">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-black text-blue-400">Nuevo Sector</h3>
+              <button 
+                onClick={() => setMostrarModalPiso(false)}
+                className="text-slate-500 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <form onSubmit={agregarPiso} className="space-y-4">
+              <input 
+                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
+                placeholder="Nombre del sector (Ej: Piso 1, Terapia, Guardia...)" 
+                value={nuevoPiso.nombre_piso} 
+                onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} 
+                required 
+              />
+              <button 
+                type="submit" 
+                className="w-full bg-blue-600 p-3 rounded-xl font-semibold uppercase text-sm hover:bg-blue-500 transition-all"
+              >
+                Crear Sector
+              </button>
+            </form>
+          </div>
         </div>
       )}
       

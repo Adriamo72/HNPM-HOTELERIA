@@ -1,6 +1,6 @@
 // App.js
 import React, { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient'; // 👈 IMPORTANTE: agregar esta línea
+import { supabase } from './supabaseClient'; // 👈 Import con llaves
 import LoginConQR from './components/LoginConQR';
 import FormularioPiso from './components/FormularioPiso';
 import AdminDashboard from './components/AdminDashboard';
@@ -88,7 +88,7 @@ function App() {
   }
 
   if (!usuarioLogueado) {
-    return <LoginConQR onLoginSuccess={manejarLogin} supabase={supabase} />;
+    return <LoginConQR onLoginSuccess={manejarLogin} />;
   }
 
   return (

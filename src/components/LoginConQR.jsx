@@ -1,21 +1,38 @@
 // components/LoginConQR.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
+import bcrypt from 'bcryptjs';
 
 const LoginConQR = ({ onLoginSuccess }) => {
-  const [scaneando, setScaneando] = useState(true);
+  const [modo, setModo] = useState('qr'); // 'qr' o 'admin'
+  const [adminUser, setAdminUser] = useState('');
+  const [adminPin, setAdminPin] = useState('');
   const [error, setError] = useState('');
   const [verificando, setVerificando] = useState(false);
+  const [bloqueado, setBloqueado] = useState(false);
+  const [tiempoRestante, setTiempoRestante] = useState(0);
   const scannerRef = useRef(null);
+  const timerRef = useRef(null);
 
-  // Cargar scanner cuando el componente se monta
+  // Limpiar timer al desmontar
   useEffect(() => {
-    if (!scaneando) return;
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  // Cargar scanner solo en modo QR
+  useEffect(() => {
+    if (modo !== 'qr') return;
     
-    // Usar html5-qrcode (más estable)
     const loadScanner = async () => {
       try {
         const { Html5QrcodeScanner } = await import('html5-qrcode');
+        
+        const container = document.getElementById("qr-reader");
+        if (container) {
+          container.innerHTML = '';
+        }
         
         scannerRef.current = new Html5QrcodeScanner(
           "qr-reader",
@@ -40,27 +57,25 @@ const LoginConQR = ({ onLoginSuccess }) => {
     
     return () => {
       if (scannerRef.current) {
-        scannerRef.current.clear();
+        scannerRef.current.clear().catch(console.error);
       }
     };
-  }, [scaneando]);
+  }, [modo]);
 
   const onScanSuccess = async (decodedText) => {
     if (verificando) return;
     setVerificando(true);
     
     try {
-      // Verificar si es un QR personal válido
       if (decodedText.includes('/auth/')) {
         const token = decodedText.split('/auth/')[1];
         
-        // Buscar token en la base de datos
         const { data: tokenData, error: tokenError } = await supabase
           .from('tokens_acceso')
           .select('dni, activo, expira_en')
           .eq('token', token)
           .eq('activo', true)
-          .single();
+          .maybeSingle();
         
         if (tokenError || !tokenData) {
           setError("QR inválido. Contacta al administrador.");
@@ -68,19 +83,17 @@ const LoginConQR = ({ onLoginSuccess }) => {
           return;
         }
         
-        // Verificar expiración
         if (tokenData.expira_en && new Date(tokenData.expira_en) < new Date()) {
           setError("Credencial expirada. Solicita renovación.");
           setVerificando(false);
           return;
         }
         
-        // Obtener datos del usuario
         const { data: usuario, error: userError } = await supabase
           .from('personal')
           .select('*')
           .eq('dni', tokenData.dni)
-          .single();
+          .maybeSingle();
         
         if (userError || !usuario) {
           setError("Usuario no encontrado.");
@@ -88,28 +101,33 @@ const LoginConQR = ({ onLoginSuccess }) => {
           return;
         }
         
-        // Actualizar último uso del token
+        // Si es admin, redirigir a login por PIN
+        if (usuario.es_admin || usuario.rol === 'ADMIN') {
+          setError("Los administradores deben usar el acceso por PIN.");
+          setVerificando(false);
+          setModo('admin');
+          return;
+        }
+        
         await supabase
           .from('tokens_acceso')
           .update({ ultimo_uso: new Date().toISOString() })
           .eq('token', token);
         
-        // Guardar sesión (expira en 8 horas)
         const sesion = {
           usuario: usuario,
           expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
         };
         localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
         
-        // Detener scanner
         if (scannerRef.current) {
-          scannerRef.current.clear();
+          await scannerRef.current.clear();
         }
         
         onLoginSuccess(usuario);
         
       } else {
-        setError("Escanea tu CREDENCIAL PERSONAL, no el código del sector.");
+        setError("❌ Escanea tu CREDENCIAL PERSONAL");
         setTimeout(() => {
           setError('');
           setVerificando(false);
@@ -122,16 +140,264 @@ const LoginConQR = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    
+    if (bloqueado) {
+      setError(`Demasiados intentos. Espera ${tiempoRestante} segundos.`);
+      return;
+    }
+    
+    if (!adminUser.trim() || !adminPin.trim()) {
+      setError("Ingrese usuario y PIN");
+      return;
+    }
+    
+    setVerificando(true);
+    setError('');
+    
+    try {
+      // Buscar admin en la tabla admin_acceso
+      const { data: admin, error: adminError } = await supabase
+        .from('admin_acceso')
+        .select('*')
+        .eq('usuario', adminUser.toLowerCase().trim())
+        .eq('activo', true)
+        .maybeSingle();
+      
+      if (adminError || !admin) {
+        setError("Usuario administrador no válido.");
+        setVerificando(false);
+        return;
+      }
+      
+      // Verificar si está bloqueado
+      if (admin.bloqueado_hasta && new Date(admin.bloqueado_hasta) > new Date()) {
+        const segundosRestantes = Math.ceil((new Date(admin.bloqueado_hasta) - new Date()) / 1000);
+        setTiempoRestante(segundosRestantes);
+        setBloqueado(true);
+        iniciarContador(segundosRestantes);
+        setError(`Cuenta bloqueada. Intenta nuevamente en ${Math.ceil(segundosRestantes / 60)} minutos.`);
+        setVerificando(false);
+        return;
+      }
+      
+      // Verificar PIN hasheado
+      if (!admin.pin_hash) {
+        setError("PIN no configurado. Contacta al administrador del sistema.");
+        setVerificando(false);
+        return;
+      }
+      
+      const pinValido = bcrypt.compareSync(adminPin, admin.pin_hash);
+      
+      if (!pinValido) {
+        const nuevosIntentos = (admin.intentos_fallidos || 0) + 1;
+        
+        if (nuevosIntentos >= 3) {
+          const bloqueoHasta = new Date(Date.now() + 15 * 60 * 1000);
+          await supabase
+            .from('admin_acceso')
+            .update({ 
+              intentos_fallidos: nuevosIntentos,
+              bloqueado_hasta: bloqueoHasta.toISOString()
+            })
+            .eq('id', admin.id);
+          
+          setBloqueado(true);
+          iniciarContador(900);
+          setError(`PIN incorrecto. Cuenta bloqueada por 15 minutos.`);
+        } else {
+          await supabase
+            .from('admin_acceso')
+            .update({ intentos_fallidos: nuevosIntentos })
+            .eq('id', admin.id);
+          setError(`PIN incorrecto. Intentos restantes: ${3 - nuevosIntentos}`);
+        }
+        setVerificando(false);
+        return;
+      }
+      
+      // Login exitoso - Resetear intentos
+      await supabase
+        .from('admin_acceso')
+        .update({ 
+          intentos_fallidos: 0, 
+          bloqueado_hasta: null,
+          ultimo_acceso: new Date().toISOString()
+        })
+        .eq('id', admin.id);
+      
+      // Obtener datos del admin desde tabla personal (para tener jerarquía, nombre, etc)
+      const { data: usuarioAdmin, error: userError } = await supabase
+        .from('personal')
+        .select('*')
+        .or('es_admin.eq.true,rol.eq.ADMIN')
+        .maybeSingle();
+      
+      const adminData = usuarioAdmin || {
+        dni: 'admin',
+        nombre: 'Administrador',
+        apellido: 'Sistema',
+        jerarquia: 'ADMINISTRADOR',
+        rol: 'ADMIN',
+        es_admin: true
+      };
+      
+      // Guardar sesión
+      const sesion = {
+        usuario: adminData,
+        expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+      };
+      localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
+      
+      // Limpiar scanner si existe
+      if (scannerRef.current) {
+        await scannerRef.current.clear();
+      }
+      
+      onLoginSuccess(adminData);
+      
+    } catch (err) {
+      console.error("Error:", err);
+      setError("Error al verificar credenciales");
+      setVerificando(false);
+    }
+  };
+  
+  const iniciarContador = (segundos) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    
+    timerRef.current = setInterval(() => {
+      setTiempoRestante((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          setBloqueado(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+  
   const onScanError = (err) => {
     console.warn("Error de escaneo:", err);
-    // No mostrar error para no molestar al usuario
   };
 
+  // Pantalla de login admin (solo con usuario y PIN)
+  if (modo === 'admin') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
+        <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-8 max-w-md w-full shadow-2xl border border-red-900/30">
+          <button
+            onClick={() => {
+              setModo('qr');
+              setError('');
+              setAdminUser('');
+              setAdminPin('');
+              setBloqueado(false);
+              setTiempoRestante(0);
+              if (timerRef.current) clearInterval(timerRef.current);
+            }}
+            className="text-blue-400 text-sm mb-4 hover:text-blue-300 flex items-center gap-1"
+          >
+            ← Volver a acceso por QR
+          </button>
+          
+          <div className="text-center mb-6">
+            <div className="bg-gradient-to-r from-red-600 to-red-500 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-red-900/40">
+              <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-black text-white uppercase tracking-wider">
+              ACCESO ADMIN
+            </h1>
+            <p className="text-red-400 text-xs uppercase tracking-wider mt-2 font-semibold">
+              Panel de Administración
+            </p>
+          </div>
+          
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                USUARIO ADMIN
+              </label>
+              <input
+                type="text"
+                value={adminUser}
+                onChange={(e) => setAdminUser(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-lg outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="Ingrese usuario"
+                required
+                disabled={bloqueado}
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                PIN DE ACCESO
+              </label>
+              <input
+                type="password"
+                value={adminPin}
+                onChange={(e) => setAdminPin(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-2xl text-center tracking-[0.5em] outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="••••"
+                maxLength="6"
+                required
+                disabled={bloqueado}
+              />
+            </div>
+            
+            {error && (
+              <div className={`p-3 rounded-xl ${error.includes('bloqueada') || error.includes('Intentos') ? 'bg-orange-900/30 border-orange-800' : 'bg-red-900/30 border-red-800'} border`}>
+                <p className={`text-sm text-center ${error.includes('bloqueada') || error.includes('Intentos') ? 'text-orange-400' : 'text-red-400'}`}>
+                  {error}
+                </p>
+              </div>
+            )}
+            
+            {tiempoRestante > 0 && (
+              <div className="text-center">
+                <p className="text-orange-400 text-sm font-mono">
+                  Desbloqueo en: {Math.floor(tiempoRestante / 60)}:{String(tiempoRestante % 60).padStart(2, '0')}
+                </p>
+              </div>
+            )}
+            
+            <button
+              type="submit"
+              disabled={verificando || bloqueado}
+              className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-600 text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 uppercase disabled:opacity-50"
+            >
+              {verificando ? 'VERIFICANDO...' : 'INGRESAR AL PANEL'}
+            </button>
+          </form>
+          
+          <p className="text-slate-600 text-[10px] uppercase text-center mt-6">
+            Acceso restringido - Solo personal autorizado
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Pantalla de QR para pañoleros
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-      <div className="bg-slate-900 rounded-3xl p-8 max-w-md w-full text-center">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
+      <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-8 max-w-md w-full text-center shadow-2xl border border-blue-900/30">
+        <button
+          onClick={() => setModo('admin')}
+          className="text-red-400 text-sm mb-4 hover:text-red-300 flex items-center gap-1 ml-auto"
+        >
+          🔐 Acceso Admin →
+        </button>
+        
         <div className="mb-6">
-          <div className="bg-blue-600 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-900/40">
             <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
             </svg>
@@ -139,46 +405,35 @@ const LoginConQR = ({ onLoginSuccess }) => {
           <h1 className="text-2xl font-black text-white uppercase tracking-wider">
             HNPM HOTELERÍA
           </h1>
-          <p className="text-slate-500 text-xs uppercase tracking-wider mt-2">
+          <p className="text-blue-400 text-xs uppercase tracking-wider mt-2 font-semibold">
             Acceso con Credencial
           </p>
         </div>
 
-        {scaneando ? (
-          <>
-            <div id="qr-reader" className="bg-black rounded-2xl overflow-hidden mb-4"></div>
-            <p className="text-slate-400 text-sm">
-              📱 Escanea el código QR de tu credencial personal
-            </p>
-            <p className="text-slate-600 text-xs mt-2">
-              (El QR está en tu carnet de identificación)
-            </p>
-          </>
-        ) : verificando ? (
-          <div className="py-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="text-white mt-4">Verificando credencial...</p>
-          </div>
-        ) : null}
+        <div id="qr-reader" className="bg-black rounded-2xl overflow-hidden mb-4"></div>
+        <p className="text-slate-400 text-sm">
+          📱 Escanea el código QR de tu credencial personal
+        </p>
+        <p className="text-slate-600 text-xs mt-2">
+          (El QR está en tu carnet de identificación)
+        </p>
 
         {error && (
-          <div className="mt-4 p-3 bg-red-900/30 border border-red-800 rounded-xl">
-            <p className="text-red-400 text-sm">{error}</p>
+          <div className="mt-4 p-4 bg-red-900/30 border border-red-800 rounded-xl">
+            <p className="text-red-400 text-sm font-medium">{error}</p>
             <button 
               onClick={() => {
                 setError('');
-                setScaneando(true);
-                setVerificando(false);
                 window.location.reload();
               }}
-              className="mt-2 text-xs text-blue-400 underline"
+              className="mt-3 text-xs text-blue-400 hover:text-blue-300 underline font-semibold"
             >
               Intentar de nuevo
             </button>
           </div>
         )}
 
-        <p className="text-slate-700 text-[10px] uppercase mt-6">
+        <p className="text-slate-700 text-[10px] uppercase mt-6 tracking-wider">
           Subdirección Administrativa - Departamento Hotelería
         </p>
       </div>
