@@ -8,6 +8,48 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
   const [textoManual, setTextoManual] = useState('');
   const fileInputRef = useRef(null);
 
+  // Función para redimensionar la imagen antes de procesar
+  const redimensionarImagen = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          // Calcular nuevo tamaño manteniendo proporción
+          let width = img.width;
+          let height = img.height;
+          const maxSize = 1024;
+          
+          if (width > maxSize || height > maxSize) {
+            if (width > height) {
+              height = (height * maxSize) / width;
+              width = maxSize;
+            } else {
+              width = (width * maxSize) / height;
+              height = maxSize;
+            }
+          }
+          
+          // Crear canvas para redimensionar
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convertir a blob con mejor calidad
+          canvas.toBlob((blob) => {
+            resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+          }, 'image/jpeg', 0.9);
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const procesarImagen = async (file) => {
     if (!file) return;
     
@@ -15,9 +57,29 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
     setErrorMsg('');
     
     try {
+      console.log("📸 Procesando imagen:", file.name, file.size, "bytes");
+      
+      // Redimensionar imagen para mejor procesamiento
+      const imagenOptimizada = await redimensionarImagen(file);
+      console.log("📸 Imagen optimizada:", imagenOptimizada.size, "bytes");
+      
       const html5QrCode = new Html5Qrcode("temp-qr-reader");
       
-      const decodedText = await html5QrCode.scanFile(file, true);
+      // Configuración mejorada
+      const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+        disableFlip: false,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
+      };
+      
+      // Escanear el archivo optimizado
+      const decodedText = await html5QrCode.scanFile(imagenOptimizada, true);
+      
+      console.log("✅ QR decodificado:", decodedText);
       
       if (decodedText) {
         onScanSuccess(decodedText);
@@ -29,8 +91,8 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
       await html5QrCode.clear();
       
     } catch (err) {
-      console.error("Error leyendo QR:", err);
-      setErrorMsg("Error al leer el QR: " + (err.message || "Imagen no válida"));
+      console.error("❌ Error leyendo QR:", err);
+      setErrorMsg("No se pudo leer el QR. Asegúrate de que esté bien enfocado y con buena luz.");
       onScanError("Error al leer QR");
     } finally {
       setProcesando(false);
@@ -81,6 +143,11 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
         {procesando ? '⏳ PROCESANDO...' : '📷 SACAR FOTO AL QR'}
       </button>
       
+      {/* Instrucciones */}
+      <p className="text-xs text-slate-500 text-center mb-3">
+        💡 Enfoca bien el QR, mantén el celular firme y con buena luz
+      </p>
+      
       {/* O subir imagen */}
       <div className="relative mt-2">
         <input
@@ -102,7 +169,7 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
           <div className="w-full border-t border-slate-700"></div>
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-slate-900 px-2 text-slate-500">O prueba manualmente</span>
+          <span className="bg-slate-900 px-2 text-slate-500">Prueba manual</span>
         </div>
       </div>
       
@@ -113,11 +180,11 @@ const SimpleQRScanner = ({ onScanSuccess, onScanError }) => {
           value={textoManual}
           onChange={(e) => setTextoManual(e.target.value)}
           placeholder="Pega aquí la URL del QR"
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-xs outline-none focus:ring-2 focus:ring-blue-500"
         />
         <button
           onClick={handleTextoManual}
-          className="bg-green-600 hover:bg-green-500 text-white font-bold px-4 rounded-xl transition-all"
+          className="bg-green-600 hover:bg-green-500 text-white font-bold px-4 rounded-xl transition-all text-sm"
         >
           Validar
         </button>
