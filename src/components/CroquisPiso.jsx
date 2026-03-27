@@ -79,46 +79,56 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   };
 
   const subirCroquis = async (file) => {
-    if (!file) return;
+  if (!file) return;
+  
+  console.log("1. Archivo seleccionado:", file.name, file.size);
+  setMensaje("📤 Subiendo croquis...");
+  
+  try {
+    const fileName = `croquis_${pisoId}_${Date.now()}.png`;
+    console.log("2. Nombre archivo:", fileName);
     
-    setMensaje("📤 Subiendo croquis...");
+    // Subir a Supabase Storage
+    const { data, error } = await supabase.storage
+      .from('croquis')
+      .upload(fileName, file);
     
-    try {
-      const fileName = `croquis_${pisoId}_${Date.now()}.png`;
-      
-      // Subir a Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('croquis')
-        .upload(fileName, file);
-      
-      if (error) throw error;
-      
-      const { data: urlData } = supabase.storage
-        .from('croquis')
-        .getPublicUrl(fileName);
-      
-      // Guardar referencia en BD
-      const { error: insertError } = await supabase
-        .from('croquis_pisos')
-        .insert({
-          piso_id: pisoId,
-          nombre_archivo: fileName,
-          imagen_url: urlData.publicUrl,
-          subido_en: new Date().toISOString()
-        });
-      
-      if (insertError) throw insertError;
-      
-      setMensaje("✅ Croquis subido correctamente");
-      setTimeout(() => setMensaje(''), 2000);
-      cargarCroquis();
-      
-    } catch (error) {
-      console.error("Error subiendo:", error);
-      setMensaje("❌ Error al subir croquis");
-      setTimeout(() => setMensaje(''), 2000);
-    }
-  };
+    console.log("3. Resultado upload:", { data, error });
+    
+    if (error) throw error;
+    
+    const { data: urlData } = supabase.storage
+      .from('croquis')
+      .getPublicUrl(fileName);
+    
+    console.log("4. URL pública:", urlData.publicUrl);
+    
+    // Guardar referencia en BD
+    const { error: insertError } = await supabase
+      .from('croquis_pisos')
+      .insert({
+        piso_id: pisoId,
+        nombre_archivo: fileName,
+        imagen_url: urlData.publicUrl,
+        version: 1,
+        activo: true,
+        subido_en: new Date().toISOString()
+      });
+    
+    console.log("5. Resultado insert:", { insertError });
+    
+    if (insertError) throw insertError;
+    
+    setMensaje("✅ Croquis subido correctamente");
+    setTimeout(() => setMensaje(''), 2000);
+    cargarCroquis();
+    
+  } catch (error) {
+    console.error("❌ Error completo:", error);
+    setMensaje(`❌ Error: ${error.message}`);
+    setTimeout(() => setMensaje(''), 3000);
+  }
+};
 
   const guardarCoordenada = async (habitacionId, x, y) => {
     if (!croquis) return;
