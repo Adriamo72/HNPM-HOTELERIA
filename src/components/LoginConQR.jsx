@@ -29,71 +29,54 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
 
   // Cargar scanner SOLO en modo operador (cuando hay un sector)
   useEffect(() => {
-    if (esModoAdmin) return; // No cargar scanner en modo admin
-    
-    const loadScanner = async () => {
-      try {
-        const { Html5QrcodeScanner } = await import('html5-qrcode');
-        
-        const container = document.getElementById("qr-reader");
-        if (container) {
-          container.innerHTML = '';
-        }
-        
-        scannerRef.current = new Html5QrcodeScanner(
-          "qr-reader",
-          {
-            fps: 10,
-            qrbox: { width: 280, height: 280 },
-            aspectRatio: 1.0,
-            showTorchButtonIfSupported: true,
-            showZoomSliderIfSupported: true,
-            defaultZoomValueIfSupported: 2,
-            formatsToSupport: [ Html5QrcodeScanner.QR_CODE ],
-            videoConstraints: {
-              facingMode: { exact: "environment" }
-            }
-          },
-          false
-        );
-        
-        scannerRef.current.render(onScanSuccess, onScanError);
-        setCamaraActiva(true);
-        
-      } catch (err) {
-        console.error("Error cargando scanner:", err);
-        try {
-          const { Html5QrcodeScanner } = await import('html5-qrcode');
-          
-          scannerRef.current = new Html5QrcodeScanner(
-            "qr-reader",
-            {
-              fps: 10,
-              qrbox: { width: 280, height: 280 },
-              aspectRatio: 1.0,
-              showTorchButtonIfSupported: true,
-              showZoomSliderIfSupported: true,
-              formatsToSupport: [ Html5QrcodeScanner.QR_CODE ]
-            },
-            false
-          );
-          
-          scannerRef.current.render(onScanSuccess, onScanError);
-          setCamaraActiva(true);
-        } catch (err2) {
-          setError("Error al iniciar la cámara. Verifica permisos.");
-        }
+  if (esModoAdmin) return; // No cargar scanner en modo admin
+  
+  const loadScanner = async () => {
+    try {
+      const { Html5QrcodeScanner } = await import('html5-qrcode');
+      
+      const container = document.getElementById("qr-reader");
+      if (container) {
+        container.innerHTML = '';
       }
-    };
-    
-    loadScanner();
-    
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(console.error);
-      }
-    };
-  }, [esModoAdmin]);
+      
+      // Configuración que permite cualquier cámara, priorizando trasera
+      scannerRef.current = new Html5QrcodeScanner(
+        "qr-reader",
+        {
+          fps: 10,
+          qrbox: { width: 280, height: 280 },
+          aspectRatio: 1.0,
+          showTorchButtonIfSupported: true,
+          showZoomSliderIfSupported: true,
+          defaultZoomValueIfSupported: 2,
+          formatsToSupport: [ Html5QrcodeScanner.QR_CODE ],
+          // No forzar facingMode exacto, dejar que el usuario elija
+          videoConstraints: {
+            // Usar 'environment' como preferencia, no como obligación
+            facingMode: { ideal: "environment" }
+          }
+        },
+        false
+      );
+      
+      scannerRef.current.render(onScanSuccess, onScanError);
+      setCamaraActiva(true);
+      
+    } catch (err) {
+      console.error("Error cargando scanner:", err);
+      setError("Error al iniciar la cámara. Verifica permisos.");
+    }
+  };
+  
+  loadScanner();
+  
+  return () => {
+    if (scannerRef.current) {
+      scannerRef.current.clear().catch(console.error);
+    }
+  };
+}, [esModoAdmin]);
 
   const onScanSuccess = async (decodedText) => {
     if (verificando) return;
