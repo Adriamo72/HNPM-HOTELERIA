@@ -411,11 +411,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
       style={{
         left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
         top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-        width: 'min(4%, 60px)',
-        height: 'min(5%, 45px)',
+        width: 'min(2.2%, 34px)',
+        height: 'min(6.5%, 55px)',
         transform: 'translate(-50%, -50%)',
-        minWidth: '45px',
-        minHeight: '35px'
+        minWidth: '32px',
+        minHeight: '48px',
+        padding: '2px 0'
       }}
       title={`${hab.nombre}: ${pacientes} paciente${pacientes !== 1 ? 's' : ''}${ocup?.observaciones ? ` - ${ocup.observaciones}` : ''}`}
     >
