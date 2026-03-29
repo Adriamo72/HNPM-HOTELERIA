@@ -7,12 +7,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   const [croquis, setCroquis] = useState(null);
   const [coordenadas, setCoordenadas] = useState({});
   const [modoEdicion, setModoEdicion] = useState(false);
-  const [modoMovimiento, setModoMovimiento] = useState(false); // 👈 Modo arrastre
+  const [modoMovimiento, setModoMovimiento] = useState(false);
   const [ocupacion, setOcupacion] = useState({});
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState('');
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0]);
-  const [imagenInvertida, setImagenInvertida] = useState(false);
   
   // Estados para zoom y arrastre
   const [zoom, setZoom] = useState(1);
@@ -20,6 +19,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   const [arrastrando, setArrastrando] = useState(false);
   const [puntoInicio, setPuntoInicio] = useState({ x: 0, y: 0 });
   const [habitacionArrastrada, setHabitacionArrastrada] = useState(null);
+  const [habitacionSeleccionada, setHabitacionSeleccionada] = useState(null); // 👈 Para edición
   
   const imageRef = useRef(null);
   const containerRef = useRef(null);
@@ -45,11 +45,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     setZoom(prev => Math.min(Math.max(prev + delta, 0.5), 3));
   };
 
-  // Manejar inicio de arrastre del contenedor
+  // Manejar inicio de arrastre
   const handleMouseDown = (e) => {
     if (!modoEdicion || modoMovimiento) return;
     
-    // Verificar si se hizo click en un marcador
     const target = e.target.closest('.marcador-habitacion');
     if (target && target.dataset.habitacionId) {
       // Iniciar arrastre de habitación
@@ -78,7 +77,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
       const x = (e.clientX - rect.left) * scaleX;
       const y = (e.clientY - rect.top) * scaleY;
       
-      // Actualizar coordenada temporalmente
       setCoordenadas(prev => ({
         ...prev,
         [habitacionArrastrada]: { ...prev[habitacionArrastrada], x, y }
@@ -94,7 +92,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
 
   const handleMouseUp = async () => {
     if (arrastrando && habitacionArrastrada) {
-      // Guardar nueva posición en la base de datos
       const coord = coordenadas[habitacionArrastrada];
       if (coord) {
         await guardarCoordenada(habitacionArrastrada, coord.x, coord.y);
@@ -104,6 +101,84 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     }
     setArrastrando(false);
     setHabitacionArrastrada(null);
+  };
+
+  // Editar número de habitación
+  const editarHabitacion = async (habitacionId, nombreActual) => {
+    const nuevoNombre = prompt(
+      `Editar habitación\n\nActual: ${nombreActual}\n\nIngresa el nuevo número de habitación:`,
+      nombreActual
+    );
+    
+    if (nuevoNombre && nuevoNombre !== nombreActual) {
+      // Verificar que el nuevo nombre no exista ya
+      const existe = habitaciones.some(h => h.nombre === nuevoNombre && h.id !== habitacionId);
+      if (existe) {
+        setMensaje(`❌ La habitación ${nuevoNombre} ya existe`);
+        setTimeout(() => setMensaje(''), 2000);
+        return;
+      }
+      
+      try {
+        // Actualizar nombre en la tabla habitaciones_especiales
+        const { error } = await supabase
+          .from('habitaciones_especiales')
+          .update({ 
+            nombre: nuevoNombre,
+            slug: `${pisoId}-${nuevoNombre.toLowerCase()}`
+          })
+          .eq('id', habitacionId);
+        
+        if (error) throw error;
+        
+        // Actualizar lista local de habitaciones
+        const habIndex = habitaciones.findIndex(h => h.id === habitacionId);
+        if (habIndex !== -1) {
+          habitaciones[habIndex].nombre = nuevoNombre;
+        }
+        
+        setMensaje(`✅ Habitación actualizada a ${nuevoNombre}`);
+        setTimeout(() => setMensaje(''), 1500);
+        
+        // Recargar para actualizar la lista
+        window.location.reload();
+        
+      } catch (error) {
+        console.error("Error:", error);
+        setMensaje("❌ Error al actualizar habitación");
+        setTimeout(() => setMensaje(''), 2000);
+      }
+    }
+  };
+
+  // Eliminar habitación (coordenada)
+  const eliminarHabitacion = async (habitacionId, nombre) => {
+    if (window.confirm(`¿Eliminar la habitación "${nombre}" del croquis?\n\nSolo se eliminará su posición, no la habitación de la base de datos.`)) {
+      try {
+        const { error } = await supabase
+          .from('habitacion_coordenadas')
+          .delete()
+          .eq('habitacion_id', habitacionId)
+          .eq('croquis_id', croquis.id);
+        
+        if (error) throw error;
+        
+        // Eliminar del estado local
+        setCoordenadas(prev => {
+          const nuevas = { ...prev };
+          delete nuevas[habitacionId];
+          return nuevas;
+        });
+        
+        setMensaje(`✅ Posición de ${nombre} eliminada`);
+        setTimeout(() => setMensaje(''), 1500);
+        
+      } catch (error) {
+        console.error("Error:", error);
+        setMensaje("❌ Error al eliminar posición");
+        setTimeout(() => setMensaje(''), 2000);
+      }
+    }
   };
 
   const cargarOcupacion = async () => {
@@ -141,7 +216,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
 
       if (croquisData) {
         setCroquis(croquisData);
-        setImagenInvertida(false);
         
         const { data: coords } = await supabase
           .from('habitacion_coordenadas')
@@ -187,33 +261,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
       setMensaje("❌ Error al eliminar croquis");
       setTimeout(() => setMensaje(''), 2000);
     }
-  };
-
-  const invertirImagen = () => {
-    if (!imageRef.current) return;
-    
-    const img = imageRef.current;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    ctx.drawImage(img, 0, 0);
-    
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = 255 - data[i];
-      data[i+1] = 255 - data[i+1];
-      data[i+2] = 255 - data[i+2];
-    }
-    
-    ctx.putImageData(imageData, 0, 0);
-    img.src = canvas.toDataURL('image/png');
-    setImagenInvertida(true);
-    setMensaje("✅ Colores invertidos");
-    setTimeout(() => setMensaje(''), 2000);
   };
 
   const subirCroquis = async (file) => {
@@ -296,8 +343,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     
     const habitacionNombre = prompt(
       `¿Qué habitación está en esta ubicación?\n\n` +
-      `Habitaciones disponibles:\n${habitaciones.map(h => `- ${h.nombre}`).join('\n')}\n\n` +
-      `Ingresa el nombre exacto:`
+      `Habitaciones disponibles (36 total):\n` +
+      `Izquierda: 601,603,605,607,609,611,613,615,617,619,621,623,625,627,629,631,633,635\n` +
+      `Derecha: 602,604,606,608,610,612,614,616,618,620,622,624,626,628,630,632,634,636\n\n` +
+      `Ingresa el número exacto:`
     );
     
     if (habitacionNombre) {
@@ -319,6 +368,26 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     if (pacientes === 1) return 'bg-yellow-500/90 border-yellow-300 text-black';
     if (pacientes === 2) return 'bg-orange-500/90 border-orange-300 text-white';
     return 'bg-red-500/90 border-red-300 text-white';
+  };
+
+  // Click derecho para editar/eliminar
+  const handleContextMenu = (e, habId, nombre) => {
+    e.preventDefault();
+    if (!modoEdicion) return;
+    
+    const opcion = prompt(
+      `Habitación: ${nombre}\n\n` +
+      `Opciones:\n` +
+      `1 - Editar número\n` +
+      `2 - Eliminar posición\n\n` +
+      `Ingresa 1 o 2:`
+    );
+    
+    if (opcion === '1') {
+      editarHabitacion(habId, nombre);
+    } else if (opcion === '2') {
+      eliminarHabitacion(habId, nombre);
+    }
   };
 
   if (cargando) {
@@ -353,18 +422,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
           <h3 className="text-xl font-bold text-blue-400">{pisoNombre}</h3>
           <p className="text-xs text-slate-500">
             {modoEdicion ? (
-              modoMovimiento ? '🖱️ Modo Movimiento - Arrastra marcadores' : '✎ Modo Edición - Click para posicionar'
+              modoMovimiento ? '🖱️ Modo Movimiento - Arrastra marcadores | Click derecho para editar/eliminar' : '✎ Modo Edición - Click para posicionar | Click derecho para editar/eliminar'
             ) : '👁️ Modo Visualización'}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <input type="date" value={fechaSeleccionada} onChange={(e) => setFechaSeleccionada(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-          
-          {croquis && !imagenInvertida && (
-            <button onClick={invertirImagen} className="px-4 py-2 rounded-lg text-sm font-bold bg-purple-600 hover:bg-purple-500">
-              🎨 Invertir colores
-            </button>
-          )}
           
           <button
             onClick={() => {
@@ -420,7 +483,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
             draggable={false}
           />
           
-          {/* Marcadores de habitaciones - movibles */}
+          {/* Marcadores de habitaciones */}
           {habitaciones.map(hab => {
             const coord = coordenadas[hab.id];
             if (!coord) return null;
@@ -433,7 +496,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
               <div
                 key={hab.id}
                 data-habitacion-id={hab.id}
-                className={`marcador-habitacion absolute rounded-md border-2 ${estiloColor} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 cursor-${modoMovimiento ? 'grab' : 'pointer'}`}
+                className={`marcador-habitacion absolute rounded-md border-2 ${estiloColor} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                 style={{
                   left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                   top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
@@ -444,7 +507,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
                   minHeight: '48px',
                   padding: '2px 0'
                 }}
-                title={`${hab.nombre}: ${pacientes} paciente${pacientes !== 1 ? 's' : ''}`}
+                title={`${hab.nombre}: ${pacientes} paciente${pacientes !== 1 ? 's' : ''} | Click derecho para editar/eliminar`}
+                onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
               >
                 <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
                 <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{pacientes}</span>
@@ -467,7 +531,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
             🔍 Zoom: {Math.round(zoom * 100)}% | 🖱️ {modoMovimiento ? 'Arrastra marcadores' : (modoEdicion ? 'Click para posicionar' : 'Solo visualización')}
           </div>
           {modoEdicion && (
-            <p className="text-yellow-400 text-xs">{modoMovimiento ? '🖱️ Arrastra cualquier marcador para moverlo' : '✏️ Click en el croquis para posicionar nuevas habitaciones'}</p>
+            <p className="text-yellow-400 text-xs">
+              {modoMovimiento ? '🖱️ Arrastra cualquier marcador para moverlo' : '✏️ Click en el croquis para posicionar nuevas habitaciones'}
+              {' | '}🖱️ Click derecho sobre marcador para editar número o eliminar posición
+            </p>
           )}
         </div>
         {mensaje && (
