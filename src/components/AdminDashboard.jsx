@@ -40,6 +40,7 @@ const AdminDashboard = () => {
   const [nuevoPiso, setNuevoPiso] = useState({ nombre_piso: '' });
   const [pisoSeleccionado, setPisoSeleccionado] = useState('');
   const [habitacionStatus, setHabitacionStatus] = useState({});
+  const [habitacionesAbiertas, setHabitacionesAbiertas] = useState({});
   const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
   const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
@@ -133,6 +134,10 @@ const AdminDashboard = () => {
       }
 
       mostrarSplash('✅ Estado guardado');
+      setHabitacionesAbiertas(prev => ({
+        ...prev,
+        [habId]: false
+      }));
       const habitacion = habitacionesEspeciales.find(h => h.id === habId);
       setHabitacionStatus(prev => ({
         ...prev,
@@ -1519,7 +1524,14 @@ const cargarHabitacionesDelPiso = async () => {
 
                           return (
                             <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] ${statusBg}`}>
-                              <details className="group">
+                              <details
+                                className="group"
+                                open={!!habitacionesAbiertas[hab.id]}
+                                onToggle={(e) => setHabitacionesAbiertas(prev => ({
+                                  ...prev,
+                                  [hab.id]: e.target.open
+                                }))}
+                              >
                                 <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
                                   <div>
                                     <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
@@ -1528,16 +1540,16 @@ const cargarHabitacionesDelPiso = async () => {
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
+                                    <span className="text-slate-400 text-[10px] uppercase tracking-[0.2em]">
+                                      {`VER CONFIG.`}
+                                    </span>
                                     <button 
                                       onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }}
-                                      className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all"
+                                      className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
                                       title="Eliminar habitación"
                                     >
                                       ×
                                     </button>
-                                    <span className="text-slate-400 text-[10px] uppercase tracking-[0.2em] group-open:text-white">
-                                      {`Ver ${config.tipo === 'INTERNACION' ? 'detalle' : 'config.'}`}
-                                    </span>
                                   </div>
                                 </summary>
 
