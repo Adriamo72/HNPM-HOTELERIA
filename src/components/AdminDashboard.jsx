@@ -97,7 +97,10 @@ const AdminDashboard = () => {
           camas_ocupadas: estado?.camas_ocupadas || 0
         };
       });
-      setHabitacionStatus(next);
+      setHabitacionStatus(prev => ({
+        ...prev,
+        ...next
+      }));
     } catch (error) {
       console.error('Error cargando estado de habitaciones:', error);
     }
@@ -131,6 +134,15 @@ const AdminDashboard = () => {
 
       mostrarSplash('✅ Estado guardado');
       const habitacion = habitacionesEspeciales.find(h => h.id === habId);
+      setHabitacionStatus(prev => ({
+        ...prev,
+        [habId]: {
+          ...config,
+          camas: config.tipo === 'INTERNACION' ? config.camas : '1',
+          texto: config.tipo === 'OTROS' ? config.texto : '',
+          camas_ocupadas: config.tipo === 'INTERNACION' ? (config.camas_ocupadas || 0) : 0
+        }
+      }));
       if (habitacion) await cargarEstadoHabitaciones([habitacion]);
     } catch (error) {
       console.error('Error guardando estado de habitación:', error);
