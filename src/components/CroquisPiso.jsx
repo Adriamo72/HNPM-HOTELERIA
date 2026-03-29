@@ -397,33 +397,33 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         
         {/* Marcadores de habitaciones - tamaño responsivo 2% del ancho */}
         {habitaciones.map(hab => {
-          const coord = coordenadas[hab.id];
-          if (!coord) return null;
-          
-          const ocup = ocupacion[hab.id];
-          const pacientes = ocup?.pacientes ?? 0;
-          const estiloColor = getColorPorOcupacion(pacientes);
-          
-          return (
-            <div
-              key={hab.id}
-              className={`absolute rounded-lg border-2 ${estiloColor} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 cursor-pointer`}
-              style={{
-                left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
-                top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                width: 'min(2.5%, 45px)',
-                height: 'min(2.5%, 45px)',
-                transform: 'translate(-50%, -50%)',
-                minWidth: '30px',
-                minHeight: '30px'
-              }}
-              title={`${hab.nombre}: ${pacientes} paciente${pacientes !== 1 ? 's' : ''}${ocup?.observaciones ? ` - ${ocup.observaciones}` : ''}`}
-            >
-              <span className="text-[clamp(8px,1.5vw,12px)] font-bold hidden sm:block">{hab.nombre}</span>
-              <span className="text-[clamp(10px,2vw,16px)] font-black">{pacientes}</span>
-            </div>
-          );
-        })}
+  const coord = coordenadas[hab.id];
+  if (!coord) return null;
+  
+  const ocup = ocupacion[hab.id];
+  const pacientes = ocup?.pacientes ?? 0;
+  const estiloColor = getColorPorOcupacion(pacientes);
+  
+  return (
+    <div
+      key={hab.id}
+      className={`absolute rounded-md border-2 ${estiloColor} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 cursor-pointer`}
+      style={{
+        left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
+        top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
+        width: 'min(4%, 60px)',
+        height: 'min(5%, 45px)',
+        transform: 'translate(-50%, -50%)',
+        minWidth: '45px',
+        minHeight: '35px'
+      }}
+      title={`${hab.nombre}: ${pacientes} paciente${pacientes !== 1 ? 's' : ''}${ocup?.observaciones ? ` - ${ocup.observaciones}` : ''}`}
+    >
+      <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
+      <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{pacientes}</span>
+    </div>
+  );
+})}
       </div>
 
       {/* Leyenda y mensajes */}
