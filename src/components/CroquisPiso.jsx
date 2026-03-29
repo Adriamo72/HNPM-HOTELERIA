@@ -55,6 +55,18 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     }
   }, [ocupacion, habitaciones]);
 
+  useEffect(() => {
+  // Limpiar completamente cuando cambia el piso
+  return () => {
+    // Cleanup function que se ejecuta antes del próximo render
+    setCroquis(null);
+    setCoordenadas({});
+    setOcupacion({});
+    setCargando(true);
+    setEstadisticas({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
+  };
+}, [pisoId]);
+
   // Calcular estadísticas de camas
   const calcularEstadisticas = () => {
     let totalCamas = 0;
