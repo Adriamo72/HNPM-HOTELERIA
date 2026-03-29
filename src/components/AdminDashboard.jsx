@@ -1536,10 +1536,29 @@ const cargarHabitacionesDelPiso = async () => {
                                   <div>
                                     <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
                                     <span className={`inline-flex items-center gap-1 mt-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText}`}>
-                                      {config.tipo === 'INTERNACION' ? 'INTERNACIÓN' : config.tipo === 'EN REPARACION' ? 'EN REPARACIÓN' : 'OTROS'}
+                                      {config.tipo === 'INTERNACION'
+                                        ? 'INTERNACIÓN'
+                                        : config.tipo === 'EN REPARACION'
+                                          ? 'EN REPARACIÓN'
+                                          : `OTROS (${config.texto || 'Pañol de Traumatología'})`}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
+                                    {(config.tipo === 'INTERNACION' || config.tipo === 'OTROS') && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation();
+                                          if (config.tipo === 'INTERNACION') {
+                                            descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`);
+                                          } else {
+                                            descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`);
+                                          }
+                                        }}
+                                        className="inline-flex items-center gap-1 bg-slate-800/80 text-slate-200 border border-slate-600/40 px-2 py-1 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
+                                        title={config.tipo === 'INTERNACION' ? 'QR Ocupación' : 'QR Ropa limpia'}
+                                      >
+                                        {config.tipo === 'INTERNACION' ? 'QR OCP' : 'QR ROPA'}
+                                      </button>
+                                    )}
                                     <span className="text-slate-400 text-[10px] uppercase tracking-[0.2em]">
                                       {`VER CONFIG.`}
                                     </span>
