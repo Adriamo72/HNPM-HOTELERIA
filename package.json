@@ -17,6 +17,7 @@
     "react-dom": "^19.2.4",
     "react-image-crop": "^11.0.10",
     "react-qr-code": "^2.0.18",
+    "react-quick-pinch-zoom": "^5.1.1",
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
