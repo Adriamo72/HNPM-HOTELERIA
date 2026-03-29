@@ -12,6 +12,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState('');
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0]);
+  const [estadisticas, setEstadisticas] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
+  const [mostrarEstadisticas, setMostrarEstadisticas] = useState(true);
   
   // Estados para zoom y arrastre
   const [zoom, setZoom] = useState(1);
@@ -19,22 +21,56 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   const [arrastrando, setArrastrando] = useState(false);
   const [puntoInicio, setPuntoInicio] = useState({ x: 0, y: 0 });
   const [habitacionArrastrada, setHabitacionArrastrada] = useState(null);
-  const [habitacionSeleccionada, setHabitacionSeleccionada] = useState(null); // 👈 Para edición
   
   const imageRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Cargar ocupación al cambiar fecha
+  // RESETEAR cuando cambia el piso
   useEffect(() => {
-    if (habitaciones.length > 0) {
+    // Resetear todos los estados cuando cambia el piso
+    setCroquis(null);
+    setCoordenadas({});
+    setOcupacion({});
+    setCargando(true);
+    setZoom(1);
+    setPosicion({ x: 0, y: 0 });
+    setModoEdicion(false);
+    setModoMovimiento(false);
+    
+    // Cargar nuevo croquis
+    cargarCroquis();
+  }, [pisoId]); // 👈 Dependencia en pisoId
+
+  // Cargar ocupación al cambiar fecha o piso
+  useEffect(() => {
+    if (habitaciones.length > 0 && pisoId) {
       cargarOcupacion();
     }
-  }, [fechaSeleccionada, habitaciones]);
+  }, [fechaSeleccionada, pisoId, habitaciones]);
 
-  // Cargar croquis al montar
+  // Calcular estadísticas cuando cambia ocupación
   useEffect(() => {
-    cargarCroquis();
-  }, [pisoId]);
+    if (Object.keys(ocupacion).length > 0 || habitaciones.length > 0) {
+      calcularEstadisticas();
+    }
+  }, [ocupacion, habitaciones]);
+
+  // Calcular estadísticas de camas
+  const calcularEstadisticas = () => {
+    let totalCamas = 0;
+    let camasOcupadas = 0;
+    
+    habitaciones.forEach(hab => {
+      const ocup = ocupacion[hab.id];
+      if (ocup && ocup.tipo_habitacion === 'activa') {
+        totalCamas += ocup.total_camas || 1;
+        camasOcupadas += ocup.camas_ocupadas || 0;
+      }
+    });
+    
+    const porcentaje = totalCamas > 0 ? (camasOcupadas / totalCamas) * 100 : 0;
+    setEstadisticas({ totalCamas, camasOcupadas, porcentaje });
+  };
 
   // Manejar zoom con rueda
   const handleWheel = (e) => {
@@ -51,7 +87,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     
     const target = e.target.closest('.marcador-habitacion');
     if (target && target.dataset.habitacionId) {
-      // Iniciar arrastre de habitación
       setHabitacionArrastrada(target.dataset.habitacionId);
       setArrastrando(true);
       setPuntoInicio({ x: e.clientX, y: e.clientY });
@@ -59,7 +94,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
       return;
     }
     
-    // Si no se clickeó un marcador, arrastrar el croquis
     setArrastrando(true);
     setPuntoInicio({ x: e.clientX - posicion.x, y: e.clientY - posicion.y });
   };
@@ -68,7 +102,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     if (!arrastrando) return;
     
     if (habitacionArrastrada) {
-      // Arrastrar habitación
       const rect = containerRef.current.getBoundingClientRect();
       const imgElement = imageRef.current;
       const scaleX = imgElement.naturalWidth / rect.width / zoom;
@@ -82,7 +115,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         [habitacionArrastrada]: { ...prev[habitacionArrastrada], x, y }
       }));
     } else {
-      // Arrastrar croquis
       setPosicion({
         x: e.clientX - puntoInicio.x,
         y: e.clientY - puntoInicio.y
@@ -111,7 +143,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     );
     
     if (nuevoNombre && nuevoNombre !== nombreActual) {
-      // Verificar que el nuevo nombre no exista ya
       const existe = habitaciones.some(h => h.nombre === nuevoNombre && h.id !== habitacionId);
       if (existe) {
         setMensaje(`❌ La habitación ${nuevoNombre} ya existe`);
@@ -120,7 +151,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
       }
       
       try {
-        // Actualizar nombre en la tabla habitaciones_especiales
         const { error } = await supabase
           .from('habitaciones_especiales')
           .update({ 
@@ -131,16 +161,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         
         if (error) throw error;
         
-        // Actualizar lista local de habitaciones
-        const habIndex = habitaciones.findIndex(h => h.id === habitacionId);
-        if (habIndex !== -1) {
-          habitaciones[habIndex].nombre = nuevoNombre;
-        }
-        
         setMensaje(`✅ Habitación actualizada a ${nuevoNombre}`);
         setTimeout(() => setMensaje(''), 1500);
         
-        // Recargar para actualizar la lista
+        // Recargar para actualizar
         window.location.reload();
         
       } catch (error) {
@@ -151,7 +175,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     }
   };
 
-  // Eliminar habitación (coordenada)
+  // Eliminar posición de habitación
   const eliminarHabitacion = async (habitacionId, nombre) => {
     if (window.confirm(`¿Eliminar la habitación "${nombre}" del croquis?\n\nSolo se eliminará su posición, no la habitación de la base de datos.`)) {
       try {
@@ -163,7 +187,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         
         if (error) throw error;
         
-        // Eliminar del estado local
         setCoordenadas(prev => {
           const nuevas = { ...prev };
           delete nuevas[habitacionId];
@@ -182,12 +205,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   };
 
   const cargarOcupacion = async () => {
-    if (!habitaciones.length) return;
+    if (!habitaciones.length || !pisoId) return;
     
     try {
       const { data, error } = await supabase
         .from('ocupacion_habitaciones')
-        .select('habitacion_id, pacientes, observaciones')
+        .select('*')
         .eq('fecha', fechaSeleccionada)
         .in('habitacion_id', habitaciones.map(h => h.id));
 
@@ -204,6 +227,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   };
 
   const cargarCroquis = async () => {
+    if (!pisoId) return;
+    
     setCargando(true);
     try {
       const { data: croquisData } = await supabase
@@ -227,9 +252,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
           coordsMap[c.habitacion_id] = { x: c.x, y: c.y, ancho: c.ancho, alto: c.alto };
         });
         setCoordenadas(coordsMap);
+      } else {
+        setCroquis(null);
       }
     } catch (error) {
       console.error("Error cargando croquis:", error);
+      setCroquis(null);
     } finally {
       setCargando(false);
     }
@@ -343,10 +371,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     
     const habitacionNombre = prompt(
       `¿Qué habitación está en esta ubicación?\n\n` +
-      `Habitaciones disponibles (36 total):\n` +
-      `Izquierda: 601,603,605,607,609,611,613,615,617,619,621,623,625,627,629,631,633,635\n` +
-      `Derecha: 602,604,606,608,610,612,614,616,618,620,622,624,626,628,630,632,634,636\n\n` +
-      `Ingresa el número exacto:`
+      `Habitaciones disponibles:\n${habitaciones.map(h => `- ${h.nombre}`).join('\n')}\n\n` +
+      `Ingresa el nombre exacto:`
     );
     
     if (habitacionNombre) {
@@ -363,11 +389,36 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     }
   };
 
-  const getColorPorOcupacion = (pacientes) => {
-    if (pacientes === 0) return 'bg-green-500/90 border-green-300 text-white';
-    if (pacientes === 1) return 'bg-yellow-500/90 border-yellow-300 text-black';
-    if (pacientes === 2) return 'bg-orange-500/90 border-orange-300 text-white';
-    return 'bg-red-500/90 border-red-300 text-white';
+  const getColorPorTipoYOcupacion = (habitacion, ocup) => {
+    if (!ocup) return { bg: 'bg-gray-500/50 border-gray-400', text: 'text-white', blink: false, title: 'Sin registrar' };
+    
+    switch (ocup.tipo_habitacion) {
+      case 'reparacion':
+        return { 
+          bg: 'bg-yellow-500/80 border-yellow-400', 
+          text: 'text-black', 
+          blink: false,
+          title: 'En reparación'
+        };
+      case 'otros':
+        return { 
+          bg: 'bg-gray-500/80 border-gray-400', 
+          text: 'text-white', 
+          blink: false,
+          title: ocup.observaciones || 'Otros'
+        };
+      case 'activa':
+        const camasDisponibles = (ocup.total_camas || 1) - (ocup.camas_ocupadas || 0);
+        const parpadeo = camasDisponibles > 0;
+        return {
+          bg: 'bg-green-500/80 border-green-400',
+          text: 'text-white',
+          blink: parpadeo,
+          title: `${ocup.camas_ocupadas}/${ocup.total_camas} camas ocupadas, ${camasDisponibles} disponibles`
+        };
+      default:
+        return { bg: 'bg-gray-500/50 border-gray-400', text: 'text-white', blink: false, title: 'Sin estado' };
+    }
   };
 
   // Click derecho para editar/eliminar
@@ -405,7 +456,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
       <div className="bg-slate-800 rounded-xl p-8 text-center border border-dashed border-slate-600">
         <div className="text-6xl mb-4">🗺️</div>
         <h3 className="text-xl font-bold text-white mb-2">Croquis no disponible</h3>
-        <p className="text-slate-400 mb-4">Sube la imagen del PISO 6</p>
+        <p className="text-slate-400 mb-4">Sube la imagen del croquis para {pisoNombre}</p>
         <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2">
           📤 Subir croquis (PNG/JPG)
           <input type="file" accept="image/png,image/jpeg,image/jpg" className="hidden" onChange={(e) => e.target.files[0] && subirCroquis(e.target.files[0])} />
@@ -455,10 +506,35 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         </div>
       </div>
 
+      {/* Panel de estadísticas */}
+      {mostrarEstadisticas && estadisticas.totalCamas > 0 && (
+        <div className="bg-slate-800/50 p-3 mx-4 mt-2 rounded-lg">
+          <div className="flex justify-between items-center">
+            <div className="flex gap-4 text-sm">
+              <span className="text-green-400">🛏️ Total camas: {estadisticas.totalCamas}</span>
+              <span className="text-yellow-400">👥 Ocupadas: {estadisticas.camasOcupadas}</span>
+              <span className="text-blue-400">📊 Ocupación: {estadisticas.porcentaje.toFixed(1)}%</span>
+            </div>
+            <button
+              onClick={() => setMostrarEstadisticas(false)}
+              className="text-xs text-slate-500 hover:text-white"
+            >
+              ✖️
+            </button>
+          </div>
+          <div className="w-full bg-slate-700 rounded-full h-2 mt-2">
+            <div 
+              className="bg-green-500 h-2 rounded-full transition-all duration-500"
+              style={{ width: `${estadisticas.porcentaje}%` }}
+            ></div>
+          </div>
+        </div>
+      )}
+
       {/* Área del croquis con zoom y arrastre */}
       <div 
         ref={containerRef}
-        className="relative overflow-hidden bg-slate-950"
+        className="relative overflow-hidden bg-slate-950 mt-2"
         style={{ height: '70vh', cursor: modoMovimiento ? 'grab' : (modoEdicion ? 'crosshair' : 'default') }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
@@ -489,14 +565,24 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
             if (!coord) return null;
             
             const ocup = ocupacion[hab.id];
-            const pacientes = ocup?.pacientes ?? 0;
-            const estiloColor = getColorPorOcupacion(pacientes);
+            const estilo = getColorPorTipoYOcupacion(hab, ocup);
+            
+            let displayTexto = '';
+            if (!ocup) {
+              displayTexto = '?';
+            } else if (ocup.tipo_habitacion === 'activa') {
+              displayTexto = ocup.camas_ocupadas;
+            } else if (ocup.tipo_habitacion === 'reparacion') {
+              displayTexto = '🔧';
+            } else {
+              displayTexto = '⚪';
+            }
             
             return (
               <div
                 key={hab.id}
                 data-habitacion-id={hab.id}
-                className={`marcador-habitacion absolute rounded-md border-2 ${estiloColor} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
                 style={{
                   left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                   top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
@@ -507,11 +593,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
                   minHeight: '48px',
                   padding: '2px 0'
                 }}
-                title={`${hab.nombre}: ${pacientes} paciente${pacientes !== 1 ? 's' : ''} | Click derecho para editar/eliminar`}
+                title={estilo.title}
                 onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
               >
                 <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
-                <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{pacientes}</span>
+                <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
               </div>
             );
           })}
@@ -522,10 +608,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
       <div className="p-3 border-t border-slate-700">
         <div className="flex flex-wrap justify-between items-center gap-2">
           <div className="flex gap-4 text-xs">
-            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div> 0</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div> 1</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500"></div> 2</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500"></div> 3+</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div> Disponible</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div> Ocupada</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div> Reparación</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-500"></div> Otros</span>
           </div>
           <div className="text-xs text-slate-500">
             🔍 Zoom: {Math.round(zoom * 100)}% | 🖱️ {modoMovimiento ? 'Arrastra marcadores' : (modoEdicion ? 'Click para posicionar' : 'Solo visualización')}
