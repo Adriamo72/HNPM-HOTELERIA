@@ -977,6 +977,7 @@ const AdminDashboard = () => {
           
           {pisoSeleccionado ? (
             <CroquisPiso
+              key={pisoSeleccionado}  // 👈 ESTA LÍNEA ES CRUCIAL
               pisoId={pisoSeleccionado}
               pisoNombre={pisos.find(p => p.id === pisoSeleccionado)?.nombre_piso}
               habitaciones={habitacionesEspeciales.filter(h => h.piso_id === pisoSeleccionado)}
