@@ -1506,106 +1506,103 @@ const cargarHabitacionesDelPiso = async () => {
                               : 'text-slate-300';
 
                           return (
-                            <div key={hab.id} className={`rounded-lg border px-3 py-3 flex flex-col gap-3 transition-all min-w-[260px] ${statusBg}`}>
-                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                                <div>
-                                  <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
-                                  <span className={`inline-flex items-center gap-2 mt-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusText}`}>
-                                    {config.tipo === 'INTERNACION' ? 'INTERNACIÓN' : config.tipo === 'EN REPARACION' ? 'EN REPARACIÓN' : 'OTROS'}
-                                  </span>
-                                </div>
-                                <button 
-                                  onClick={() => eliminarHabitacion(hab.id, hab.nombre)} 
-                                  className="text-red-500 font-semibold text-lg px-2 py-1 rounded hover:bg-red-950/30 transition-all"
-                                  title="Eliminar habitación"
-                                >
-                                  ×
-                                </button>
-                              </div>
+                            <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] ${statusBg}`}>
+                              <details className="group">
+                                <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
+                                  <div>
+                                    <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
+                                    <span className={`inline-flex items-center gap-1 mt-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText}`}>
+                                      {config.tipo === 'INTERNACION' ? 'INTERNACIÓN' : config.tipo === 'EN REPARACION' ? 'EN REPARACIÓN' : 'OTROS'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }}
+                                      className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all"
+                                      title="Eliminar habitación"
+                                    >
+                                      ×
+                                    </button>
+                                    <span className="text-slate-400 text-[10px] uppercase tracking-[0.2em] group-open:text-white">
+                                      {`Ver ${config.tipo === 'INTERNACION' ? 'detalle' : 'config.'}`}
+                                    </span>
+                                  </div>
+                                </summary>
 
-                              <div className="grid gap-3">
-                                <label className="text-xs font-semibold uppercase text-slate-400">
-                                  Tipo de habitación
-                                  <select
-                                    value={config.tipo}
-                                    onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)}
-                                    className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
-                                  >
-                                    <option value="INTERNACION">INTERNACIÓN</option>
-                                    <option value="EN REPARACION">EN REPARACIÓN</option>
-                                    <option value="OTROS">OTROS</option>
-                                  </select>
-                                </label>
+                                <div className="mt-3 space-y-3 text-sm">
+                                  <div className="grid gap-2 sm:grid-cols-[1.4fr_0.9fr]">
+                                    <select
+                                      value={config.tipo}
+                                      onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)}
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
+                                    >
+                                      <option value="INTERNACION">INTERNACIÓN</option>
+                                      <option value="EN REPARACION">EN REPARACIÓN</option>
+                                      <option value="OTROS">OTROS</option>
+                                    </select>
+                                    <button
+                                      onClick={() => guardarEstadoHabitacion(hab.id)}
+                                      className="w-full bg-slate-700 text-slate-100 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] hover:bg-slate-600 transition-all"
+                                    >
+                                      💾 Guardar
+                                    </button>
+                                  </div>
 
-                                {config.tipo === 'INTERNACION' && (
-                                  <label className="text-xs font-semibold uppercase text-slate-400">
-                                    Cantidad de camas
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      value={config.camas}
-                                      onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
-                                      className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
-                                    />
-                                  </label>
-                                )}
+                                  {config.tipo === 'INTERNACION' && (
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={config.camas}
+                                        onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="Camas totales"
+                                      />
+                                      <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">
+                                        {config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}
+                                      </div>
+                                    </div>
+                                  )}
 
-                                {config.tipo === 'OTROS' && (
-                                  <label className="text-xs font-semibold uppercase text-slate-400">
-                                    Funcionalidad / aclaración
+                                  {config.tipo === 'OTROS' && (
                                     <input
                                       type="text"
                                       value={config.texto}
                                       onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)}
-                                      placeholder="Ej Oficina de incorporación, médico interno, oficial de permanencia"
-                                      className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
+                                      placeholder="Oficina, guardia, médico interno..."
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
                                     />
-                                  </label>
-                                )}
-                              </div>
-
-                              <div className="flex flex-wrap gap-2 items-center justify-between">
-                                <div className="flex flex-wrap gap-2 items-center">
-                                  {config.tipo === 'INTERNACION' && (
-                                    <button
-                                      onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)}
-                                      className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-xs font-semibold uppercase hover:bg-emerald-600/20 transition-all"
-                                      title="QR para registro de ocupación de pacientes"
-                                    >
-                                      🏥 QR Ocupación
-                                    </button>
                                   )}
 
-                                  {config.tipo === 'OTROS' && (
-                                    <button
-                                      onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)}
-                                      className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-xs font-semibold uppercase hover:bg-slate-700 transition-all"
-                                      title="QR para registro de ropa de cama limpia"
-                                    >
-                                      🧺 QR Ropa limpia
-                                    </button>
-                                  )}
+                                  <div className="flex flex-wrap gap-2 items-center">
+                                    {config.tipo === 'INTERNACION' && (
+                                      <button
+                                        onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)}
+                                        className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-emerald-600/20 transition-all"
+                                        title="QR para registro de ocupación de pacientes"
+                                      >
+                                        🏥 QR Ocupación
+                                      </button>
+                                    )}
 
-                                  {config.tipo === 'EN REPARACION' && (
-                                    <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-xs font-semibold uppercase">
-                                      🔧 En reparación
-                                    </span>
-                                  )}
+                                    {config.tipo === 'OTROS' && (
+                                      <button
+                                        onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)}
+                                        className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
+                                        title="QR para registro de ropa de cama limpia"
+                                      >
+                                        🧺 QR Ropa limpia
+                                      </button>
+                                    )}
+
+                                    {config.tipo === 'EN REPARACION' && (
+                                      <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">
+                                        🔧 En reparación
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-
-                                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                  {config.tipo === 'INTERNACION' && config.camas_ocupadas > 0 && (
-                                    <span className="text-[11px] text-slate-300">Ocupadas: {config.camas_ocupadas}</span>
-                                  )}
-
-                                  <button
-                                    onClick={() => guardarEstadoHabitacion(hab.id)}
-                                    className="px-3 py-2 bg-slate-700 text-slate-100 rounded-xl text-xs font-semibold uppercase hover:bg-slate-600 transition-all"
-                                  >
-                                    💾 Guardar estado
-                                  </button>
-                                </div>
-                              </div>
+                              </details>
                             </div>
                           );
                         })
