@@ -13,6 +13,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState('');
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0]);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
   const [estadisticas, setEstadisticas] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
   const [mostrarEstadisticas, setMostrarEstadisticas] = useState(true);
   
@@ -32,6 +33,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     setCroquis(null);
     setCoordenadas({});
     setOcupacion({});
+    setUltimaActualizacion(null);
     setCargando(true);
     setZoom(1);
     setPosicion({ x: 0, y: 0 });
@@ -89,10 +91,14 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
       if (error) throw error;
 
       const ocupMap = {};
+      let ultima = null;
       data?.forEach(occ => {
         ocupMap[occ.habitacion_id] = occ;
+        const fecha = new Date(occ.actualizado_en || occ.created_at);
+        if (!ultima || fecha > ultima) ultima = fecha;
       });
       setOcupacion(ocupMap);
+      setUltimaActualizacion(ultima);
     } catch (error) {
       console.error("Error cargando ocupación:", error);
     }
@@ -433,13 +439,17 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
 
       {mostrarEstadisticas && estadisticas.totalCamas > 0 && (
         <div className="bg-slate-800/50 p-3 mx-4 mt-2 rounded-lg">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div className="flex gap-4 text-sm">
               <span className="text-green-400">🛏️ Total: {estadisticas.totalCamas}</span>
               <span className="text-yellow-400">👥 Ocupadas: {estadisticas.camasOcupadas}</span>
               <span className="text-blue-400">📊 {estadisticas.porcentaje.toFixed(1)}%</span>
             </div>
-            <button onClick={() => setMostrarEstadisticas(false)} className="text-xs text-slate-500">✖️</button>
+            {ultimaActualizacion && (
+              <div className="text-xs uppercase text-slate-400 tracking-[0.12em]">
+                Última pasada: {ultimaActualizacion.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            )}
           </div>
           <div className="w-full bg-slate-700 rounded-full h-2 mt-2">
             <div className="bg-green-500 h-2 rounded-full transition-all duration-500" style={{ width: `${estadisticas.porcentaje}%` }}></div>
@@ -518,7 +528,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
                   minHeight: '48px',
                   padding: '2px 0'
                 }}
-                title={estilo.title}
+                title={`${estilo.title}${ocup ? '\nÚltima pasada: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : ''}`}
                 onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
               >
                 <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>

@@ -39,6 +39,9 @@ const AdminDashboard = () => {
   });
   const [nuevoPiso, setNuevoPiso] = useState({ nombre_piso: '' });
   const [pisoSeleccionado, setPisoSeleccionado] = useState('');
+  const [habitacionStatus, setHabitacionStatus] = useState({});
+  const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
+  const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STOCK_CRITICO = 5;
   const [croquisKey, setCroquisKey] = useState(0);
@@ -47,6 +50,93 @@ const AdminDashboard = () => {
     cargarDatos();
     cargarAdmins();
   }, []);
+
+  useEffect(() => {
+    if (!habitacionesEspeciales.length) return;
+    setHabitacionStatus(prev => {
+      const next = { ...prev };
+      habitacionesEspeciales.forEach(hab => {
+        if (!next[hab.id]) {
+          next[hab.id] = { tipo: 'OTROS', camas: '1', texto: '' };
+        }
+      });
+      return next;
+    });
+  }, [habitacionesEspeciales]);
+
+  const actualizarHabitacionStatus = (habId, field, value) => {
+    setHabitacionStatus(prev => ({
+      ...prev,
+      [habId]: {
+        ...prev[habId],
+        [field]: value
+      }
+    }));
+  };
+
+  const cargarEstadoHabitaciones = async (habitaciones = []) => {
+    if (!habitaciones.length) return;
+    const hoy = new Date().toISOString().split('T')[0];
+
+    try {
+      const { data, error } = await supabase
+        .from('ocupacion_habitaciones')
+        .select('*')
+        .eq('fecha', hoy)
+        .in('habitacion_id', habitaciones.map(h => h.id));
+
+      if (error) throw error;
+
+      const next = {};
+      habitaciones.forEach(hab => {
+        const estado = data?.find(e => e.habitacion_id === hab.id);
+        next[hab.id] = {
+          tipo: estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS',
+          camas: estado?.total_camas?.toString() || '1',
+          texto: estado?.observaciones || '',
+          camas_ocupadas: estado?.camas_ocupadas || 0
+        };
+      });
+      setHabitacionStatus(next);
+    } catch (error) {
+      console.error('Error cargando estado de habitaciones:', error);
+    }
+  };
+
+  const guardarEstadoHabitacion = async (habId) => {
+    const config = habitacionStatus[habId];
+    if (!config) return;
+
+    const fecha = new Date().toISOString().split('T')[0];
+
+    try {
+      const { error } = await supabase
+        .from('ocupacion_habitaciones')
+        .upsert({
+          habitacion_id: habId,
+          fecha,
+          tipo_habitacion: TIPO_MAP_DB[config.tipo] || 'otros',
+          total_camas: config.tipo === 'INTERNACION' ? Number(config.camas) || 1 : 1,
+          camas_ocupadas: config.tipo === 'INTERNACION' ? (config.camas_ocupadas || 0) : 0,
+          observaciones: config.tipo === 'OTROS' ? (config.texto || null) : null,
+          actualizado_por: null,
+          actualizado_en: new Date().toISOString()
+        }, { onConflict: 'habitacion_id,fecha' });
+
+      if (error) {
+        console.error('Error guardando estado de habitación:', error);
+        mostrarSplash('❌ Error al guardar estado');
+        return;
+      }
+
+      mostrarSplash('✅ Estado guardado');
+      const habitacion = habitacionesEspeciales.find(h => h.id === habId);
+      if (habitacion) await cargarEstadoHabitaciones([habitacion]);
+    } catch (error) {
+      console.error('Error guardando estado de habitación:', error);
+      mostrarSplash('❌ Error al guardar estado');
+    }
+  };
 
   const mostrarSplash = (mensaje) => {
     setNotificacion({ visible: true, mensaje });
@@ -169,6 +259,7 @@ const AdminDashboard = () => {
       setPersonal(resPers.data || []);
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
+      await cargarEstadoHabitaciones(resHabs.data || []);
       setMovimientosAgrupados(agrupados);
       setStockPañol(stockPañolMap);
       setStockUso(stockUsoMap);
@@ -1401,37 +1492,123 @@ const cargarHabitacionesDelPiso = async () => {
                     
                     <div className="flex flex-wrap gap-2">
                       {habitacionesEspeciales.filter(h => h.piso_id === p.id).length > 0 ? (
-                        habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => (
-                          <div key={hab.id} className="bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 flex flex-wrap items-center gap-2 hover:bg-slate-800 transition-all">
-                            <span className="text-sm font-semibold uppercase text-slate-300">{hab.nombre}</span>
-                            
-                            {/* QR para ropa blanca */}
-                            <button 
-                              onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)} 
-                              className="text-blue-500 text-xs font-semibold uppercase hover:text-blue-400 transition-all px-2 py-1 rounded bg-blue-500/10"
-                              title="QR para registro de ropa blanca"
-                            >
-                              🧺 Ropa
-                            </button>
-                            
-                            {/* QR para ocupación */}
-                            <button 
-                              onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)} 
-                              className="text-green-500 text-xs font-semibold uppercase hover:text-green-400 transition-all px-2 py-1 rounded bg-green-500/10"
-                              title="QR para registro de ocupación de pacientes"
-                            >
-                              🏥 Ocupación
-                            </button>
-                            
-                            <button 
-                              onClick={() => eliminarHabitacion(hab.id, hab.nombre)} 
-                              className="text-red-500 font-semibold text-sm px-2 py-1 rounded hover:bg-red-950/30 transition-all"
-                              title="Eliminar habitación"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))
+                        habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => {
+                          const config = habitacionStatus[hab.id] || { tipo: 'OTROS', camas: '1', texto: '' };
+                          const statusBg = config.tipo === 'INTERNACION'
+                            ? 'bg-emerald-900/30 border-emerald-600/40'
+                            : config.tipo === 'EN REPARACION'
+                              ? 'bg-amber-900/30 border-amber-600/40'
+                              : 'bg-slate-800/70 border-slate-700';
+                          const statusText = config.tipo === 'INTERNACION'
+                            ? 'text-emerald-300'
+                            : config.tipo === 'EN REPARACION'
+                              ? 'text-amber-300'
+                              : 'text-slate-300';
+
+                          return (
+                            <div key={hab.id} className={`rounded-lg border px-3 py-3 flex flex-col gap-3 transition-all min-w-[260px] ${statusBg}`}>
+                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                <div>
+                                  <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
+                                  <span className={`inline-flex items-center gap-2 mt-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusText}`}>
+                                    {config.tipo === 'INTERNACION' ? 'INTERNACIÓN' : config.tipo === 'EN REPARACION' ? 'EN REPARACIÓN' : 'OTROS'}
+                                  </span>
+                                </div>
+                                <button 
+                                  onClick={() => eliminarHabitacion(hab.id, hab.nombre)} 
+                                  className="text-red-500 font-semibold text-lg px-2 py-1 rounded hover:bg-red-950/30 transition-all"
+                                  title="Eliminar habitación"
+                                >
+                                  ×
+                                </button>
+                              </div>
+
+                              <div className="grid gap-3">
+                                <label className="text-xs font-semibold uppercase text-slate-400">
+                                  Tipo de habitación
+                                  <select
+                                    value={config.tipo}
+                                    onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)}
+                                    className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
+                                  >
+                                    <option value="INTERNACION">INTERNACIÓN</option>
+                                    <option value="EN REPARACION">EN REPARACIÓN</option>
+                                    <option value="OTROS">OTROS</option>
+                                  </select>
+                                </label>
+
+                                {config.tipo === 'INTERNACION' && (
+                                  <label className="text-xs font-semibold uppercase text-slate-400">
+                                    Cantidad de camas
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={config.camas}
+                                      onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
+                                      className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                    />
+                                  </label>
+                                )}
+
+                                {config.tipo === 'OTROS' && (
+                                  <label className="text-xs font-semibold uppercase text-slate-400">
+                                    Funcionalidad / aclaración
+                                    <input
+                                      type="text"
+                                      value={config.texto}
+                                      onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)}
+                                      placeholder="Ej Oficina de incorporación, médico interno, oficial de permanencia"
+                                      className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
+                                    />
+                                  </label>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap gap-2 items-center justify-between">
+                                <div className="flex flex-wrap gap-2 items-center">
+                                  {config.tipo === 'INTERNACION' && (
+                                    <button
+                                      onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)}
+                                      className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-xs font-semibold uppercase hover:bg-emerald-600/20 transition-all"
+                                      title="QR para registro de ocupación de pacientes"
+                                    >
+                                      🏥 QR Ocupación
+                                    </button>
+                                  )}
+
+                                  {config.tipo === 'OTROS' && (
+                                    <button
+                                      onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)}
+                                      className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-xs font-semibold uppercase hover:bg-slate-700 transition-all"
+                                      title="QR para registro de ropa de cama limpia"
+                                    >
+                                      🧺 QR Ropa limpia
+                                    </button>
+                                  )}
+
+                                  {config.tipo === 'EN REPARACION' && (
+                                    <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-xs font-semibold uppercase">
+                                      🔧 En reparación
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                  {config.tipo === 'INTERNACION' && config.camas_ocupadas > 0 && (
+                                    <span className="text-[11px] text-slate-300">Ocupadas: {config.camas_ocupadas}</span>
+                                  )}
+
+                                  <button
+                                    onClick={() => guardarEstadoHabitacion(hab.id)}
+                                    className="px-3 py-2 bg-slate-700 text-slate-100 rounded-xl text-xs font-semibold uppercase hover:bg-slate-600 transition-all"
+                                  >
+                                    💾 Guardar estado
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
                       ) : (
                         <p className="text-sm text-slate-500 italic">No hay habitaciones registradas. Usa el botón "+ Agregar Habitación"</p>
                       )}

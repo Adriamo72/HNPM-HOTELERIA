@@ -67,6 +67,13 @@ const RegistroOcupacionQR = ({ perfilUsuario, onRegistroCompleto }) => {
     setRegistrando(true);
     
     try {
+      if (tipoHabitacion !== 'activa') {
+        setMensaje('❌ Esta habitación no está habilitada para registro de ocupación');
+        setTimeout(() => setMensaje(''), 2000);
+        setRegistrando(false);
+        return;
+      }
+
       const fecha = new Date().toISOString().split('T')[0];
       
       const { error } = await supabase
@@ -76,7 +83,7 @@ const RegistroOcupacionQR = ({ perfilUsuario, onRegistroCompleto }) => {
           fecha: fecha,
           tipo_habitacion: tipoHabitacion,
           total_camas: totalCamas,
-          camas_ocupadas: tipoHabitacion === 'activa' ? camasOcupadas : 0,
+          camas_ocupadas: camasOcupadas,
           observaciones: novedades || null,
           actualizado_por: perfilUsuario?.dni,
           actualizado_en: new Date().toISOString()
@@ -86,14 +93,7 @@ const RegistroOcupacionQR = ({ perfilUsuario, onRegistroCompleto }) => {
       
       if (error) throw error;
       
-      let mensajeExito = `✅ ${habitacion.nombre}: `;
-      if (tipoHabitacion === 'reparacion') {
-        mensajeExito += 'En reparación';
-      } else if (tipoHabitacion === 'otros') {
-        mensajeExito += `Otros - ${novedades || 'Sin novedades'}`;
-      } else {
-        mensajeExito += `${camasOcupadas}/${totalCamas} camas ocupadas`;
-      }
+      const mensajeExito = `✅ ${habitacion.nombre}: ${camasOcupadas}/${totalCamas} camas ocupadas`;
       
       setMensaje(mensajeExito);
       setTimeout(() => {
@@ -170,112 +170,33 @@ const RegistroOcupacionQR = ({ perfilUsuario, onRegistroCompleto }) => {
         </div>
         
         {/* Tipo de habitación */}
-        <div className="mb-4">
-          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-            Estado de la habitación
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => setTipoHabitacion('activa')}
-              className={`py-2 rounded-lg font-bold transition-all ${
-                tipoHabitacion === 'activa' 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
-            >
-              🟢 Activa
-            </button>
-            <button
-              onClick={() => setTipoHabitacion('reparacion')}
-              className={`py-2 rounded-lg font-bold transition-all ${
-                tipoHabitacion === 'reparacion' 
-                  ? 'bg-yellow-600 text-white' 
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
-            >
-              🟡 Reparación
-            </button>
-            <button
-              onClick={() => setTipoHabitacion('otros')}
-              className={`py-2 rounded-lg font-bold transition-all ${
-                tipoHabitacion === 'otros' 
-                  ? 'bg-gray-600 text-white' 
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
-            >
-              ⚪ Otros
-            </button>
+        <div className="mb-4 bg-slate-800 p-4 rounded-2xl border border-slate-700">
+          <p className="text-xs font-black uppercase text-slate-400 mb-3">Situación configurada en ADMINISTRACIÓN</p>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="bg-slate-950/80 p-3 rounded-xl">
+              <span className="block text-[10px] uppercase text-slate-500">Estado</span>
+              <span className="font-bold text-white">
+                {tipoHabitacion === 'activa' ? 'Internación' : tipoHabitacion === 'reparacion' ? 'En reparación' : 'Otros'}
+              </span>
+            </div>
+            <div className="bg-slate-950/80 p-3 rounded-xl">
+              <span className="block text-[10px] uppercase text-slate-500">Camas totales</span>
+              <span className="font-bold text-white">{totalCamas}</span>
+            </div>
           </div>
         </div>
-        
-        {/* Configuración solo para habitaciones activas */}
-        {tipoHabitacion === 'activa' && (
-          <>
-            <div className="mb-4">
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                Configuración de camas
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => {
-                    setTotalCamas(1);
-                    if (camasOcupadas > 1) setCamasOcupadas(1);
-                  }}
-                  className={`py-2 rounded-lg font-bold transition-all ${
-                    totalCamas === 1 
-                      ? 'bg-blue-600 text-white' 
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                  }`}
-                >
-                  🛏️ 1 cama
-                </button>
-                <button
-                  onClick={() => setTotalCamas(2)}
-                  className={`py-2 rounded-lg font-bold transition-all ${
-                    totalCamas === 2 
-                      ? 'bg-blue-600 text-white' 
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                  }`}
-                >
-                  🛏️🛏️ 2 camas
-                </button>
-              </div>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                Camas ocupadas: {camasOcupadas} / {totalCamas}
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[...Array(totalCamas + 1)].map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCamasOcupadas(i)}
-                    className={`py-2 rounded-lg font-bold transition-all ${
-                      camasOcupadas === i 
-                        ? 'bg-green-600 text-white' 
-                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    {i} {i === 1 ? 'cama' : 'camas'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-        
-        {/* Novedades para todos los tipos */}
+
         <div className="mb-4">
           <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-            {tipoHabitacion === 'otros' ? 'Descripción / Uso' : 'Observaciones'}
+            Pacientes ocupando camas
           </label>
-          <textarea
-            placeholder={tipoHabitacion === 'otros' ? "Ej: Oficina Incorporación, Depósito, Sala de espera" : "Observaciones opcionales"}
-            value={novedades}
-            onChange={(e) => setNovedades(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white"
-            rows="2"
+          <input
+            type="number"
+            min="0"
+            max={totalCamas}
+            value={camasOcupadas}
+            onChange={(e) => setCamasOcupadas(Math.min(Math.max(parseInt(e.target.value) || 0, 0), totalCamas))}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
         </div>
         
