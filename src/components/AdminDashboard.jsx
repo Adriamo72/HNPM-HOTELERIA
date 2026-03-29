@@ -44,6 +44,25 @@ const AdminDashboard = () => {
   const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
   const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
+
+  const formatearResumenHabitacion = (config) => {
+    if (config.tipo === 'INTERNACION') {
+      const camas = Number(config.camas) || 1;
+      return `INTERNACIÓN (${camas} cama${camas === 1 ? '' : 's'})`;
+    }
+
+    if (config.tipo === 'EN REPARACION') {
+      return 'EN REPARACIÓN';
+    }
+
+    const texto = config.texto ? config.texto.trim() : '';
+    return `OTROS (${texto})`;
+  };
+
+  const truncarTexto = (texto, largo = 28) => {
+    if (!texto) return texto;
+    return texto.length > largo ? `${texto.slice(0, largo - 1)}…` : texto;
+  };
   const STOCK_CRITICO = 5;
   const [croquisKey, setCroquisKey] = useState(0);
 
@@ -1523,7 +1542,7 @@ const cargarHabitacionesDelPiso = async () => {
                               : 'text-slate-300';
 
                           return (
-                            <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] ${statusBg}`}>
+                            <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] max-w-[320px] w-full sm:w-[320px] ${statusBg}`}>
                               <details
                                 className="group"
                                 open={!!habitacionesAbiertas[hab.id]}
@@ -1552,12 +1571,8 @@ const cargarHabitacionesDelPiso = async () => {
                                         </button>
                                       )}
                                     </div>
-                                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText}`}>
-                                      {config.tipo === 'INTERNACION'
-                                        ? 'INTERNACIÓN'
-                                        : config.tipo === 'EN REPARACION'
-                                          ? 'EN REPARACIÓN'
-                                          : `OTROS (${config.texto || 'Pañol de Traumatología'})`}
+                                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate`}>
+                                      {truncarTexto(formatearResumenHabitacion(config), 28)}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
