@@ -11,6 +11,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState('');
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0]);
+  const [imagenInvertida, setImagenInvertida] = useState(false);
   
   // Refs
   const imageRef = useRef(null);
@@ -63,6 +64,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
 
       if (croquisData) {
         setCroquis(croquisData);
+        setImagenInvertida(false);
         
         // Cargar coordenadas guardadas
         const { data: coords } = await supabase
@@ -133,6 +135,36 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     }
   };
 
+  const invertirImagen = () => {
+    if (!imageRef.current) return;
+    
+    const img = imageRef.current;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    ctx.drawImage(img, 0, 0);
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 255 - data[i];     // R
+      data[i+1] = 255 - data[i+1]; // G
+      data[i+2] = 255 - data[i+2]; // B
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    
+    // Crear nueva URL de imagen
+    const nuevaUrl = canvas.toDataURL('image/png');
+    img.src = nuevaUrl;
+    setImagenInvertida(true);
+    setMensaje("✅ Colores invertidos - Fondo negro, líneas blancas");
+    setTimeout(() => setMensaje(''), 2000);
+  };
+
   const subirCroquis = async (file) => {
     if (!file) return;
     
@@ -200,13 +232,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
           croquis_id: croquis.id,
           x: Math.round(x),
           y: Math.round(y),
-          ancho: 60,
-          alto: 60
+          ancho: 40,
+          alto: 40
         }, { onConflict: 'habitacion_id,croquis_id' });
       
       if (error) throw error;
       
-      setCoordenadas(prev => ({ ...prev, [habitacionId]: { x, y, ancho: 60, alto: 60 } }));
+      setCoordenadas(prev => ({ ...prev, [habitacionId]: { x, y, ancho: 40, alto: 40 } }));
       setMensaje(`✅ Posición guardada para habitación`);
       setTimeout(() => setMensaje(''), 1500);
       
@@ -317,6 +349,16 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
             className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
           />
           
+          {croquis && !imagenInvertida && (
+            <button
+              onClick={invertirImagen}
+              className="px-4 py-2 rounded-lg text-sm font-bold bg-purple-600 hover:bg-purple-500 transition-all"
+              title="Invertir colores (fondo blanco → negro)"
+            >
+              🎨 Invertir colores
+            </button>
+          )}
+          
           <button
             onClick={() => setModoEdicion(!modoEdicion)}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
@@ -353,7 +395,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
           style={{ pointerEvents: modoEdicion ? 'auto' : 'none' }}
         />
         
-        {/* Marcadores de habitaciones */}
+        {/* Marcadores de habitaciones - tamaño responsivo 2% del ancho */}
         {habitaciones.map(hab => {
           const coord = coordenadas[hab.id];
           if (!coord) return null;
@@ -369,14 +411,16 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
               style={{
                 left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                 top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                width: `${(coord.ancho / (imageRef.current?.naturalWidth || 1)) * 100}%`,
-                height: `${(coord.alto / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                transform: 'translate(-50%, -50%)'
+                width: 'min(2.5%, 45px)',
+                height: 'min(2.5%, 45px)',
+                transform: 'translate(-50%, -50%)',
+                minWidth: '30px',
+                minHeight: '30px'
               }}
               title={`${hab.nombre}: ${pacientes} paciente${pacientes !== 1 ? 's' : ''}${ocup?.observaciones ? ` - ${ocup.observaciones}` : ''}`}
             >
-              <span className="text-[10px] font-bold hidden sm:block">{hab.nombre.substring(0, 12)}</span>
-              <span className="text-lg font-black">{pacientes}</span>
+              <span className="text-[clamp(8px,1.5vw,12px)] font-bold hidden sm:block">{hab.nombre}</span>
+              <span className="text-[clamp(10px,2vw,16px)] font-black">{pacientes}</span>
             </div>
           );
         })}
@@ -392,7 +436,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500"></div> 3 pacientes</span>
           </div>
           <div className="text-xs text-slate-500">
-            💡 Croquis exportado desde nanoCAD con fondo negro/líneas blancas
+            💡 Marcadores: {modoEdicion ? 'posiciona habitaciones haciendo click' : 'muestran ocupación actual'}
           </div>
           {modoEdicion && (
             <p className="text-yellow-400 text-xs">✏️ Click en el croquis para posicionar habitaciones</p>
