@@ -1533,9 +1533,26 @@ const cargarHabitacionesDelPiso = async () => {
                                 }))}
                               >
                                 <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
-                                  <div>
-                                    <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
-                                    <span className={`inline-flex items-center gap-1 mt-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText}`}>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
+                                      {(config.tipo === 'INTERNACION' || config.tipo === 'OTROS') && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation();
+                                            if (config.tipo === 'INTERNACION') {
+                                              descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`);
+                                            } else {
+                                              descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`);
+                                            }
+                                          }}
+                                          className="inline-flex items-center gap-1 bg-slate-800/80 text-slate-200 border border-slate-600/40 px-2 py-1 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
+                                          title={config.tipo === 'INTERNACION' ? 'QR Ocupación' : 'QR Ropa limpia'}
+                                        >
+                                          {config.tipo === 'INTERNACION' ? 'QR OCP' : 'QR ROPA'}
+                                        </button>
+                                      )}
+                                    </div>
+                                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText}`}>
                                       {config.tipo === 'INTERNACION'
                                         ? 'INTERNACIÓN'
                                         : config.tipo === 'EN REPARACION'
@@ -1544,24 +1561,16 @@ const cargarHabitacionesDelPiso = async () => {
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    {(config.tipo === 'INTERNACION' || config.tipo === 'OTROS') && (
-                                      <button
-                                        onClick={(e) => { e.stopPropagation();
-                                          if (config.tipo === 'INTERNACION') {
-                                            descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`);
-                                          } else {
-                                            descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`);
-                                          }
-                                        }}
-                                        className="inline-flex items-center gap-1 bg-slate-800/80 text-slate-200 border border-slate-600/40 px-2 py-1 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
-                                        title={config.tipo === 'INTERNACION' ? 'QR Ocupación' : 'QR Ropa limpia'}
-                                      >
-                                        {config.tipo === 'INTERNACION' ? 'QR OCP' : 'QR ROPA'}
-                                      </button>
-                                    )}
-                                    <span className="text-slate-400 text-[10px] uppercase tracking-[0.2em]">
-                                      {`VER CONFIG.`}
-                                    </span>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({
+                                        ...prev,
+                                        [hab.id]: !prev[hab.id]
+                                      })); }}
+                                      className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all"
+                                      title="Ver configuración"
+                                    >
+                                      ⚙️
+                                    </button>
                                     <button 
                                       onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }}
                                       className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
