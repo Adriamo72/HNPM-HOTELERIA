@@ -1320,89 +1320,108 @@ const AdminDashboard = () => {
           </section>
 
           {/* Gestión de Pisos y QRs */}
-          <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">🏥 Sectores y QRs</h3>
-                <p className="text-xs text-slate-500 mt-1">Pisos, habitaciones y códigos QR</p>
-              </div>
-              <button
-                onClick={() => setMostrarModalPiso(true)}
-                className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
-              >
-                + Nuevo Sector
-              </button>
+        <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">🏥 Sectores y QRs</h3>
+              <p className="text-xs text-slate-500 mt-1">Pisos, habitaciones y códigos QR</p>
             </div>
-            
-            <div className="grid grid-cols-1 gap-5">
-              {pisos.length > 0 ? (
-                pisos.map(p => (
-                  <div key={p.id} className="bg-slate-950 p-5 rounded-xl border border-slate-800 hover:border-slate-700 transition-all">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-                      <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
-                      <div className="flex flex-wrap gap-2">
-                        <button 
-                          onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} 
-                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
-                        >
-                          🗄️ QR Pañol
-                        </button>
-                        <button 
-                          onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} 
-                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
-                        >
-                          🧺 QR Lavadero
-                        </button>
-                        <button 
-                          onClick={() => eliminarPiso(p.id, p.nombre_piso)} 
-                          className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
-                          title="Eliminar sector y todos sus registros"
-                        >
-                          🗑️ Eliminar
-                        </button>
-                      </div>
-                    </div>
-                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
-                        <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">🏠 Habitaciones Especiales</p>
-                        <button 
-                          onClick={() => agregarHabitacion(p.id, p.slug)} 
-                          className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all"
-                        >
-                          + Agregar Habitación
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {habitacionesEspeciales.filter(h => h.piso_id === p.id).length > 0 ? (
-                          habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => (
-                            <div key={hab.id} className="bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 flex items-center gap-2 hover:bg-slate-800 transition-all">
-                              <span className="text-sm font-semibold uppercase text-slate-300">{hab.nombre}</span>
-                              <button 
-                                onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso}`)} 
-                                className="text-blue-500 text-xs font-semibold uppercase hover:text-blue-400 transition-all"
-                              >
-                                📱 QR
-                              </button>
-                              <button 
-                                onClick={() => eliminarHabitacion(hab.id, hab.nombre)} 
-                                className="text-red-500 font-semibold text-sm px-1 hover:text-red-400 transition-all"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-slate-500 italic">No hay habitaciones especiales registradas</p>
-                        )}
-                      </div>
+            <button
+              onClick={() => setMostrarModalPiso(true)}
+              className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
+            >
+              + Nuevo Sector
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-5">
+            {pisos.length > 0 ? (
+              pisos.map(p => (
+                <div key={p.id} className="bg-slate-950 p-5 rounded-xl border border-slate-800 hover:border-slate-700 transition-all">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                    <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button 
+                        onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} 
+                        className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
+                      >
+                        🗄️ QR Pañol
+                      </button>
+                      <button 
+                        onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} 
+                        className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
+                      >
+                        🧺 QR Lavadero
+                      </button>
+                      <button 
+                        onClick={() => eliminarPiso(p.id, p.nombre_piso)} 
+                        className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
+                        title="Eliminar sector y todos sus registros"
+                      >
+                        🗑️ Eliminar
+                      </button>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center text-slate-500 text-base py-8">📭 No hay sectores registrados. Crea el primer sector usando el botón arriba.</div>
-              )}
-            </div>
-          </section>
+                  
+                  {/* Habitaciones - Ahora con dos QR por habitación */}
+                  <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
+                        🏠 Habitaciones ({habitacionesEspeciales.filter(h => h.piso_id === p.id).length})
+                      </p>
+                      <button 
+                        onClick={() => agregarHabitacion(p.id, p.slug)} 
+                        className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all"
+                      >
+                        + Agregar Habitación
+                      </button>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      {habitacionesEspeciales.filter(h => h.piso_id === p.id).length > 0 ? (
+                        habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => (
+                          <div key={hab.id} className="bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 flex flex-wrap items-center gap-2 hover:bg-slate-800 transition-all">
+                            <span className="text-sm font-semibold uppercase text-slate-300">{hab.nombre}</span>
+                            
+                            {/* QR para ropa blanca */}
+                            <button 
+                              onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)} 
+                              className="text-blue-500 text-xs font-semibold uppercase hover:text-blue-400 transition-all px-2 py-1 rounded bg-blue-500/10"
+                              title="QR para registro de ropa blanca"
+                            >
+                              🧺 Ropa
+                            </button>
+                            
+                            {/* QR para ocupación */}
+                            <button 
+                              onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)} 
+                              className="text-green-500 text-xs font-semibold uppercase hover:text-green-400 transition-all px-2 py-1 rounded bg-green-500/10"
+                              title="QR para registro de ocupación de pacientes"
+                            >
+                              🏥 Ocupación
+                            </button>
+                            
+                            <button 
+                              onClick={() => eliminarHabitacion(hab.id, hab.nombre)} 
+                              className="text-red-500 font-semibold text-sm px-2 py-1 rounded hover:bg-red-950/30 transition-all"
+                              title="Eliminar habitación"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-slate-500 italic">No hay habitaciones registradas. Usa el botón "+ Agregar Habitación"</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-slate-500 text-base py-8">📭 No hay sectores registrados. Crea el primer sector usando el botón arriba.</div>
+            )}
+          </div>
+        </section>
         </div>
       )}
       

@@ -1,0 +1,302 @@
+// components/RegistroOcupacionQR.jsx
+import React, { useState } from 'react';
+import { supabase } from '../supabaseClient';
+import LiveQRScanner from './LiveQRScanner';
+
+const RegistroOcupacionQR = ({ perfilUsuario, onRegistroCompleto }) => {
+  const [escanear, setEscanear] = useState(true);
+  const [habitacion, setHabitacion] = useState(null);
+  const [tipoHabitacion, setTipoHabitacion] = useState('activa');
+  const [totalCamas, setTotalCamas] = useState(1);
+  const [camasOcupadas, setCamasOcupadas] = useState(0);
+  const [novedades, setNovedades] = useState('');
+  const [registrando, setRegistrando] = useState(false);
+  const [mensaje, setMensaje] = useState('');
+
+  const handleScanSuccess = async (decodedText) => {
+    if (!escanear) return;
+    
+    if (decodedText.includes('/ocupacion/')) {
+      const slug = decodedText.split('/ocupacion/')[1];
+      
+      const { data: habitacionData, error } = await supabase
+        .from('habitaciones_especiales')
+        .select('*, pisos(nombre_piso)')
+        .eq('slug', slug)
+        .maybeSingle();
+      
+      if (error || !habitacionData) {
+        setMensaje("❌ Habitación no encontrada");
+        setTimeout(() => setMensaje(''), 2000);
+        return;
+      }
+      
+      setHabitacion(habitacionData);
+      setEscanear(false);
+      
+      // Cargar estado actual de la habitación
+      const fecha = new Date().toISOString().split('T')[0];
+      const { data: estadoActual } = await supabase
+        .from('ocupacion_habitaciones')
+        .select('*')
+        .eq('habitacion_id', habitacionData.id)
+        .eq('fecha', fecha)
+        .maybeSingle();
+      
+      if (estadoActual) {
+        setTipoHabitacion(estadoActual.tipo_habitacion || 'activa');
+        setTotalCamas(estadoActual.total_camas || 1);
+        setCamasOcupadas(estadoActual.camas_ocupadas || 0);
+        setNovedades(estadoActual.observaciones || '');
+      }
+      
+      setMensaje(`✅ Habitación: ${habitacionData.nombre}`);
+    } else {
+      setMensaje("❌ Escanea un QR de ocupación válido (debe contener /ocupacion/)");
+      setTimeout(() => setMensaje(''), 2000);
+    }
+  };
+
+  const handleScanError = (err) => {
+    console.warn("Error:", err);
+  };
+
+  const registrarOcupacion = async () => {
+    if (!habitacion) return;
+    
+    setRegistrando(true);
+    
+    try {
+      const fecha = new Date().toISOString().split('T')[0];
+      
+      const { error } = await supabase
+        .from('ocupacion_habitaciones')
+        .upsert({
+          habitacion_id: habitacion.id,
+          fecha: fecha,
+          tipo_habitacion: tipoHabitacion,
+          total_camas: totalCamas,
+          camas_ocupadas: tipoHabitacion === 'activa' ? camasOcupadas : 0,
+          observaciones: novedades || null,
+          actualizado_por: perfilUsuario?.dni,
+          actualizado_en: new Date().toISOString()
+        }, {
+          onConflict: 'habitacion_id,fecha'
+        });
+      
+      if (error) throw error;
+      
+      let mensajeExito = `✅ ${habitacion.nombre}: `;
+      if (tipoHabitacion === 'reparacion') {
+        mensajeExito += 'En reparación';
+      } else if (tipoHabitacion === 'otros') {
+        mensajeExito += `Otros - ${novedades || 'Sin novedades'}`;
+      } else {
+        mensajeExito += `${camasOcupadas}/${totalCamas} camas ocupadas`;
+      }
+      
+      setMensaje(mensajeExito);
+      setTimeout(() => {
+        setMensaje('');
+        setEscanear(true);
+        setHabitacion(null);
+        setTipoHabitacion('activa');
+        setTotalCamas(1);
+        setCamasOcupadas(0);
+        setNovedades('');
+        if (onRegistroCompleto) onRegistroCompleto();
+      }, 1500);
+      
+    } catch (error) {
+      console.error("Error:", error);
+      setMensaje("❌ Error al registrar");
+      setTimeout(() => setMensaje(''), 2000);
+    } finally {
+      setRegistrando(false);
+    }
+  };
+
+  if (escanear) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
+        <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-6 max-w-md w-full shadow-2xl border border-green-900/30">
+          <div className="text-center mb-4">
+            <div className="bg-gradient-to-r from-green-600 to-green-500 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-green-900/40">
+              <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-black text-white uppercase tracking-wider">
+              REGISTRO DE OCUPACIÓN
+            </h1>
+            <p className="text-green-400 text-[10px] uppercase tracking-wider mt-1 font-semibold">
+              Escanea QR de ocupación en la puerta
+            </p>
+          </div>
+
+          <LiveQRScanner 
+            onScanSuccess={handleScanSuccess}
+            onScanError={handleScanError}
+          />
+          
+          {mensaje && (
+            <div className="mt-4 text-center text-sm text-yellow-400">{mensaje}</div>
+          )}
+          
+          <p className="text-slate-600 text-[9px] uppercase mt-4 tracking-wider text-center">
+            Subdirección Administrativa - Departamento Hotelería
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
+      <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-6 max-w-md w-full shadow-2xl border border-green-900/30">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-green-400">
+            {habitacion?.nombre}
+          </h3>
+          <button 
+            onClick={() => {
+              setEscanear(true);
+              setHabitacion(null);
+            }}
+            className="text-slate-400 text-sm hover:text-white"
+          >
+            ← Cambiar
+          </button>
+        </div>
+        
+        {/* Tipo de habitación */}
+        <div className="mb-4">
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+            Estado de la habitación
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => setTipoHabitacion('activa')}
+              className={`py-2 rounded-lg font-bold transition-all ${
+                tipoHabitacion === 'activa' 
+                  ? 'bg-green-600 text-white' 
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              🟢 Activa
+            </button>
+            <button
+              onClick={() => setTipoHabitacion('reparacion')}
+              className={`py-2 rounded-lg font-bold transition-all ${
+                tipoHabitacion === 'reparacion' 
+                  ? 'bg-yellow-600 text-white' 
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              🟡 Reparación
+            </button>
+            <button
+              onClick={() => setTipoHabitacion('otros')}
+              className={`py-2 rounded-lg font-bold transition-all ${
+                tipoHabitacion === 'otros' 
+                  ? 'bg-gray-600 text-white' 
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              ⚪ Otros
+            </button>
+          </div>
+        </div>
+        
+        {/* Configuración solo para habitaciones activas */}
+        {tipoHabitacion === 'activa' && (
+          <>
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                Configuración de camas
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setTotalCamas(1);
+                    if (camasOcupadas > 1) setCamasOcupadas(1);
+                  }}
+                  className={`py-2 rounded-lg font-bold transition-all ${
+                    totalCamas === 1 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  🛏️ 1 cama
+                </button>
+                <button
+                  onClick={() => setTotalCamas(2)}
+                  className={`py-2 rounded-lg font-bold transition-all ${
+                    totalCamas === 2 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  🛏️🛏️ 2 camas
+                </button>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                Camas ocupadas: {camasOcupadas} / {totalCamas}
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[...Array(totalCamas + 1)].map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCamasOcupadas(i)}
+                    className={`py-2 rounded-lg font-bold transition-all ${
+                      camasOcupadas === i 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    {i} {i === 1 ? 'cama' : 'camas'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+        
+        {/* Novedades para todos los tipos */}
+        <div className="mb-4">
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+            {tipoHabitacion === 'otros' ? 'Descripción / Uso' : 'Observaciones'}
+          </label>
+          <textarea
+            placeholder={tipoHabitacion === 'otros' ? "Ej: Oficina Incorporación, Depósito, Sala de espera" : "Observaciones opcionales"}
+            value={novedades}
+            onChange={(e) => setNovedades(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white"
+            rows="2"
+          />
+        </div>
+        
+        <button
+          onClick={registrarOcupacion}
+          disabled={registrando}
+          className="w-full bg-green-600 py-3 rounded-xl font-bold uppercase disabled:opacity-50 hover:bg-green-500 transition-all"
+        >
+          {registrando ? 'REGISTRANDO...' : '✅ REGISTRAR OCUPACIÓN'}
+        </button>
+        
+        {mensaje && (
+          <div className="mt-3 text-center text-sm text-green-400">{mensaje}</div>
+        )}
+        
+        <p className="text-slate-600 text-[9px] uppercase mt-4 tracking-wider text-center">
+          Subdirección Administrativa - Departamento Hotelería
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default RegistroOcupacionQR;

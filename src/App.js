@@ -1,9 +1,10 @@
 // App.js
 import React, { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient'; // 👈 Import con llaves
+import { supabase } from './supabaseClient';
 import LoginConQR from './components/LoginConQR';
 import FormularioPiso from './components/FormularioPiso';
 import AdminDashboard from './components/AdminDashboard';
+import RegistroOcupacionQR from './components/RegistroOcupacionQR';
 
 function App() {
   const [usuarioLogueado, setUsuarioLogueado] = useState(null);
@@ -39,22 +40,35 @@ function App() {
     const path = window.location.pathname;
     console.log("📍 Path actual:", path);
     
-    if (path.includes('/piso/')) {
+    // Ruta para ocupación (nueva)
+    if (path.includes('/ocupacion/')) {
+      const slug = path.split('/ocupacion/')[1];
+      setModoAcceso('ocupacion');
+      setSlugCompleto(slug);
+      console.log("📌 Modo OCUPACION:", slug);
+    } 
+    // Ruta para ropa blanca - piso
+    else if (path.includes('/piso/')) {
       const slug = path.split('/piso/')[1];
       setModoAcceso('piso');
       setSlugCompleto(slug);
       console.log("📌 Modo PISO:", slug);
-    } else if (path.includes('/lavadero/')) {
+    } 
+    // Ruta para ropa blanca - lavadero
+    else if (path.includes('/lavadero/')) {
       const slug = path.split('/lavadero/')[1];
       setModoAcceso('lavadero');
       setSlugCompleto(slug);
       console.log("📌 Modo LAVADERO:", slug);
-    } else if (path.includes('/habitacion/')) {
+    } 
+    // Ruta para ropa blanca - habitación especial
+    else if (path.includes('/habitacion/')) {
       const slug = path.split('/habitacion/')[1];
       setModoAcceso('habitacion');
       setSlugCompleto(slug);
-      console.log("📌 Modo HABITACION:", slug);
-    } else {
+      console.log("📌 Modo HABITACION (ropa blanca):", slug);
+    } 
+    else {
       setModoAcceso(null);
       setSlugCompleto(null);
     }
@@ -88,8 +102,8 @@ function App() {
   }
 
   if (!usuarioLogueado) {
-  return <LoginConQR onLoginSuccess={manejarLogin} modoAcceso={modoAcceso} />;
-}
+    return <LoginConQR onLoginSuccess={manejarLogin} modoAcceso={modoAcceso} />;
+  }
 
   return (
     <div className="App bg-slate-950 min-h-screen font-sans text-slate-200">
@@ -121,6 +135,11 @@ function App() {
         <main className="flex-grow">
           {rol === 'admin' ? (
             <AdminDashboard />
+          ) : modoAcceso === 'ocupacion' ? (
+            <RegistroOcupacionQR 
+              perfilUsuario={datosUsuario}
+              onRegistroCompleto={() => {}}
+            />
           ) : (
             <FormularioPiso 
               perfilUsuario={datosUsuario} 
