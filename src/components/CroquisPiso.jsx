@@ -447,18 +447,80 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         </div>
       )}
 
-      <div ref={containerRef} className="relative overflow-hidden bg-slate-950 mt-2" style={{ height: '70vh', cursor: modoMovimiento ? 'grab' : (modoEdicion ? 'crosshair' : 'default') }} onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
-        <div style={{ transform: `translate(${posicion.x}px, ${posicion.y}px) scale(${zoom})`, transformOrigin: '0 0', transition: arrastrando ? 'none' : 'transform 0.1s ease-out' }}>
-          <img ref={imageRef} src={croquis.imagen_url} alt={`Croquis ${pisoNombre}`} className="w-full h-auto" onClick={handleImageClick} style={{ pointerEvents: modoEdicion && !modoMovimiento ? 'auto' : 'none' }} draggable={false} />
+      <div 
+        ref={containerRef}
+        className="relative overflow-auto bg-slate-950"
+        style={{ 
+          height: 'auto', 
+          maxHeight: '80vh', 
+          cursor: modoMovimiento ? 'grab' : (modoEdicion ? 'crosshair' : 'default'),
+          minHeight: '400px'
+        }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        {/* Contenedor para zoom y arrastre */}
+        <div
+          style={{
+            transform: `translate(${posicion.x}px, ${posicion.y}px) scale(${zoom})`,
+            transformOrigin: '0 0',
+            transition: arrastrando ? 'none' : 'transform 0.1s ease-out',
+            width: 'fit-content'
+          }}
+        >
+          <img
+            ref={imageRef}
+            src={croquis.imagen_url}
+            alt={`Croquis ${pisoNombre}`}
+            className="w-auto h-auto"
+            style={{ 
+              maxWidth: '100%',
+              pointerEvents: modoEdicion && !modoMovimiento ? 'auto' : 'none'
+            }}
+            onClick={handleImageClick}
+            draggable={false}
+          />
           
+          {/* Marcadores de habitaciones */}
           {habitaciones.map(hab => {
             const coord = coordenadas[hab.id];
             if (!coord) return null;
+            
             const ocup = ocupacion[hab.id];
             const estilo = getColorPorTipoYOcupacion(hab, ocup);
-            let displayTexto = !ocup ? '?' : (ocup.tipo_habitacion === 'activa' ? ocup.camas_ocupadas : (ocup.tipo_habitacion === 'reparacion' ? '🔧' : '⚪'));
+            
+            let displayTexto = '';
+            if (!ocup) {
+              displayTexto = '?';
+            } else if (ocup.tipo_habitacion === 'activa') {
+              displayTexto = ocup.camas_ocupadas;
+            } else if (ocup.tipo_habitacion === 'reparacion') {
+              displayTexto = '🔧';
+            } else {
+              displayTexto = '⚪';
+            }
+            
             return (
-              <div key={hab.id} data-habitacion-id={hab.id} className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`} style={{ left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`, top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`, width: 'min(2.2%, 34px)', height: 'min(6.5%, 55px)', transform: 'translate(-50%, -50%)', minWidth: '32px', minHeight: '48px', padding: '2px 0' }} title={estilo.title} onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}>
+              <div
+                key={hab.id}
+                data-habitacion-id={hab.id}
+                className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
+                style={{
+                  left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
+                  top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
+                  width: 'min(2.2%, 34px)',
+                  height: 'min(6.5%, 55px)',
+                  transform: 'translate(-50%, -50%)',
+                  minWidth: '32px',
+                  minHeight: '48px',
+                  padding: '2px 0'
+                }}
+                title={estilo.title}
+                onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
+              >
                 <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
                 <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
               </div>
