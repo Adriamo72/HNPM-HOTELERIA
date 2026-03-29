@@ -41,6 +41,7 @@ const AdminDashboard = () => {
   const [pisoSeleccionado, setPisoSeleccionado] = useState('');
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STOCK_CRITICO = 5;
+  const [croquisKey, setCroquisKey] = useState(0);
 
   useEffect(() => {
     cargarDatos();
@@ -882,6 +883,23 @@ const AdminDashboard = () => {
     }
   };
 
+  useEffect(() => {
+  if (pisoSeleccionado) {
+    cargarHabitacionesDelPiso();
+  }
+}, [pisoSeleccionado]);
+
+const cargarHabitacionesDelPiso = async () => {
+  const { data } = await supabase
+    .from('habitaciones_especiales')
+    .select('*')
+    .eq('piso_id', pisoSeleccionado);
+  setHabitacionesEspeciales(prev => {
+    const otras = prev.filter(h => h.piso_id !== pisoSeleccionado);
+    return [...otras, ...(data || [])];
+  });
+};
+
   // ==================== GENERAR QR ====================
   const descargarQR = (path, titulo) => {
     const urlApp = `${window.location.origin}${path}`; 
@@ -965,7 +983,10 @@ const AdminDashboard = () => {
             </h2>
             <select
               value={pisoSeleccionado}
-              onChange={(e) => setPisoSeleccionado(e.target.value)}
+              onChange={(e) => {
+                setPisoSeleccionado(e.target.value);
+                setCroquisKey(prev => prev + 1); // Forzar recreación del croquis
+              }}
               className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
             >
               <option value="">Seleccionar piso...</option>
@@ -977,7 +998,7 @@ const AdminDashboard = () => {
           
           {pisoSeleccionado ? (
             <CroquisPiso
-              key={pisoSeleccionado}  // 👈 ESTA LÍNEA ES CRUCIAL
+              key={croquisKey}  // 👈 Usar la key que cambia con cada selección
               pisoId={pisoSeleccionado}
               pisoNombre={pisos.find(p => p.id === pisoSeleccionado)?.nombre_piso}
               habitaciones={habitacionesEspeciales.filter(h => h.piso_id === pisoSeleccionado)}
