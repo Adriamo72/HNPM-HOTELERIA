@@ -133,18 +133,38 @@ const AdminDashboard = () => {
     const fecha = new Date().toISOString().split('T')[0];
 
     try {
-      const { error } = await supabase
+      const { data: existing, error: fetchError } = await supabase
         .from('ocupacion_habitaciones')
-        .upsert({
-          habitacion_id: habId,
-          fecha,
-          tipo_habitacion: TIPO_MAP_DB[config.tipo] || 'otros',
-          total_camas: config.tipo === 'INTERNACION' ? Number(config.camas) || 1 : 1,
-          camas_ocupadas: config.tipo === 'INTERNACION' ? (config.camas_ocupadas || 0) : 0,
-          observaciones: config.tipo === 'OTROS' ? (config.texto || null) : null,
-          actualizado_por: null,
-          actualizado_en: new Date().toISOString()
-        }, { onConflict: 'habitacion_id,fecha' });
+        .select('id')
+        .eq('habitacion_id', habId)
+        .eq('fecha', fecha)
+        .maybeSingle();
+      if (fetchError) throw fetchError;
+
+      const payload = {
+        habitacion_id: habId,
+        fecha,
+        tipo_habitacion: TIPO_MAP_DB[config.tipo] || 'otros',
+        total_camas: config.tipo === 'INTERNACION' ? Number(config.camas) || 1 : 1,
+        camas_ocupadas: config.tipo === 'INTERNACION' ? (config.camas_ocupadas || 0) : 0,
+        observaciones: config.tipo === 'OTROS' ? (config.texto || null) : null,
+        actualizado_por: null,
+        actualizado_en: new Date().toISOString()
+      };
+
+      let error;
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from('ocupacion_habitaciones')
+          .update(payload)
+          .eq('id', existing.id);
+        error = updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('ocupacion_habitaciones')
+          .insert(payload);
+        error = insertError;
+      }
 
       if (error) {
         console.error('Error guardando estado de habitación:', error);
@@ -1009,23 +1029,6 @@ const AdminDashboard = () => {
       }
     }
   };
-
-  useEffect(() => {
-  if (pisoSeleccionado) {
-    cargarHabitacionesDelPiso();
-  }
-}, [pisoSeleccionado]);
-
-const cargarHabitacionesDelPiso = async () => {
-  const { data } = await supabase
-    .from('habitaciones_especiales')
-    .select('*')
-    .eq('piso_id', pisoSeleccionado);
-  setHabitacionesEspeciales(prev => {
-    const otras = prev.filter(h => h.piso_id !== pisoSeleccionado);
-    return [...otras, ...(data || [])];
-  });
-};
 
   // ==================== GENERAR QR ====================
   const descargarQR = (path, titulo) => {
