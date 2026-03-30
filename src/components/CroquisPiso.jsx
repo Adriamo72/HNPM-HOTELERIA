@@ -542,7 +542,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
                   minHeight: '48px',
                   padding: '2px 0'
                 }}
-                title={`${estilo.title}${ocup ? '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs' : ''}`}
+                title={`${estilo.title}${ocup ? '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs' : ''}`}
                 onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
               >
                 <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
