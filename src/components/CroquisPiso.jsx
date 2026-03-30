@@ -4,6 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 
 const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
+  const normalizedPisoId = typeof pisoId === 'string' && pisoId.trim() !== '' && !Number.isNaN(Number(pisoId))
+    ? Number(pisoId)
+    : pisoId;
+
   // Estados principales
   const [croquis, setCroquis] = useState(null);
   const [coordenadas, setCoordenadas] = useState({});
@@ -42,10 +46,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     setEstadisticas({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
     
     // Cargar nuevo croquis
-    if (pisoId) {
+    if (normalizedPisoId !== '' && normalizedPisoId !== null && normalizedPisoId !== undefined) {
       cargarCroquis();
     }
-  }, [pisoId]);
+  }, [normalizedPisoId]);
 
   // Cargar ocupación cuando cambia fecha o cuando se cargan las habitaciones
   useEffect(() => {
@@ -105,14 +109,14 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   };
 
   const cargarCroquis = async () => {
-    if (!pisoId) return;
+    if (normalizedPisoId === '' || normalizedPisoId === null || normalizedPisoId === undefined) return;
     
     setCargando(true);
     try {
       const { data: croquisData } = await supabase
         .from('croquis_pisos')
         .select('*')
-        .eq('piso_id', pisoId)
+        .eq('piso_id', normalizedPisoId)
         .eq('activo', true)
         .order('version', { ascending: false })
         .maybeSingle();

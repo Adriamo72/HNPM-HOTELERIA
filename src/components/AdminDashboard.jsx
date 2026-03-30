@@ -1111,8 +1111,7 @@ const cargarHabitacionesDelPiso = async () => {
             <select
               value={pisoSeleccionado}
               onChange={(e) => {
-                const selectedValue = e.target.value ? Number(e.target.value) : '';
-                setPisoSeleccionado(selectedValue);
+                setPisoSeleccionado(e.target.value);
                 setCroquisKey(prev => prev + 1); // Forzar recreación del croquis
               }}
               className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
@@ -1128,8 +1127,8 @@ const cargarHabitacionesDelPiso = async () => {
             <CroquisPiso
               key={croquisKey}  // 👈 Usar la key que cambia con cada selección
               pisoId={pisoSeleccionado}
-              pisoNombre={pisos.find(p => p.id === pisoSeleccionado)?.nombre_piso}
-              habitaciones={habitacionesEspeciales.filter(h => h.piso_id === pisoSeleccionado)}
+              pisoNombre={pisos.find(p => String(p.id) === String(pisoSeleccionado))?.nombre_piso}
+              habitaciones={habitacionesEspeciales.filter(h => String(h.piso_id) === String(pisoSeleccionado))}
             />
           ) : (
             <div className="bg-slate-800 rounded-xl p-12 text-center">
