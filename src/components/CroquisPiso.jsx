@@ -455,9 +455,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         <div className="bg-slate-800/50 p-3 mx-4 mt-2 rounded-lg">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div className="flex gap-4 text-sm">
-              <span className="text-green-400">🛏️ Total: {estadisticas.totalCamas}</span>
-              <span className="text-yellow-400">👥 Ocupadas: {estadisticas.camasOcupadas}</span>
-              <span className="text-blue-400">📊 {estadisticas.porcentaje.toFixed(1)}%</span>
+              <span className="text-green-400">Total: {estadisticas.totalCamas}</span>
+              <span className="text-yellow-400">Ocupadas: {estadisticas.camasOcupadas}</span>
+              <span className="text-blue-400">{estadisticas.porcentaje.toFixed(1)}%</span>
             </div>
             {ultimaActualizacion && (
               <div className="text-xs uppercase text-slate-400 tracking-[0.12em]">
