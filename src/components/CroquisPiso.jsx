@@ -186,7 +186,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
       
       if (insertError) throw insertError;
       
-      setMensaje("✅ Croquis subido correctamente");
+      setMensaje("✅  subido correctamente");
       setTimeout(() => setMensaje(''), 2000);
       cargarCroquis();
       
@@ -226,19 +226,19 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     if (!croquis) return;
     
     const confirmar = window.confirm(
-      `⚠️ ¿ELIMINAR CROQUIS?\n\nPiso: ${pisoNombre}\nSe eliminarán también todas las coordenadas.\n\nEsta acción NO SE PUEDE DESHACER.`
+      `⚠️ ¿ELIMINAR PLANO?\n\nPiso: ${pisoNombre}\nSe eliminarán también todas las coordenadas.\n\nEsta acción NO SE PUEDE DESHACER.`
     );
     
     if (!confirmar) return;
     
-    setMensaje("🗑️ Eliminando croquis...");
+    setMensaje("🗑️ Eliminando plano...");
     
     try {
       await supabase.from('habitacion_coordenadas').delete().eq('croquis_id', croquis.id);
       await supabase.from('croquis_pisos').delete().eq('id', croquis.id);
       await supabase.storage.from('croquis').remove([croquis.nombre_archivo]);
       
-      setMensaje("✅ Croquis eliminado correctamente");
+      setMensaje("✅ Plano eliminado correctamente");
       setCroquis(null);
       setCoordenadas({});
       setTimeout(() => setMensaje(''), 2000);
@@ -427,7 +427,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
         <h3 className="text-xl font-bold text-white mb-2">Croquis no disponible</h3>
         <p className="text-slate-400 mb-4">Sube la imagen del croquis para {pisoNombre}</p>
         <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2">
-          📤 Subir croquis (PNG/JPG)
+          📤 Subir plano (PNG/JPG)
           <input type="file" accept="image/png,image/jpeg,image/jpg" className="hidden" onChange={(e) => e.target.files[0] && subirCroquis(e.target.files[0])} />
         </label>
       </div>

@@ -1096,7 +1096,7 @@ const AdminDashboard = () => {
           onClick={() => setActiveTab('croquis')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'croquis' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
-          🏨 HOTELERIA
+          HOTELERIA
         </button>
         <button 
           onClick={() => setActiveTab('historial')} 
@@ -1116,7 +1116,7 @@ const AdminDashboard = () => {
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
-              🏨 HOTELERIA
+              HOTELERIA
             </h2>
             <select
               value={pisoSeleccionado}
