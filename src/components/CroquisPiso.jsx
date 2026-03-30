@@ -524,7 +524,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
             } else if (ocup.tipo_habitacion === 'reparacion') {
               displayTexto = '🔧';
             } else {
-              displayTexto = '⚪';
+              displayTexto = '';
             }
             
             return (
