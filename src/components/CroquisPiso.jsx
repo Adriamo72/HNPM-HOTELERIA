@@ -286,11 +286,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     
     switch (ocup.tipo_habitacion) {
       case 'reparacion':
-        return { 
-          bg: 'bg-yellow-500/80 border-yellow-400', 
-          text: 'text-black', 
+        return {
+          bg: 'border-yellow-400',
+          text: 'text-black',
           blink: false,
-          title: 'En reparación'
+          title: 'En reparación',
+          style: { backgroundColor: 'rgba(255, 248, 24, 0.95)' }
         };
       case 'otros':
         return { 
@@ -540,7 +541,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
                   transform: 'translate(-50%, -50%)',
                   minWidth: '32px',
                   minHeight: '48px',
-                  padding: '2px 0'
+                  padding: '2px 0',
+                  ...estilo.style
                 }}
                 title={`${estilo.title}${ocup ? '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs' : ''}`}
                 onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
