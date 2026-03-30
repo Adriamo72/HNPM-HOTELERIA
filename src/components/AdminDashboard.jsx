@@ -103,13 +103,21 @@ const AdminDashboard = () => {
         .from('ocupacion_habitaciones')
         .select('*')
         .eq('fecha', hoy)
-        .in('habitacion_id', habitaciones.map(h => h.id));
+        .in('habitacion_id', habitaciones.map(h => h.id))
+        .order('actualizado_en', { ascending: false });
 
       if (error) throw error;
 
+      const estadoPorHabitacion = {};
+      (data || []).forEach(e => {
+        if (!estadoPorHabitacion[e.habitacion_id]) {
+          estadoPorHabitacion[e.habitacion_id] = e;
+        }
+      });
+
       const next = {};
       habitaciones.forEach(hab => {
-        const estado = data?.find(e => e.habitacion_id === hab.id);
+        const estado = estadoPorHabitacion[hab.id];
         next[hab.id] = {
           tipo: estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS',
           camas: estado?.total_camas?.toString() || '1',
