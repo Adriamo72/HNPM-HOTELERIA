@@ -282,7 +282,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
   };
 
   const getColorPorTipoYOcupacion = (habitacion, ocup) => {
-    if (!ocup) return { bg: 'bg-gray-500/50 border-gray-400', text: 'text-white', blink: false, title: 'Sin registrar' };
+    if (!ocup) return { bg: 'border-gray-400', text: 'text-white', blink: false, title: 'Sin registrar', style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } };
     
     switch (ocup.tipo_habitacion) {
       case 'reparacion':
@@ -294,23 +294,25 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
           style: { backgroundColor: 'rgba(255, 248, 24, 0.95)' }
         };
       case 'otros':
-        return { 
-          bg: 'bg-gray-500/80 border-gray-400', 
-          text: 'text-white', 
+        return {
+          bg: 'border-gray-400',
+          text: 'text-white',
           blink: false,
-          title: ocup.observaciones || 'Otros'
+          title: ocup.observaciones || 'Otros',
+          style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' }
         };
       case 'activa':
         const camasDisponibles = (ocup.total_camas || 1) - (ocup.camas_ocupadas || 0);
         const parpadeo = camasDisponibles > 0;
         return {
-          bg: 'bg-green-500/80 border-green-400',
+          bg: 'border-green-400',
           text: 'text-white',
           blink: parpadeo,
-          title: `${ocup.camas_ocupadas}/${ocup.total_camas} camas ocupadas, ${camasDisponibles} disponibles`
+          title: `${ocup.camas_ocupadas}/${ocup.total_camas} camas ocupadas, ${camasDisponibles} disponibles`,
+          style: { backgroundColor: 'rgba(32, 205, 10, 0.9)' }
         };
       default:
-        return { bg: 'bg-gray-500/50 border-gray-400', text: 'text-white', blink: false, title: 'Sin estado' };
+        return { bg: 'border-gray-400', text: 'text-white', blink: false, title: 'Sin estado', style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } };
     }
   };
 
