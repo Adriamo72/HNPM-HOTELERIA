@@ -86,18 +86,28 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     if (!habitaciones.length || !pisoId) return;
     
     try {
-      const { data, error } = await supabase
+      const hoy = new Date().toISOString().split('T')[0];
+      let query = supabase
         .from('ocupacion_habitaciones')
         .select('*')
-        .eq('fecha', fechaSeleccionada)
         .in('habitacion_id', habitaciones.map(h => h.id));
+
+      if (fechaSeleccionada === hoy) {
+        query = query.order('fecha', { ascending: false }).order('actualizado_en', { ascending: false });
+      } else {
+        query = query.eq('fecha', fechaSeleccionada).order('actualizado_en', { ascending: false });
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
       const ocupMap = {};
       let ultima = null;
-      data?.forEach(occ => {
-        ocupMap[occ.habitacion_id] = occ;
+      (data || []).forEach(occ => {
+        if (!ocupMap[occ.habitacion_id]) {
+          ocupMap[occ.habitacion_id] = occ;
+        }
         const fecha = new Date(occ.actualizado_en || occ.created_at);
         if (!ultima || fecha > ultima) ultima = fecha;
       });
