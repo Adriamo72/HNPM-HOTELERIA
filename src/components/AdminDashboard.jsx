@@ -1096,7 +1096,7 @@ const AdminDashboard = () => {
           onClick={() => setActiveTab('croquis')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'croquis' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
-          HOTELERIA
+          Hotelería
         </button>
         <button 
           onClick={() => setActiveTab('historial')} 
