@@ -1086,7 +1086,7 @@ const cargarHabitacionesDelPiso = async () => {
           onClick={() => setActiveTab('croquis')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'croquis' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
-          🗺️ Croquis
+          🏨 HOTELERIA
         </button>
         <button 
           onClick={() => setActiveTab('historial')} 
@@ -1106,12 +1106,13 @@ const cargarHabitacionesDelPiso = async () => {
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
-              🗺️ Mapa de Ocupación por Piso
+              🏨 HOTELERIA
             </h2>
             <select
               value={pisoSeleccionado}
               onChange={(e) => {
-                setPisoSeleccionado(e.target.value);
+                const selectedValue = e.target.value ? Number(e.target.value) : '';
+                setPisoSeleccionado(selectedValue);
                 setCroquisKey(prev => prev + 1); // Forzar recreación del croquis
               }}
               className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
