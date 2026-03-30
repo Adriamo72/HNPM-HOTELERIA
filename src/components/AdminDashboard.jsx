@@ -96,15 +96,14 @@ const AdminDashboard = () => {
 
   const cargarEstadoHabitaciones = async (habitaciones = []) => {
     if (!habitaciones.length) return;
-    const hoy = new Date().toISOString().split('T')[0];
 
     try {
       const { data, error } = await supabase
         .from('ocupacion_habitaciones')
         .select('*')
-        .eq('fecha', hoy)
         .in('habitacion_id', habitaciones.map(h => h.id))
-        .order('actualizado_en', { ascending: false });
+        .order('actualizado_en', { ascending: false })
+        .order('fecha', { ascending: false });
 
       if (error) throw error;
 

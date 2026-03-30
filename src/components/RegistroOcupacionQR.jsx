@@ -34,15 +34,20 @@ const RegistroOcupacionQR = ({ perfilUsuario, onRegistroCompleto }) => {
       setHabitacion(habitacionData);
       setEscanear(false);
       
-      // Cargar estado actual de la habitación
-      const fecha = new Date().toISOString().split('T')[0];
-      const { data: estadoActual } = await supabase
+      // Cargar estado actual de la habitación (último registro disponible)
+      const { data: estadoActual, error: estadoError } = await supabase
         .from('ocupacion_habitaciones')
         .select('*')
         .eq('habitacion_id', habitacionData.id)
-        .eq('fecha', fecha)
+        .order('fecha', { ascending: false })
+        .order('actualizado_en', { ascending: false })
+        .limit(1)
         .maybeSingle();
       
+      if (estadoError) {
+        console.error('Error cargando estado de habitación:', estadoError);
+      }
+
       if (estadoActual) {
         setTipoHabitacion(estadoActual.tipo_habitacion || 'activa');
         setTotalCamas(estadoActual.total_camas || 1);
@@ -75,22 +80,40 @@ const RegistroOcupacionQR = ({ perfilUsuario, onRegistroCompleto }) => {
       }
 
       const fecha = new Date().toISOString().split('T')[0];
-      
-      const { error } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('ocupacion_habitaciones')
-        .upsert({
-          habitacion_id: habitacion.id,
-          fecha: fecha,
-          tipo_habitacion: tipoHabitacion,
-          total_camas: totalCamas,
-          camas_ocupadas: camasOcupadas,
-          observaciones: novedades || null,
-          actualizado_por: perfilUsuario?.dni,
-          actualizado_en: new Date().toISOString()
-        }, {
-          onConflict: 'habitacion_id,fecha'
-        });
-      
+        .select('id')
+        .eq('habitacion_id', habitacion.id)
+        .eq('fecha', fecha)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      const payload = {
+        habitacion_id: habitacion.id,
+        fecha: fecha,
+        tipo_habitacion: tipoHabitacion,
+        total_camas: totalCamas,
+        camas_ocupadas: camasOcupadas,
+        observaciones: novedades || null,
+        actualizado_por: perfilUsuario?.dni,
+        actualizado_en: new Date().toISOString()
+      };
+
+      let error;
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from('ocupacion_habitaciones')
+          .update(payload)
+          .eq('id', existing.id);
+        error = updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('ocupacion_habitaciones')
+          .insert(payload);
+        error = insertError;
+      }
+
       if (error) throw error;
       
       const mensajeExito = `✅ ${habitacion.nombre}: ${camasOcupadas}/${totalCamas} camas ocupadas`;
