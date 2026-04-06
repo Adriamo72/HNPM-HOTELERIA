@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import LoginConQR from './components/LoginConQR';
 import FormularioPiso from './components/FormularioPiso';
 import AdminDashboard from './components/AdminDashboard';
+import RegistroOcupacionQR from './components/RegistroOcupacionQR';
 import RecorridoOcupacion from './components/RecorridoOcupacion';
 
 function App() {
@@ -40,19 +41,26 @@ function App() {
     const path = window.location.pathname;
     console.log("📍 Path actual:", path);
     
-    // Ruta para ocupación (nueva)
-    if (path.includes('/ocupacion/')) {
+    // Ruta para RECORRIDO DE OCUPACIÓN (NUEVO - por piso)
+    if (path.includes('/recorrido/')) {
+      const slug = path.split('/recorrido/')[1];
+      setModoAcceso('recorrido');
+      setSlugCompleto(slug);
+      console.log("📌 Modo RECORRIDO OCUPACIÓN (por piso):", slug);
+    } 
+    // Ruta para ocupación (antiguo - por habitación) - Se mantiene por compatibilidad
+    else if (path.includes('/ocupacion/')) {
       const slug = path.split('/ocupacion/')[1];
       setModoAcceso('ocupacion');
       setSlugCompleto(slug);
-      console.log("📌 Modo OCUPACION:", slug);
+      console.log("📌 Modo OCUPACION (por habitación - legacy):", slug);
     } 
     // Ruta para ropa blanca - piso
     else if (path.includes('/piso/')) {
       const slug = path.split('/piso/')[1];
       setModoAcceso('piso');
       setSlugCompleto(slug);
-      console.log("📌 Modo PISO:", slug);
+      console.log("📌 Modo PISO (pañol):", slug);
     } 
     // Ruta para ropa blanca - lavadero
     else if (path.includes('/lavadero/')) {
@@ -68,6 +76,11 @@ function App() {
       setSlugCompleto(slug);
       console.log("📌 Modo HABITACION (ropa blanca):", slug);
     } 
+    // Ruta para autenticación (login con QR personal)
+    else if (path.includes('/auth/')) {
+      // Esto lo maneja LoginConQR, no necesitamos hacer nada aquí
+      console.log("📌 Ruta de autenticación detectada");
+    }
     else {
       setModoAcceso(null);
       setSlugCompleto(null);
@@ -91,11 +104,11 @@ function App() {
 
   if (cargandoSesion) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center">
         <div className="animate-pulse text-center">
-          <div className="w-12 h-12 bg-blue-600 rounded-full mx-auto mb-4 animate-bounce"></div>
-          <p className="text-slate-500 text-sm font-mono">SENTINEL HNPM</p>
-          <p className="text-slate-600 text-xs mt-2">Cargando sistema...</p>
+          <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl mx-auto mb-4 animate-bounce shadow-lg shadow-blue-900/40"></div>
+          <p className="text-blue-500 font-black text-sm uppercase tracking-wider">SENTINEL HNPM</p>
+          <p className="text-slate-600 text-xs mt-2 font-mono">Inicializando sistema...</p>
         </div>
       </div>
     );
@@ -108,20 +121,42 @@ function App() {
   return (
     <div className="App bg-slate-950 min-h-screen font-sans text-slate-200">
       <div className="flex flex-col min-h-screen">
+        {/* Header */}
         <header className="bg-slate-900/90 backdrop-blur-sm border-b border-blue-900/50 p-4 flex justify-between items-center shadow-2xl sticky top-0 z-50">
-          <div>
-            <h1 className="text-blue-500 font-black text-xs uppercase tracking-widest leading-none">
-              SENTINEL HNPM
-            </h1>
-            <p className="text-[11px] text-slate-300 font-bold uppercase mt-1 tracking-wider">
-              {datosUsuario?.jerarquia} {datosUsuario?.apellido}, {datosUsuario?.nombre}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/40">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-blue-500 font-black text-xs uppercase tracking-widest leading-none">
+                SENTINEL HNPM
+              </h1>
+              <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 tracking-wider">
+                {modoAcceso === 'recorrido' ? 'RECORRIDO OCUPACIÓN' : 
+                  modoAcceso === 'piso' ? 'CONTROL PAÑOL' : 
+                  modoAcceso === 'lavadero' ? 'CONTROL LAVADERO' : 
+                  modoAcceso === 'habitacion' ? 'SERVICIO HABITACIÓN' : 
+                  'PANEL DE CONTROL'}
+              </p>
+            </div>
           </div>
           <div className="flex gap-3 items-center">
-            <div className="bg-slate-800 px-3 py-1.5 rounded-lg">
-              <span className="text-[10px] font-black uppercase text-blue-400">
-                {rol === 'admin' ? '🔐 ADMINISTRADOR' : '👤 OPERADOR'}
+            <div className="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+              <span className="text-[10px] font-black uppercase">
+                {rol === 'admin' ? (
+                  <span className="text-red-400">🔐 ADMINISTRADOR</span>
+                ) : (
+                  <span className="text-blue-400">👤 {datosUsuario?.jerarquia || 'OPERADOR'}</span>
+                )}
               </span>
+            </div>
+            <div className="text-right hidden sm:block">
+              <p className="text-[9px] text-slate-500 uppercase leading-tight">Conectado</p>
+              <p className="text-[11px] font-bold text-white leading-tight">
+                {datosUsuario?.apellido}, {datosUsuario?.nombre}
+              </p>
             </div>
             <button 
               onClick={cerrarSesion} 
@@ -132,14 +167,20 @@ function App() {
           </div>
         </header>
 
+        {/* Main Content */}
         <main className="flex-grow">
           {rol === 'admin' ? (
             <AdminDashboard />
-          ) : modoAcceso === 'ocupacion' ? (
+          ) : modoAcceso === 'recorrido' ? (
             <RecorridoOcupacion 
               perfilUsuario={datosUsuario}
-              pisoId={null}  // Se seleccionará dentro del componente
-              onFinalizar={() => window.location.href = '/'}
+              slugPiso={slugCompleto}
+            />
+          ) : modoAcceso === 'ocupacion' ? (
+            // Legacy: modo antiguo de ocupación por habitación (se mantiene por compatibilidad)
+            <RegistroOcupacionQR 
+              perfilUsuario={datosUsuario}
+              onRegistroCompleto={() => {}}
             />
           ) : (
             <FormularioPiso 
@@ -150,6 +191,7 @@ function App() {
           )}
         </main>
         
+        {/* Footer */}
         <footer className="p-3 text-center text-[8px] text-slate-600 uppercase tracking-widest bg-slate-950/80 border-t border-slate-900">
           Sistema de Trazabilidad Hospitalaria • HNPM Sentinel Hub v2.0
         </footer>

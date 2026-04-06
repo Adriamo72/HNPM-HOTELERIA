@@ -1,83 +1,171 @@
 // components/RecorridoOcupacion.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import LiveQRScanner from './LiveQRScanner';
 
-const RecorridoOcupacion = ({ perfilUsuario, pisoId, pisoNombre, onFinalizar }) => {
-  const [modo, setModo] = useState('seleccionar_piso'); // seleccionar_piso, escaneo_rapido, modo_lista
-  const [pisoSeleccionado, setPisoSeleccionado] = useState(null);
-  const [pisosDisponibles, setPisosDisponibles] = useState([]);
+const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
+  const [piso, setPiso] = useState(null);
   const [habitaciones, setHabitaciones] = useState([]);
   const [ocupaciones, setOcupaciones] = useState({});
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
+  const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    cargarPisos();
-  }, []);
+    if (slugPiso) {
+      cargarDatos();
+    }
+  }, [slugPiso]);
 
-  const cargarPisos = async () => {
-    const { data } = await supabase.from('pisos').select('*').order('nombre_piso');
-    setPisosDisponibles(data || []);
+  const cargarDatos = async () => {
+    setCargando(true);
+    
+    try {
+      // 1. Obtener el piso por slug
+      const { data: pisoData, error: pisoError } = await supabase
+        .from('pisos')
+        .select('*')
+        .eq('slug', slugPiso)
+        .single();
+      
+      if (pisoError) throw pisoError;
+      setPiso(pisoData);
+      
+      // 2. Obtener TODAS las habitaciones del piso
+      const { data: habitacionesData, error: habError } = await supabase
+        .from('habitaciones_especiales')
+        .select('*')
+        .eq('piso_id', pisoData.id)
+        .order('nombre');
+      
+      if (habError) throw habError;
+      
+      if (!habitacionesData || habitacionesData.length === 0) {
+        setHabitaciones([]);
+        setCargando(false);
+        return;
+      }
+      
+      // 3. Obtener la configuración de ocupación para la fecha actual
+      const fecha = new Date().toISOString().split('T')[0];
+      const { data: ocupacionesData, error: ocupError } = await supabase
+        .from('ocupacion_habitaciones')
+        .select('*')
+        .in('habitacion_id', habitacionesData.map(h => h.id))
+        .eq('fecha', fecha);
+      
+      if (ocupError) throw ocupError;
+      
+      // 4. Crear mapa de ocupaciones existentes
+      const ocupMap = {};
+      (ocupacionesData || []).forEach(ocup => {
+        ocupMap[ocup.habitacion_id] = ocup;
+      });
+      
+      // 5. FILTRAR SOLO habitaciones de INTERNACIÓN (tipo_habitacion = 'activa')
+      const habitacionesInternacion = [];
+      
+      for (const hab of habitacionesData) {
+        const ocupExistente = ocupMap[hab.id];
+        
+        // Determinar el tipo de habitación
+        let tipoHabitacion = null;
+        let totalCamas = 1;
+        let camasOcupadas = 0;
+        
+        if (ocupExistente) {
+          tipoHabitacion = ocupExistente.tipo_habitacion;
+          totalCamas = ocupExistente.total_camas || 1;
+          camasOcupadas = ocupExistente.camas_ocupadas || 0;
+        } else {
+          // Si no existe registro, buscar si hay configuración previa (último registro)
+          const { data: ultimoRegistro } = await supabase
+            .from('ocupacion_habitaciones')
+            .select('tipo_habitacion, total_camas')
+            .eq('habitacion_id', hab.id)
+            .order('fecha', { ascending: false })
+            .order('actualizado_en', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (ultimoRegistro) {
+            tipoHabitacion = ultimoRegistro.tipo_habitacion;
+            totalCamas = ultimoRegistro.total_camas || 1;
+          }
+        }
+        
+        // SOLO agregar si es de tipo INTERNACIÓN (activa)
+        if (tipoHabitacion === 'activa') {
+          habitacionesInternacion.push({
+            id: hab.id,
+            nombre: hab.nombre,
+            total_camas: totalCamas,
+            camas_ocupadas: camasOcupadas
+          });
+        }
+      }
+      
+      // 6. Guardar estado de ocupaciones para edición
+      const ocupState = {};
+      habitacionesInternacion.forEach(hab => {
+        ocupState[hab.id] = {
+          camas_ocupadas: hab.camas_ocupadas,
+          total_camas: hab.total_camas
+        };
+      });
+      
+      setHabitaciones(habitacionesInternacion);
+      setOcupaciones(ocupState);
+      
+    } catch (error) {
+      console.error("Error cargando datos:", error);
+      setMensaje("❌ Error al cargar el sector");
+      setTimeout(() => setMensaje(''), 3000);
+    } finally {
+      setCargando(false);
+    }
   };
 
-  const seleccionarPiso = async (piso) => {
-    setPisoSeleccionado(piso);
+  const actualizarCamasOcupadas = (habitacionId, nuevoValor) => {
+    const habitacion = habitaciones.find(h => h.id === habitacionId);
+    if (!habitacion) return;
     
-    // Cargar habitaciones del piso
-    const { data: habs } = await supabase
-      .from('habitaciones_especiales')
-      .select('*')
-      .eq('piso_id', piso.id);
+    const maxCamas = habitacion.total_camas;
+    const valor = Math.min(maxCamas, Math.max(0, nuevoValor));
     
-    setHabitaciones(habs || []);
-    
-    // Cargar ocupaciones actuales
-    const fecha = new Date().toISOString().split('T')[0];
-    const { data: ocups } = await supabase
-      .from('ocupacion_habitaciones')
-      .select('*')
-      .in('habitacion_id', (habs || []).map(h => h.id))
-      .eq('fecha', fecha);
-    
-    const ocupMap = {};
-    (ocups || []).forEach(ocup => {
-      ocupMap[ocup.habitacion_id] = ocup;
-    });
-    setOcupaciones(ocupMap);
-    
-    setModo('modo_lista');
-  };
-
-  const actualizarOcupacion = (habitacionId, campo, valor) => {
     setOcupaciones(prev => ({
       ...prev,
       [habitacionId]: {
         ...prev[habitacionId],
-        [campo]: valor,
-        actualizado_por: perfilUsuario.dni,
-        actualizado_en: new Date().toISOString()
+        camas_ocupadas: valor
       }
     }));
   };
 
   const guardarTodas = async () => {
+    if (habitaciones.length === 0) {
+      setMensaje("⚠️ No hay habitaciones de internación para guardar");
+      setTimeout(() => setMensaje(''), 2000);
+      return;
+    }
+    
     setGuardando(true);
     const fecha = new Date().toISOString().split('T')[0];
+    let guardados = 0;
+    let errores = 0;
     
     try {
       for (const hab of habitaciones) {
-        const ocup = ocupaciones[hab.id];
-        if (!ocup) continue;
+        const ocupActual = ocupaciones[hab.id];
+        if (!ocupActual) continue;
         
         const payload = {
           habitacion_id: hab.id,
           fecha: fecha,
           tipo_habitacion: 'activa',
-          total_camas: ocup.total_camas || 1,
-          camas_ocupadas: ocup.camas_ocupadas || 0,
-          observaciones: ocup.observaciones || null,
-          actualizado_por: perfilUsuario.dni,
+          total_camas: hab.total_camas,
+          camas_ocupadas: ocupActual.camas_ocupadas,
+          observaciones: null,
+          actualizado_por: perfilUsuario?.dni,
           actualizado_en: new Date().toISOString()
         };
         
@@ -85,184 +173,225 @@ const RecorridoOcupacion = ({ perfilUsuario, pisoId, pisoNombre, onFinalizar }) 
           .from('ocupacion_habitaciones')
           .upsert(payload, { onConflict: 'habitacion_id,fecha' });
         
-        if (error) throw error;
+        if (error) {
+          console.error(`Error guardando ${hab.nombre}:`, error);
+          errores++;
+        } else {
+          guardados++;
+        }
       }
       
-      setMensaje('✅ Todas las ocupaciones guardadas');
-      setTimeout(() => setMensaje(''), 2000);
+      if (errores === 0) {
+        setMensaje(`✅ ${guardados} habitaciones guardadas - ${new Date().toLocaleTimeString()}`);
+      } else {
+        setMensaje(`⚠️ ${guardados} guardadas, ${errores} errores`);
+      }
       
-      if (onFinalizar) onFinalizar();
+      setTimeout(() => setMensaje(''), 2500);
+      
+      // Recargar datos para mostrar los valores actualizados
+      setTimeout(() => cargarDatos(), 500);
+      
     } catch (error) {
-      console.error(error);
-      setMensaje('❌ Error al guardar');
+      console.error("Error guardando:", error);
+      setMensaje("❌ Error al guardar la ocupación");
+      setTimeout(() => setMensaje(''), 3000);
     } finally {
       setGuardando(false);
     }
   };
 
-  const handleScanSuccess = async (decodedText) => {
-    if (modo !== 'escaneo_rapido') return;
-    
-    if (decodedText.includes('/ocupacion/')) {
-      const slug = decodedText.split('/ocupacion/')[1];
-      const { data: habitacion } = await supabase
-        .from('habitaciones_especiales')
-        .select('*')
-        .eq('slug', slug)
-        .maybeSingle();
-      
-      if (habitacion && habitacion.piso_id === pisoSeleccionado?.id) {
-        // Enfocar automáticamente en esta habitación
-        document.getElementById(`habitacion-${habitacion.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setMensaje(`📌 Enfocado: ${habitacion.nombre}`);
-        setTimeout(() => setMensaje(''), 1500);
-      } else {
-        setMensaje('❌ Habitación no pertenece a este piso');
-        setTimeout(() => setMensaje(''), 1500);
-      }
-    }
-  };
+  // Calcular estadísticas
+  const totalCamas = habitaciones.reduce((sum, hab) => sum + (hab.total_camas || 1), 0);
+  const totalOcupadas = habitaciones.reduce((sum, hab) => sum + (ocupaciones[hab.id]?.camas_ocupadas || 0), 0);
+  const porcentaje = totalCamas > 0 ? (totalOcupadas / totalCamas) * 100 : 0;
 
-  // Pantalla de selección de piso
-  if (modo === 'seleccionar_piso') {
+  if (cargando) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 p-6">
-        <div className="max-w-md mx-auto">
-          <div className="text-center mb-8">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-500 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-black text-white uppercase">Recorrido de Ocupación</h1>
-            <p className="text-slate-400 text-sm mt-2">{perfilUsuario?.jerarquia} {perfilUsuario?.apellido}</p>
-          </div>
-          
-          <div className="space-y-3">
-            <p className="text-xs text-slate-500 uppercase font-bold mb-2">Seleccionar sector:</p>
-            {pisosDisponibles.map(piso => (
-              <button
-                key={piso.id}
-                onClick={() => seleccionarPiso(piso)}
-                className="w-full bg-slate-800 hover:bg-slate-700 p-4 rounded-xl text-left transition-all border border-slate-700"
-              >
-                <span className="text-lg font-bold text-blue-400">{piso.nombre_piso}</span>
-                <span className="text-xs text-slate-500 block mt-1">Tap para registrar ocupación</span>
-              </button>
-            ))}
-          </div>
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center">
+        <div className="animate-pulse text-center">
+          <div className="w-16 h-16 bg-purple-600 rounded-2xl mx-auto mb-4 animate-bounce"></div>
+          <p className="text-slate-400 font-mono text-sm">Cargando recorrido...</p>
         </div>
       </div>
     );
   }
 
-  // Modo lista de habitaciones (más rápido)
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 p-4 pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm p-4 rounded-xl mb-4 border border-slate-800">
-        <div className="flex justify-between items-center">
-          <div>
-            <button 
-              onClick={() => setModo('seleccionar_piso')}
-              className="text-slate-400 text-sm mb-1"
-            >
-              ← Cambiar sector
-            </button>
-            <h2 className="text-xl font-bold text-blue-400">{pisoSeleccionado?.nombre_piso}</h2>
-          </div>
-          <button
-            onClick={() => setModo(modo === 'modo_lista' ? 'escaneo_rapido' : 'modo_lista')}
-            className={`px-3 py-2 rounded-lg text-xs font-bold ${modo === 'escaneo_rapido' ? 'bg-green-600' : 'bg-slate-700'}`}
+  if (!piso) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
+        <div className="bg-red-900/20 rounded-2xl p-8 text-center max-w-md border border-red-800">
+          <div className="text-6xl mb-4">❌</div>
+          <h2 className="text-xl font-bold text-white mb-2">Sector no encontrado</h2>
+          <p className="text-slate-400 text-sm">El código QR escaneado no corresponde a un sector válido.</p>
+          <button 
+            onClick={() => window.location.href = '/'}
+            className="mt-6 bg-blue-600 px-6 py-2 rounded-xl text-sm font-bold"
           >
-            {modo === 'escaneo_rapido' ? '📱 Modo Escáner' : '📋 Modo Lista'}
+            Volver al inicio
           </button>
         </div>
-        
-        {/* Barra de progreso */}
-        <div className="mt-3">
-          <div className="flex justify-between text-xs text-slate-500 mb-1">
-            <span>Progreso</span>
-            <span>{Object.keys(ocupaciones).filter(id => ocupaciones[id]?.camas_ocupadas !== undefined).length}/{habitaciones.length}</span>
+      </div>
+    );
+  }
+
+  if (habitaciones.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
+        <div className="bg-slate-900 rounded-2xl p-8 text-center max-w-md border border-slate-800">
+          <div className="text-6xl mb-4">🏥</div>
+          <h2 className="text-xl font-bold text-white mb-2">Sin habitaciones de internación</h2>
+          <p className="text-slate-400 text-sm">
+            El sector <span className="text-purple-400 font-bold">{piso.nombre_piso}</span> no tiene habitaciones configuradas para internación.
+          </p>
+          <p className="text-slate-500 text-xs mt-2">
+            Contacte al administrador para configurar las habitaciones.
+          </p>
+          <button 
+            onClick={() => window.location.href = '/'}
+            className="mt-6 bg-blue-600 px-6 py-2 rounded-xl text-sm font-bold"
+          >
+            Volver al inicio
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 pb-32">
+      {/* Header fijo */}
+      <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-purple-900/30">
+        <div className="p-4">
+          <div className="flex justify-between items-center mb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white">RECORRIDO OCUPACIÓN</h1>
+                  <p className="text-xs text-purple-400 font-bold uppercase">{piso.nombre_piso}</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-slate-500 uppercase">Operador</p>
+              <p className="text-sm font-bold text-white">{perfilUsuario?.jerarquia} {perfilUsuario?.apellido}</p>
+            </div>
           </div>
-          <div className="w-full bg-slate-800 rounded-full h-2">
-            <div 
-              className="bg-green-500 h-2 rounded-full transition-all"
-              style={{ width: `${(Object.keys(ocupaciones).filter(id => ocupaciones[id]?.camas_ocupadas !== undefined).length / habitaciones.length) * 100}%` }}
-            />
+          
+          {/* Tarjeta de resumen */}
+          <div className="bg-slate-800/50 rounded-xl p-3">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-slate-400">
+                🛏️ Total camas: <span className="text-white font-bold">{totalCamas}</span>
+              </span>
+              <span className="text-slate-400">
+                👤 Ocupadas: <span className="text-yellow-400 font-bold">{totalOcupadas}</span>
+              </span>
+              <span className="text-slate-400">
+                ✅ Disponibles: <span className="text-green-400 font-bold">{totalCamas - totalOcupadas}</span>
+              </span>
+            </div>
+            <div className="w-full bg-slate-700 rounded-full h-2.5">
+              <div 
+                className="bg-gradient-to-r from-purple-500 to-purple-400 h-2.5 rounded-full transition-all duration-500"
+                style={{ width: `${porcentaje}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-slate-500 mt-1.5">
+              <span>{habitaciones.length} habitaciones</span>
+              <span>{porcentaje.toFixed(0)}% ocupación</span>
+              <span>{new Date().toLocaleDateString('es-AR')}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Modo Escáner Rápido */}
-      {modo === 'escaneo_rapido' && (
-        <div className="mb-6">
-          <LiveQRScanner 
-            onScanSuccess={handleScanSuccess}
-            onScanError={() => {}}
-          />
-          <p className="text-center text-xs text-slate-500 mt-2">
-            📷 Escanea QR de ocupación para ir directamente a la habitación
-          </p>
-        </div>
-      )}
-
-      {/* Lista de habitaciones */}
-      <div className="space-y-3">
+      {/* Lista de habitaciones (SOLO INTERNACIÓN) */}
+      <div className="p-4 space-y-3">
         {habitaciones.map(hab => {
-          const ocup = ocupaciones[hab.id] || {};
-          const totalCamas = ocup.total_camas || 1;
-          const camasOcupadas = ocup.camas_ocupadas || 0;
+          const ocupActual = ocupaciones[hab.id];
+          const camasOcupadas = ocupActual?.camas_ocupadas || 0;
+          const totalCamasHab = hab.total_camas || 1;
+          
+          let estado = '';
+          let colorEstado = '';
+          let iconoEstado = '';
+          
+          if (camasOcupadas === 0) {
+            estado = 'VACÍA';
+            colorEstado = 'bg-red-900/50 text-red-400 border-red-800/50';
+            iconoEstado = '🔴';
+          } else if (camasOcupadas === totalCamasHab) {
+            estado = 'COMPLETA';
+            colorEstado = 'bg-green-900/50 text-green-400 border-green-800/50';
+            iconoEstado = '🟢';
+          } else {
+            estado = 'PARCIAL';
+            colorEstado = 'bg-yellow-900/50 text-yellow-400 border-yellow-800/50';
+            iconoEstado = '🟡';
+          }
           
           return (
             <div 
               key={hab.id} 
-              id={`habitacion-${hab.id}`}
-              className="bg-slate-800/50 rounded-xl p-4 border border-slate-700"
+              className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden hover:border-purple-700/50 transition-all"
             >
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-lg font-bold text-white">{hab.nombre}</h3>
-                <span className="text-xs text-slate-500">Camas: {totalCamas}</span>
-              </div>
-              
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => actualizarOcupacion(hab.id, 'camas_ocupadas', Math.max(0, camasOcupadas - 1))}
-                  className="w-12 h-12 bg-red-900/50 rounded-xl text-2xl font-bold text-red-400 active:scale-95"
-                >
-                  -
-                </button>
-                
-                <div className="flex-1 text-center">
-                  <input
-                    type="number"
-                    min="0"
-                    max={totalCamas}
-                    value={camasOcupadas}
-                    onChange={(e) => actualizarOcupacion(hab.id, 'camas_ocupadas', Math.min(totalCamas, Math.max(0, parseInt(e.target.value) || 0)))}
-                    className="w-full bg-slate-900 text-4xl font-black text-center text-green-400 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">Pacientes ocupando cama</p>
+              <div className="p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold text-white">{hab.nombre}</span>
+                    <span className="text-xs text-slate-500">({totalCamasHab} cama{totalCamasHab === 1 ? '' : 's'})</span>
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${colorEstado} border`}>
+                    {iconoEstado} {estado}
+                  </span>
                 </div>
                 
-                <button
-                  onClick={() => actualizarOcupacion(hab.id, 'camas_ocupadas', Math.min(totalCamas, camasOcupadas + 1))}
-                  className="w-12 h-12 bg-green-900/50 rounded-xl text-2xl font-bold text-green-400 active:scale-95"
-                >
-                  +
-                </button>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => actualizarCamasOcupadas(hab.id, camasOcupadas - 1)}
+                    disabled={camasOcupadas === 0}
+                    className="w-14 h-14 bg-red-900/30 rounded-xl text-3xl font-bold text-red-400 active:scale-95 transition-all disabled:opacity-30 disabled:active:scale-100"
+                  >
+                    -
+                  </button>
+                  
+                  <div className="flex-1 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max={totalCamasHab}
+                        value={camasOcupadas}
+                        onChange={(e) => actualizarCamasOcupadas(hab.id, parseInt(e.target.value) || 0)}
+                        className="w-28 bg-slate-900 text-5xl font-black text-center text-purple-400 rounded-xl p-2 outline-none focus:ring-2 focus:ring-purple-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <span className="text-2xl text-slate-500 font-bold">/ {totalCamasHab}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">PACIENTES OCUPANDO CAMA</p>
+                  </div>
+                  
+                  <button
+                    onClick={() => actualizarCamasOcupadas(hab.id, camasOcupadas + 1)}
+                    disabled={camasOcupadas === totalCamasHab}
+                    className="w-14 h-14 bg-green-900/30 rounded-xl text-3xl font-bold text-green-400 active:scale-95 transition-all disabled:opacity-30 disabled:active:scale-100"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
               
-              {/* Indicador de estado */}
-              <div className="mt-3 flex justify-between items-center text-xs">
-                <span className={`px-2 py-1 rounded-full ${camasOcupadas === totalCamas ? 'bg-red-900/50 text-red-400' : camasOcupadas > 0 ? 'bg-yellow-900/50 text-yellow-400' : 'bg-green-900/50 text-green-400'}`}>
-                  {camasOcupadas === totalCamas ? '🟢 COMPLETO' : camasOcupadas > 0 ? '🟡 PARCIAL' : '🔴 VACÍO'}
-                </span>
-                {ocup.actualizado_en && (
-                  <span className="text-slate-600">
-                    {new Date(ocup.actualizado_en).toLocaleTimeString()}
-                  </span>
-                )}
+              {/* Barra de ocupación de la habitación */}
+              <div className="h-1 bg-slate-700">
+                <div 
+                  className="h-full bg-purple-500 transition-all duration-300"
+                  style={{ width: `${(camasOcupadas / totalCamasHab) * 100}%` }}
+                />
               </div>
             </div>
           );
@@ -270,19 +399,30 @@ const RecorridoOcupacion = ({ perfilUsuario, pisoId, pisoNombre, onFinalizar }) 
       </div>
 
       {/* Botón guardar flotante */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-950 to-transparent">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8">
         <button
           onClick={guardarTodas}
           disabled={guardando}
-          className="w-full bg-gradient-to-r from-green-600 to-green-500 p-4 rounded-xl font-black text-white uppercase shadow-lg active:scale-95 disabled:opacity-50"
+          className="w-full bg-gradient-to-r from-purple-600 to-purple-500 p-4 rounded-xl font-black text-white uppercase shadow-lg active:scale-95 disabled:opacity-50 disabled:active:scale-100 text-lg tracking-wider"
         >
-          {guardando ? 'GUARDANDO...' : '✅ GUARDAR TODAS LAS OCUPACIONES'}
+          {guardando ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              GUARDANDO...
+            </span>
+          ) : (
+            '✅ GUARDAR OCUPACIÓN'
+          )}
         </button>
       </div>
       
+      {/* Mensaje flotante */}
       {mensaje && (
-        <div className="fixed top-20 left-4 right-4 bg-blue-600 text-white p-3 rounded-xl text-center shadow-xl z-20">
-          {mensaje}
+        <div className="fixed top-20 left-4 right-4 bg-slate-900 border border-purple-600 text-white p-3 rounded-xl text-center shadow-2xl z-50 animate-in slide-in-from-top-5">
+          <p className="font-bold text-sm">{mensaje}</p>
         </div>
       )}
     </div>

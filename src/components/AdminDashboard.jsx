@@ -1500,22 +1500,31 @@ const AdminDashboard = () => {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                     <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
                     <div className="flex flex-wrap gap-2">
+                      {/* QR OCUPACIÓN DEL PISO (NUEVO) */}
+                      <button 
+                        onClick={() => descargarQR(`/recorrido/${p.slug}`, `RECORRIDO OCUPACIÓN - ${p.nombre_piso}`)} 
+                        className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-purple-500 border border-purple-900/30 hover:bg-purple-900/30 transition-all"
+                      >
+                        🏥 QR Recorrido
+                      </button>
+                      
                       <button 
                         onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} 
                         className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
                       >
                         🗄️ QR Pañol
                       </button>
+                      
                       <button 
                         onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} 
                         className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
                       >
                         🧺 QR Lavadero
                       </button>
+                      
                       <button 
                         onClick={() => eliminarPiso(p.id, p.nombre_piso)} 
                         className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
-                        title="Eliminar sector y todos sus registros"
                       >
                         🗑️ Eliminar
                       </button>
