@@ -1,529 +1,828 @@
-// components/FormularioPiso.jsx (versión con spinner)
+// components/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import bcrypt from 'bcryptjs';
+import CroquisPiso from './CroquisPiso';
 import useSpinner from '../hooks/useSpinner';
-import SpinnerOverlay from '../components/SpinnerOverlay';
+import SpinnerOverlay from './SpinnerOverlay';
 
-const ITEMS_HOTELERIA = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
-
-const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
-  const [piso, setPiso] = useState(null);
-  const [habitacionEspecial, setHabitacionEspecial] = useState(null);
-  const [modo, setModo] = useState(modoAcceso || 'piso'); 
-  const [stocksPorItem, setStocksPorItem] = useState({});
-  const [stocksUsoPorItem, setStocksUsoPorItem] = useState({});
-  const [stocksLavaderoPorItem, setStocksLavaderoPorItem] = useState({});
-  const [novedades, setNovedades] = useState("Sin novedades");
-  const [busquedaDni, setBusquedaDni] = useState('');
-  const [enfermeroEncontrado, setEnfermeroEncontrado] = useState(null);
-  const [datos, setDatos] = useState({ item: 'SABANAS', carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
-  const [cargando, setCargando] = useState(true);
-  const [registrando, setRegistrando] = useState(false);
-  
-  // Estados para el formulario de habitación
-  const [itemSeleccionadoHabitacion, setItemSeleccionadoHabitacion] = useState('SABANAS');
-  const [cantidadHabitacion, setCantidadHabitacion] = useState(0);
+const AdminDashboard = () => {
+  const [activeTab, setActiveTab] = useState('croquis');
+  const [personal, setPersonal] = useState([]);
+  const [pisos, setPisos] = useState([]);
+  const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
+  const [admins, setAdmins] = useState([]);
+  const [movimientosAgrupados, setMovimientosAgrupados] = useState({});
+  const [stockPañol, setStockPañol] = useState({});
+  const [stockUso, setStockUso] = useState({});
+  const [stockLavadero, setStockLavadero] = useState({});
+  const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
   
   const { spinner, showLoading, showSuccess, showError, hideSpinner } = useSpinner();
+  
+  // Estados para modales
+  const [mostrarModalAdmin, setMostrarModalAdmin] = useState(false);
+  const [mostrarModalCambioPin, setMostrarModalCambioPin] = useState(false);
+  const [mostrarModalPersonal, setMostrarModalPersonal] = useState(false);
+  const [mostrarModalPiso, setMostrarModalPiso] = useState(false);
+  const [adminSeleccionado, setAdminSeleccionado] = useState(null);
+  
+  // Estados para formularios
+  const [nuevoAdmin, setNuevoAdmin] = useState({ usuario: '', pin: '', confirmarPin: '' });
+  const [nuevoPin, setNuevoPin] = useState('');
+  const [confirmarNuevoPin, setConfirmarNuevoPin] = useState('');
+  const [nuevoMiembro, setNuevoMiembro] = useState({ 
+    dni: '', 
+    nombre: '', 
+    apellido: '', 
+    jerarquia: '', 
+    celular: '', 
+    rol: 'pañolero' 
+  });
+  const [nuevoPiso, setNuevoPiso] = useState({ nombre_piso: '' });
+  const [pisoSeleccionado, setPisoSeleccionado] = useState('');
+  const [habitacionStatus, setHabitacionStatus] = useState({});
+  const [habitacionesAbiertas, setHabitacionesAbiertas] = useState({});
+  const [croquisKey, setCroquisKey] = useState(0);
+  const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
+  
+  const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
+  const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
+  const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
+  const STOCK_CRITICO = 5;
 
-  useEffect(() => {
-    if (slugPiso) {
-      cargarContexto();
-    } else {
-      setCargando(false);
+  const formatearResumenHabitacion = (config) => {
+    if (config.tipo === 'INTERNACION') {
+      const camas = Number(config.camas) || 1;
+      return `INTERNACIÓN (${camas} cama${camas === 1 ? '' : 's'})`;
     }
-  }, [slugPiso]);
 
-  const mostrarSplash = (msj) => {
-    // Usamos el spinner para feedback
-    if (msj.includes('✅')) {
-      showSuccess(msj);
-    } else if (msj.includes('❌') || msj.includes('ERROR')) {
-      showError(msj);
+    if (config.tipo === 'EN REPARACION') {
+      return 'EN REPARACIÓN';
     }
+
+    const texto = config.texto ? config.texto.trim() : '';
+    return `OTROS (${texto})`;
   };
 
-  const cargarContexto = async () => {
-    setCargando(true);
-    showLoading('CARGANDO SECTOR...');
-    
-    try {
-      let pisoData = null;
-      let habitacionData = null;
+  const truncarTexto = (texto, largo = 28) => {
+    if (!texto) return texto;
+    return texto.length > largo ? `${texto.slice(0, largo - 1)}…` : texto;
+  };
 
-      if (modo === 'habitacion') {
-        const { data: habitacion } = await supabase
-          .from('habitaciones_especiales')
-          .select('*, pisos(*)')
-          .eq('slug', slugPiso)
-          .maybeSingle();
+  const mostrarSplash = (mensaje) => {
+    setNotificacion({ visible: true, mensaje });
+    setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
+  };
 
-        if (habitacion) {
-          habitacionData = habitacion;
-          pisoData = habitacion.pisos;
-        }
+  const actualizarHabitacionStatus = (habId, field, value) => {
+    setHabitacionStatus(prev => ({
+      ...prev,
+      [habId]: {
+        ...prev[habId],
+        [field]: value
       }
-
-      if (!pisoData) {
-        const { data: piso, error } = await supabase
-          .from('pisos')
-          .select('*')
-          .eq('slug', slugPiso)
-          .single();
-
-        if (error) {
-          showError('SECTOR NO ENCONTRADO');
-          setCargando(false);
-          return;
-        }
-        pisoData = piso;
-      }
-
-      if (pisoData) {
-        setPiso(pisoData);
-        if (habitacionData) {
-          setHabitacionEspecial(habitacionData);
-        }
-        
-        const stocksTemp = {};
-        const stocksUsoTemp = {};
-        const stocksLavaderoTemp = {};
-        
-        for (const item of ITEMS_HOTELERIA) {
-          const { data: stockData, error } = await supabase
-            .from('stock_piso')
-            .select('stock_pañol, stock_en_uso, stock_lavadero')
-            .eq('piso_id', pisoData.id)
-            .eq('item', item)
-            .maybeSingle();
-          
-          if (error) {
-            console.error(`Error cargando stock para ${item}:`, error);
-          }
-          
-          if (!stockData) {
-            const { error: insertError } = await supabase
-              .from('stock_piso')
-              .insert({
-                piso_id: pisoData.id,
-                item: item,
-                stock_pañol: 0,
-                stock_en_uso: 0,
-                stock_lavadero: 0,
-                updated_at: new Date()
-              });
-            
-            if (insertError) {
-              console.error(`Error creando registro para ${item}:`, insertError);
-            }
-            
-            stocksTemp[item] = 0;
-            stocksUsoTemp[item] = 0;
-            stocksLavaderoTemp[item] = 0;
-          } else {
-            stocksTemp[item] = stockData.stock_pañol || 0;
-            stocksUsoTemp[item] = stockData.stock_en_uso || 0;
-            stocksLavaderoTemp[item] = stockData.stock_lavadero || 0;
-          }
-        }
-        
-        setStocksPorItem(stocksTemp);
-        setStocksUsoPorItem(stocksUsoTemp);
-        setStocksLavaderoPorItem(stocksLavaderoTemp);
-        hideSpinner();
-      }
-    } catch (error) {
-      console.error("Error en cargarContexto:", error);
-      showError('ERROR INESPERADO');
-    } finally {
-      setCargando(false);
-    }
+    }));
   };
 
-  const actualizarStockCompleto = async (item, nuevoPañol, nuevoUso, nuevoLavadero) => {
-    const { error } = await supabase
-      .from('stock_piso')
-      .upsert({
-        piso_id: piso.id,
-        item: item,
-        stock_pañol: nuevoPañol,
-        stock_en_uso: nuevoUso,
-        stock_lavadero: nuevoLavadero,
-        updated_at: new Date()
-      }, { onConflict: 'piso_id,item' });
-    
-    if (error) {
-      console.error("Error actualizando stock_piso:", error);
-      return false;
-    }
-    return true;
-  };
-
-  // ==================== REGISTRO HABITACIÓN ====================
-  const registrarHabitacion = async () => {
-    if (!piso?.id) {
-      showError('PISO NO IDENTIFICADO');
-      return;
-    }
-
-    if (cantidadHabitacion <= 0) {
-      showError('INGRESE UNA CANTIDAD VÁLIDA');
-      return;
-    }
-
-    const stockActualPañol = stocksPorItem[itemSeleccionadoHabitacion] || 0;
-    const nuevoStockPañol = stockActualPañol - cantidadHabitacion;
-    const nuevoStockUso = (stocksUsoPorItem[itemSeleccionadoHabitacion] || 0) + cantidadHabitacion;
-
-    if (nuevoStockPañol < 0) {
-      showError(`STOCK INSUFICIENTE DE ${itemSeleccionadoHabitacion}. DISPONIBLE: ${stockActualPañol}`);
-      return;
-    }
-
-    setRegistrando(true);
-    showLoading('REGISTRANDO ENTREGA...');
-
-    const movimiento = {
-      piso_id: piso.id,
-      dni_pañolero: perfilUsuario.dni,
-      item: itemSeleccionadoHabitacion,
-      egreso_limpio: cantidadHabitacion,
-      stock_fisico_piso: nuevoStockPañol,
-      novedades: novedades,
-      es_cambio_habitacion: true
-    };
-
-    if (habitacionEspecial) {
-      movimiento.habitacion_id = habitacionEspecial.id;
-    }
-
-    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
-    
-    if (movError) {
-      console.error("Error:", movError);
-      showError('ERROR EN REGISTRO');
-      setRegistrando(false);
-      return;
-    }
-
-    const ok = await actualizarStockCompleto(itemSeleccionadoHabitacion, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[itemSeleccionadoHabitacion] || 0);
-    
-    if (ok) {
-      setStocksPorItem(prev => ({ ...prev, [itemSeleccionadoHabitacion]: nuevoStockPañol }));
-      setStocksUsoPorItem(prev => ({ ...prev, [itemSeleccionadoHabitacion]: nuevoStockUso }));
-      showSuccess(`${cantidadHabitacion} ${itemSeleccionadoHabitacion} ENTREGADOS`);
-      setCantidadHabitacion(0);
-      setNovedades("Sin novedades");
-    } else {
-      showError('ERROR AL ACTUALIZAR STOCK');
-    }
-    
-    setRegistrando(false);
-  };
-
-  // ==================== CAMBIO ESTÁNDAR HABITACIÓN ====================
-  const ejecutarCambioEstandar = async () => {
-    if (!piso?.id) {
-      showError('PISO NO IDENTIFICADO');
-      return;
-    }
-
-    setRegistrando(true);
-    showLoading('REGISTRANDO CAMBIO ESTÁNDAR...');
-    
-    const itemsEstandar = [
-      { item: 'SABANAS', cant: 2 },
-      { item: 'TOALLAS', cant: 1 },
-      { item: 'TOALLONES', cant: 1 }
-    ];
+  const cargarEstadoHabitaciones = async (habitaciones = []) => {
+    if (!habitaciones.length) return;
 
     try {
-      let errores = false;
-      let exitosos = [];
-      
-      for (const i of itemsEstandar) {
-        const stockActualPañol = stocksPorItem[i.item] || 0;
-        const nuevoStockPañol = stockActualPañol - i.cant;
-        const nuevoStockUso = (stocksUsoPorItem[i.item] || 0) + i.cant;
+      const { data, error } = await supabase
+        .from('ocupacion_habitaciones')
+        .select('*')
+        .in('habitacion_id', habitaciones.map(h => h.id))
+        .order('actualizado_en', { ascending: false })
+        .order('fecha', { ascending: false });
 
-        if (nuevoStockPañol < 0) {
-          showError(`STOCK INSUFICIENTE DE ${i.item}. DISPONIBLE: ${stockActualPañol}`);
-          errores = true;
-          continue;
+      if (error) throw error;
+
+      const estadoPorHabitacion = {};
+      (data || []).forEach(e => {
+        if (!estadoPorHabitacion[e.habitacion_id]) {
+          estadoPorHabitacion[e.habitacion_id] = e;
         }
+      });
 
-        const movimiento = {
-          piso_id: piso.id,
-          dni_pañolero: perfilUsuario.dni,
-          item: i.item,
-          egreso_limpio: i.cant,
-          stock_fisico_piso: nuevoStockPañol,
-          novedades: novedades,
-          es_cambio_habitacion: true
+      const next = {};
+      habitaciones.forEach(hab => {
+        const estado = estadoPorHabitacion[hab.id];
+        next[hab.id] = {
+          tipo: estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS',
+          camas: estado?.total_camas?.toString() || '1',
+          texto: estado?.observaciones || '',
+          camas_ocupadas: estado?.camas_ocupadas || 0
         };
+      });
+      setHabitacionStatus(prev => ({
+        ...prev,
+        ...next
+      }));
+    } catch (error) {
+      console.error('Error cargando estado de habitaciones:', error);
+    }
+  };
 
-        if (habitacionEspecial) {
-          movimiento.habitacion_id = habitacionEspecial.id;
-        }
+  const guardarEstadoHabitacion = async (habId) => {
+    const config = habitacionStatus[habId];
+    if (!config) return;
 
-        const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
+    showLoading('GUARDANDO CONFIGURACIÓN...');
+    const fecha = new Date().toISOString().split('T')[0];
+
+    try {
+      const { data: existing, error: fetchError } = await supabase
+        .from('ocupacion_habitaciones')
+        .select('id')
+        .eq('habitacion_id', habId)
+        .eq('fecha', fecha)
+        .maybeSingle();
+      if (fetchError) throw fetchError;
+
+      const payload = {
+        habitacion_id: habId,
+        fecha,
+        tipo_habitacion: TIPO_MAP_DB[config.tipo] || 'otros',
+        total_camas: config.tipo === 'INTERNACION' ? Number(config.camas) || 1 : 1,
+        camas_ocupadas: config.tipo === 'INTERNACION' ? (config.camas_ocupadas || 0) : 0,
+        observaciones: config.tipo === 'OTROS' ? (config.texto || null) : null,
+        actualizado_por: null,
+        actualizado_en: new Date().toISOString()
+      };
+
+      let error;
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from('ocupacion_habitaciones')
+          .update(payload)
+          .eq('id', existing.id);
+        error = updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('ocupacion_habitaciones')
+          .insert(payload);
+        error = insertError;
+      }
+
+      if (error) throw error;
+
+      showSuccess('CONFIGURACIÓN GUARDADA');
+      setHabitacionesAbiertas(prev => ({
+        ...prev,
+        [habId]: false
+      }));
+      
+      const habitacion = habitacionesEspeciales.find(h => h.id === habId);
+      if (habitacion) await cargarEstadoHabitaciones([habitacion]);
+    } catch (error) {
+      console.error('Error guardando estado de habitación:', error);
+      showError('ERROR AL GUARDAR');
+    }
+  };
+
+  const recalcularStockPiso = async (pisoId) => {
+    try {
+      const { data: movimientos, error: mError } = await supabase
+        .from('movimientos_stock')
+        .select('*')
+        .eq('piso_id', pisoId)
+        .order('created_at', { ascending: true });
+      
+      if (mError) throw mError;
+      
+      const stocksIniciales = {};
+      ITEMS_REQUERIDOS.forEach(item => {
+        stocksIniciales[item] = { pañol: 0, uso: 0, lavadero: 0 };
+      });
+      
+      for (const mov of movimientos) {
+        const item = mov.item;
+        if (!stocksIniciales[item]) continue;
         
-        if (movError) {
-          errores = true;
-          continue;
+        if (mov.entregado_limpio > 0) {
+          stocksIniciales[item].pañol += mov.entregado_limpio;
+          stocksIniciales[item].lavadero = Math.max(0, stocksIniciales[item].lavadero - mov.entregado_limpio);
         }
-
-        const ok = await actualizarStockCompleto(i.item, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[i.item] || 0);
         
-        if (ok) {
-          exitosos.push(i.item);
-          setStocksPorItem(prev => ({ ...prev, [i.item]: nuevoStockPañol }));
-          setStocksUsoPorItem(prev => ({ ...prev, [i.item]: nuevoStockUso }));
-        } else {
-          errores = true;
+        if (mov.egreso_limpio > 0) {
+          stocksIniciales[item].pañol -= mov.egreso_limpio;
+          stocksIniciales[item].uso += mov.egreso_limpio;
+        }
+        
+        if (mov.retirado_sucio > 0) {
+          stocksIniciales[item].uso = Math.max(0, stocksIniciales[item].uso - mov.retirado_sucio);
+          stocksIniciales[item].lavadero += mov.retirado_sucio;
         }
       }
       
-      if (!errores && exitosos.length > 0) {
-        showSuccess(`CAMBIO ESTÁNDAR: ${exitosos.join(', ')}`);
-        setNovedades("Sin novedades");
-      } else if (exitosos.length > 0) {
-        showSuccess(`PARCIAL: ${exitosos.join(', ')}`);
-      } else {
-        showError('STOCK INSUFICIENTE');
+      for (const item of ITEMS_REQUERIDOS) {
+        const { error: upsertError } = await supabase
+          .from('stock_piso')
+          .upsert({
+            piso_id: pisoId,
+            item: item,
+            stock_pañol: Math.max(0, stocksIniciales[item]?.pañol || 0),
+            stock_en_uso: Math.max(0, stocksIniciales[item]?.uso || 0),
+            stock_lavadero: Math.max(0, stocksIniciales[item]?.lavadero || 0),
+            updated_at: new Date()
+          }, { onConflict: 'piso_id,item' });
+        
+        if (upsertError) console.error(`Error actualizando ${item}:`, upsertError);
       }
+      
+      return true;
+    } catch (error) {
+      console.error("Error recalculando stock:", error);
+      throw error;
+    }
+  };
+
+  const cargarDatos = async () => {
+    setSincronizando(true);
+    showLoading('SINCRONIZANDO DATOS...');
+    
+    try {
+      const resPers = await supabase.from('personal').select('*').order('apellido');
+      const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
+      const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
+      
+      const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
+      setAuditoriaHabilitada(config?.valor === 'true');
+
+      const { data: movs } = await supabase.from('movimientos_stock')
+        .select(`
+          *, 
+          pisos(nombre_piso, id), 
+          pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), 
+          enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      const stockPañolMap = {};
+      const stockUsoMap = {};
+      const stockLavaderoMap = {};
+      
+      if (resPisos.data) {
+        for (const piso of resPisos.data) {
+          stockPañolMap[piso.nombre_piso] = {};
+          stockUsoMap[piso.nombre_piso] = {};
+          stockLavaderoMap[piso.nombre_piso] = {};
+          
+          for (const item of ITEMS_REQUERIDOS) {
+            const { data: stockData } = await supabase
+              .from('stock_piso')
+              .select('stock_pañol, stock_en_uso, stock_lavadero')
+              .eq('piso_id', piso.id)
+              .eq('item', item)
+              .maybeSingle();
+            
+            stockPañolMap[piso.nombre_piso][item] = stockData?.stock_pañol || 0;
+            stockUsoMap[piso.nombre_piso][item] = stockData?.stock_en_uso || 0;
+            stockLavaderoMap[piso.nombre_piso][item] = stockData?.stock_lavadero || 0;
+          }
+        }
+      }
+
+      const agrupados = movs ? movs.reduce((acc, curr) => {
+        const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
+        if (!acc[nombrePiso]) acc[nombrePiso] = [];
+        acc[nombrePiso].push(curr);
+        return acc;
+      }, {}) : {};
+      
+      setPersonal(resPers.data || []);
+      setPisos(resPisos.data || []);
+      setHabitacionesEspeciales(resHabs.data || []);
+      setMovimientosAgrupados(agrupados);
+      setStockPañol(stockPañolMap);
+      setStockUso(stockUsoMap);
+      setStockLavadero(stockLavaderoMap);
+      
+      await cargarEstadoHabitaciones(resHabs.data || []);
+      
+      showSuccess('DATOS SINCRONIZADOS');
+      
     } catch (error) {
       console.error(error);
-      showError('ERROR EN REGISTRO');
+      showError('ERROR AL SINCRONIZAR');
     } finally {
-      setRegistrando(false);
+      setSincronizando(false);
     }
   };
 
-  // ==================== REGISTRO LAVADERO ====================
-  const registrarLavadero = async (e) => {
-    e.preventDefault();
+  const cargarAdmins = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_acceso')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setAdmins(data || []);
+    } catch (error) {
+      console.error("Error cargando admins:", error);
+    }
+  };
+
+  const agregarAdmin = async () => {
+    if (!nuevoAdmin.usuario.trim()) {
+      showError('INGRESE UN USUARIO');
+      return;
+    }
     
-    if (!piso?.id) {
-      showError('PISO NO IDENTIFICADO');
+    if (nuevoAdmin.pin.length < 4) {
+      showError('EL PIN DEBE TENER 4 DÍGITOS');
       return;
     }
-
-    const ingresoLimpio = parseInt(datos.carga_lavadero || 0);
-    const salidaSucio = parseInt(datos.retirado_sucio || 0);
-
-    if (ingresoLimpio === 0 && salidaSucio === 0) {
-      showError('INGRESE AL MENOS UNA CANTIDAD');
+    
+    if (nuevoAdmin.pin !== nuevoAdmin.confirmarPin) {
+      showError('LOS PINS NO COINCIDEN');
       return;
     }
+    
+    showLoading('CREANDO ADMINISTRADOR...');
+    
+    try {
+      const salt = bcrypt.genSaltSync(10);
+      const pinHash = bcrypt.hashSync(nuevoAdmin.pin, salt);
+      
+      const { error } = await supabase
+        .from('admin_acceso')
+        .insert({
+          usuario: nuevoAdmin.usuario.toLowerCase().trim(),
+          pin_hash: pinHash,
+          activo: true,
+          created_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        if (error.code === '23505') {
+          showError('EL USUARIO YA EXISTE');
+        } else {
+          showError('ERROR AL CREAR ADMINISTRADOR');
+        }
+        return;
+      }
+      
+      showSuccess(`ADMIN ${nuevoAdmin.usuario} CREADO`);
+      setNuevoAdmin({ usuario: '', pin: '', confirmarPin: '' });
+      setMostrarModalAdmin(false);
+      cargarAdmins();
+      
+    } catch (error) {
+      console.error("Error:", error);
+      showError('ERROR AL CREAR ADMINISTRADOR');
+    }
+  };
 
-    setRegistrando(true);
-    showLoading('REGISTRANDO MOVIMIENTO...');
+  const cambiarEstadoAdmin = async (adminId, estadoActual) => {
+    try {
+      const { error } = await supabase
+        .from('admin_acceso')
+        .update({ 
+          activo: !estadoActual,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', adminId);
+      
+      if (error) throw error;
+      
+      showSuccess(estadoActual ? "ADMINISTRADOR DESACTIVADO" : "ADMINISTRADOR ACTIVADO");
+      cargarAdmins();
+      
+    } catch (error) {
+      console.error("Error:", error);
+      showError("ERROR AL CAMBIAR ESTADO");
+    }
+  };
 
-    let nuevoStockPañol = stocksPorItem[datos.item] || 0;
-    let nuevoStockUso = stocksUsoPorItem[datos.item] || 0;
-    let nuevoStockLavadero = stocksLavaderoPorItem[datos.item] || 0;
-    let mensajes = [];
-    let ajusteAutomatico = false;
+  const cambiarPinAdmin = async () => {
+    if (nuevoPin.length < 4) {
+      showError("EL PIN DEBE TENER 4 DÍGITOS");
+      return;
+    }
+    
+    if (nuevoPin !== confirmarNuevoPin) {
+      showError("LOS PINS NO COINCIDEN");
+      return;
+    }
+    
+    showLoading("CAMBIANDO PIN...");
+    
+    try {
+      const salt = bcrypt.genSaltSync(10);
+      const pinHash = bcrypt.hashSync(nuevoPin, salt);
+      
+      const { error } = await supabase
+        .from('admin_acceso')
+        .update({ 
+          pin_hash: pinHash,
+          intentos_fallidos: 0,
+          bloqueado_hasta: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', adminSeleccionado.id);
+      
+      if (error) throw error;
+      
+      showSuccess(`PIN CAMBIADO PARA ${adminSeleccionado.usuario}`);
+      setMostrarModalCambioPin(false);
+      setNuevoPin('');
+      setConfirmarNuevoPin('');
+      cargarAdmins();
+      
+    } catch (error) {
+      console.error("Error:", error);
+      showError("ERROR AL CAMBIAR PIN");
+    }
+  };
 
-    if (salidaSucio > 0) {
-      if (nuevoStockUso >= salidaSucio) {
-        nuevoStockUso -= salidaSucio;
-        nuevoStockLavadero += salidaSucio;
-        mensajes.push(`${salidaSucio} sucios`);
-      } else {
-        const deficit = salidaSucio - nuevoStockUso;
-        nuevoStockPañol -= deficit;
-        nuevoStockUso = 0;
-        nuevoStockLavadero += salidaSucio;
-        ajusteAutomatico = true;
-        mensajes.push(`${salidaSucio} sucios (${deficit} ajustado)`);
+  const eliminarAdmin = async (adminId, usuario) => {
+    if (window.confirm(`¿Eliminar permanentemente al administrador "${usuario}"?\n\nEsta acción no se puede deshacer.`)) {
+      showLoading("ELIMINANDO ADMINISTRADOR...");
+      
+      try {
+        const { error } = await supabase
+          .from('admin_acceso')
+          .delete()
+          .eq('id', adminId);
+        
+        if (error) throw error;
+        
+        showSuccess(`ADMINISTRADOR ${usuario} ELIMINADO`);
+        cargarAdmins();
+        
+      } catch (error) {
+        console.error("Error:", error);
+        showError("ERROR AL ELIMINAR ADMINISTRADOR");
       }
     }
+  };
 
-    if (ingresoLimpio > 0) {
-      if (nuevoStockLavadero >= ingresoLimpio) {
-        nuevoStockLavadero -= ingresoLimpio;
-        nuevoStockPañol += ingresoLimpio;
-        mensajes.push(`${ingresoLimpio} limpios`);
-      } else {
-        const deficit = ingresoLimpio - nuevoStockLavadero;
-        nuevoStockLavadero = 0;
-        nuevoStockPañol += ingresoLimpio;
-        ajusteAutomatico = true;
-        mensajes.push(`${ingresoLimpio} limpios (${deficit} nuevo ingreso)`);
+  const generarQRPersonal = async (personal) => {
+    showLoading('GENERANDO CREDENCIAL...');
+    
+    try {
+      const token = crypto.randomUUID ? crypto.randomUUID() : 
+        Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
+      const expiraEn = new Date();
+      expiraEn.setMonth(expiraEn.getMonth() + 6);
+      
+      await supabase
+        .from('tokens_acceso')
+        .update({ activo: false })
+        .eq('dni', personal.dni);
+      
+      const { error } = await supabase
+        .from('tokens_acceso')
+        .insert({
+          dni: personal.dni,
+          token: token,
+          activo: true,
+          tipo: 'personal',
+          creado_en: new Date().toISOString(),
+          expira_en: expiraEn.toISOString()
+        });
+      
+      if (error) throw error;
+      
+      const qrUrl = `${window.location.origin}/auth/${token}`;
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
+      const nombreArchivo = `Credencial_${personal.jerarquia}_${personal.apellido}_${personal.nombre}.png`;
+      
+      const win = window.open('', '_blank', 'width=600,height=700,menubar=no,toolbar=no,location=no');
+      
+      if (!win) {
+        showError('PERMITIR POPUPS PARA ESTE SITIO');
+        return;
+      }
+      
+      win.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Credencial ${personal.apellido}</title>
+            <meta charset="UTF-8">
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { background: #1e293b; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif; padding: 40px; }
+              .container { text-align: center; }
+              .credencial { width: 85.6mm; height: 53.98mm; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 3mm; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3); position: relative; overflow: hidden; border: 1px solid #334155; margin-bottom: 20px; }
+              .credencial::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #3b82f6, #60a5fa, #3b82f6); }
+              .contenido { padding: 4mm 3mm; height: 100%; display: flex; gap: 3mm; }
+              .lado-qr { flex-shrink: 0; width: 28mm; text-align: center; }
+              .qr-container { background: white; padding: 2mm; border-radius: 2mm; border: 1px solid #334155; }
+              .qr-container img { width: 24mm; height: 24mm; display: block; }
+              .qr-label { font-size: 2mm; color: #94a3b8; margin-top: 1.5mm; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+              .lado-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+              .header { text-align: center; margin-bottom: 2mm; }
+              .logo-placeholder { width: 12mm; height: 12mm; margin: 0 auto 1mm; background: #3b82f6; border-radius: 2mm; display: flex; align-items: center; justify-content: center; color: white; font-size: 5mm; font-weight: bold; }
+              .hospital { font-size: 3mm; font-weight: 800; color: white; letter-spacing: 0.5px; line-height: 1.2; }
+              .departamento { font-size: 2.2mm; color: #60a5fa; font-weight: 600; letter-spacing: 0.3px; }
+              .datos { text-align: center; margin: 2mm 0; }
+              .jerarquia { font-size: 2.8mm; font-weight: 800; color: #60a5fa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1mm; }
+              .nombre { font-size: 3.2mm; font-weight: 700; color: white; line-height: 1.3; }
+              .rol { display: inline-block; background: #1e40af; color: #93c5fd; font-size: 2mm; font-weight: 700; padding: 0.5mm 2mm; border-radius: 3mm; margin-top: 1.5mm; text-transform: uppercase; }
+              .footer { text-align: center; border-top: 0.5px solid #334155; padding-top: 1.5mm; margin-top: 1mm; }
+              .valido { font-size: 2mm; color: #94a3b8; font-weight: 500; }
+              .valido span { font-weight: 700; color: #34d399; }
+              .mensaje { font-size: 1.8mm; color: #64748b; margin-top: 1mm; }
+              .botones { margin-top: 20px; display: flex; gap: 10px; justify-content: center; }
+              button { background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+              button:hover { background: #1d4ed8; transform: scale(1.02); }
+              .info { margin-top: 20px; padding: 12px; background: #334155; border-radius: 8px; font-size: 12px; color: #cbd5e1; text-align: left; }
+              .info strong { color: #60a5fa; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div id="credencial" class="credencial">
+                <div class="contenido">
+                  <div class="lado-qr">
+                    <div class="qr-container">
+                      <img src="${qrCodeUrl}" alt="QR de acceso" />
+                    </div>
+                    <div class="qr-label">ACCESO<br>HOTELERÍA</div>
+                  </div>
+                  <div class="lado-info">
+                    <div class="header">
+                      <div class="logo-placeholder">🏥</div>
+                      <div class="hospital">HOSPITAL NAVAL</div>
+                      <div class="hospital" style="font-size:2.5mm">BUENOS AIRES</div>
+                      <div class="departamento">DEPARTAMENTO HOTELERÍA</div>
+                    </div>
+                    <div class="datos">
+                      <div class="jerarquia">${personal.jerarquia || 'OPERADOR'}</div>
+                      <div class="nombre">${personal.apellido}, ${personal.nombre}</div>
+                      <div class="rol">${personal.rol?.toUpperCase() || 'PAÑOLERO'}</div>
+                    </div>
+                    <div class="footer">
+                      <div class="valido">VÁLIDO HASTA: <span>${expiraEn.toLocaleDateString('es-AR')}</span></div>
+                      <div class="mensaje">PERSONAL E INTRANSFERIBLE</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="botones">
+                <button id="btnGuardar">📸 GUARDAR COMO IMAGEN</button>
+                <button id="btnCerrar" style="background:#475569">✖️ CERRAR</button>
+              </div>
+              <div class="info">
+                <strong>💡 Para Word:</strong> Guarda la imagen y luego inserta en Word.<br>
+                <strong>📄 En una hoja A4 entran 8 credenciales (4x2).</strong> Ajusta el tamaño de la imagen a <strong>8.56cm x 5.4cm</strong>.
+              </div>
+            </div>
+            <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+            <script>
+              function guardarImagen() {
+                const element = document.getElementById('credencial');
+                const btn = document.getElementById('btnGuardar');
+                const textoOriginal = btn.innerHTML;
+                btn.innerHTML = '⏳ GENERANDO...';
+                btn.disabled = true;
+                html2canvas(element, { scale: 4, backgroundColor: null, logging: false, useCORS: true }).then(canvas => {
+                  const link = document.createElement('a');
+                  link.download = '${nombreArchivo}';
+                  link.href = canvas.toDataURL('image/png');
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  btn.innerHTML = textoOriginal;
+                  btn.disabled = false;
+                }).catch(error => {
+                  console.error('Error:', error);
+                  btn.innerHTML = textoOriginal;
+                  btn.disabled = false;
+                  alert('❌ Error al capturar la imagen.');
+                });
+              }
+              window.onload = function() {
+                document.getElementById('btnGuardar').onclick = guardarImagen;
+                document.getElementById('btnCerrar').onclick = function() { window.close(); };
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      win.document.close();
+      
+      showSuccess(`CREDENCIAL DE ${personal.apellido} GENERADA`);
+      
+    } catch (error) {
+      console.error("Error generando QR:", error);
+      showError('ERROR AL GENERAR CREDENCIAL');
+    }
+  };
+
+  const eliminarMovimiento = async (id) => {
+    if (!window.confirm("⚠️ ¿ELIMINAR REGISTRO?\n\nEl stock se recalculará automáticamente después de eliminar.")) return;
+    
+    showLoading('ELIMINANDO REGISTRO...');
+    
+    try {
+      const { data: movimiento, error: getError } = await supabase
+        .from('movimientos_stock')
+        .select('piso_id')
+        .eq('id', id)
+        .single();
+      
+      if (getError) throw getError;
+      
+      const { error: delError } = await supabase
+        .from('movimientos_stock')
+        .delete()
+        .eq('id', id);
+      
+      if (delError) throw delError;
+      
+      await recalcularStockPiso(movimiento.piso_id);
+      showSuccess('REGISTRO ELIMINADO');
+      cargarDatos();
+      
+    } catch (error) {
+      console.error("Error:", error);
+      showError('ERROR AL ELIMINAR');
+    }
+  };
+
+  const eliminarPiso = async (pisoId, pisoNombre) => {
+    if (window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE el piso "${pisoNombre}"?\n\nSe eliminarán todos los registros asociados.\n\nEsta acción NO SE PUEDE DESHACER.`)) {
+      showLoading('ELIMINANDO SECTOR...');
+      
+      try {
+        await supabase.from('movimientos_stock').delete().eq('piso_id', pisoId);
+        await supabase.from('stock_piso').delete().eq('piso_id', pisoId);
+        await supabase.from('habitaciones_especiales').delete().eq('piso_id', pisoId);
+        await supabase.from('pisos').delete().eq('id', pisoId);
+        
+        showSuccess(`SECTOR "${pisoNombre}" ELIMINADO`);
+        cargarDatos();
+      } catch (error) {
+        console.error("Error:", error);
+        showError('ERROR AL ELIMINAR SECTOR');
       }
     }
-
-    if (nuevoStockPañol < 0) {
-      showError('STOCK EN PAÑOL NEGATIVO. CONTACTE ADMINISTRACIÓN');
-      setRegistrando(false);
-      return;
-    }
-
-    const movimiento = {
-      piso_id: piso.id,
-      dni_pañolero: perfilUsuario.dni,
-      item: datos.item,
-      entregado_limpio: ingresoLimpio,
-      retirado_sucio: salidaSucio,
-      stock_fisico_piso: nuevoStockPañol,
-      novedades: novedades + (ajusteAutomatico ? " [Ajuste automático]" : "")
-    };
-
-    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
-    
-    if (movError) {
-      showError('ERROR EN REGISTRO');
-      setRegistrando(false);
-      return;
-    }
-
-    const ok = await actualizarStockCompleto(datos.item, nuevoStockPañol, nuevoStockUso, nuevoStockLavadero);
-    
-    if (ok) {
-      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
-      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
-      setStocksLavaderoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockLavadero }));
-      showSuccess(`${datos.item}: ${mensajes.join(' / ')}${ajusteAutomatico ? ' ⚠️ AJUSTE' : ''}`);
-      setDatos({ ...datos, carga_lavadero: 0, retirado_sucio: 0 });
-      setNovedades("Sin novedades");
-    } else {
-      showError('ERROR AL ACTUALIZAR STOCK');
-    }
-    
-    setRegistrando(false);
   };
 
-  // ==================== REGISTRO PAÑOL - ENTREGA A PISO ====================
-  const registrarEntregaPiso = async (e) => {
+  const agregarPersonal = async (e) => {
     e.preventDefault();
+    if (!nuevoMiembro.dni || !nuevoMiembro.nombre || !nuevoMiembro.apellido) {
+      showError('COMPLETE TODOS LOS CAMPOS');
+      return;
+    }
     
-    if (!piso?.id) {
-      showError('PISO NO IDENTIFICADO');
-      return;
-    }
-
-    if (!enfermeroEncontrado) {
-      showError('DEBE BUSCAR UN ENCARGADO DE PISO');
-      return;
-    }
-
-    const cantidadEntregada = parseInt(datos.entrega_piso || 0);
-    if (cantidadEntregada <= 0) {
-      showError('INGRESE UNA CANTIDAD VÁLIDA');
-      return;
-    }
-
-    setRegistrando(true);
-    showLoading('REGISTRANDO ENTREGA...');
-
-    const stockActualPañol = stocksPorItem[datos.item] || 0;
-    const nuevoStockPañol = stockActualPañol - cantidadEntregada;
-    const nuevoStockUso = (stocksUsoPorItem[datos.item] || 0) + cantidadEntregada;
-
-    if (nuevoStockPañol < 0) {
-      showError(`STOCK INSUFICIENTE. DISPONIBLE: ${stockActualPañol}`);
-      setRegistrando(false);
-      return;
-    }
-
-    const movimiento = {
-      piso_id: piso.id,
-      dni_pañolero: perfilUsuario.dni,
-      dni_enfermero: enfermeroEncontrado.dni,
-      item: datos.item,
-      egreso_limpio: cantidadEntregada,
-      stock_fisico_piso: nuevoStockPañol,
-      novedades: novedades
-    };
-
-    const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
+    showLoading('REGISTRANDO PERSONAL...');
     
-    if (movError) {
-      showError('ERROR EN REGISTRO');
-      setRegistrando(false);
-      return;
-    }
-
-    const ok = await actualizarStockCompleto(datos.item, nuevoStockPañol, nuevoStockUso, stocksLavaderoPorItem[datos.item] || 0);
+    const { error } = await supabase.from('personal').insert([nuevoMiembro]);
     
-    if (ok) {
-      setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
-      setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
-      showSuccess(`${cantidadEntregada} ${datos.item} ENTREGADOS A ${enfermeroEncontrado.apellido}`);
-      setDatos({ ...datos, entrega_piso: 0 });
-      setBusquedaDni('');
-      setEnfermeroEncontrado(null);
-      setNovedades("Sin novedades");
+    if (!error) {
+      setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
+      showSuccess('PERSONAL REGISTRADO');
+      setMostrarModalPersonal(false);
+      cargarDatos();
     } else {
-      showError('ERROR AL ACTUALIZAR STOCK');
+      showError('ERROR AL REGISTRAR PERSONAL');
     }
-    
-    setRegistrando(false);
   };
 
-  const buscarEnfermero = async () => {
-    if (busquedaDni.length < 7) {
-      showError('DNI INVÁLIDO');
+  const eliminarPersonal = async (dni, nombre) => {
+    if (window.confirm(`¿Eliminar al personal "${nombre}"?`)) {
+      showLoading('ELIMINANDO PERSONAL...');
+      
+      const { error } = await supabase.from('personal').delete().eq('dni', dni);
+      
+      if (!error) { 
+        showSuccess('PERSONAL ELIMINADO'); 
+        cargarDatos(); 
+      } else {
+        showError('ERROR AL ELIMINAR PERSONAL');
+      }
+    }
+  };
+
+  const agregarPiso = async (e) => {
+    e.preventDefault();
+    if (!nuevoPiso.nombre_piso.trim()) {
+      showError('INGRESE UN NOMBRE PARA EL SECTOR');
       return;
     }
     
-    showLoading('BUSCANDO PERSONAL...');
+    showLoading('CREANDO SECTOR...');
+    const slug = nuevoPiso.nombre_piso.toLowerCase().replace(/ /g, '-');
+    const { error } = await supabase.from('pisos').insert([{ nombre_piso: nuevoPiso.nombre_piso.trim(), slug }]);
     
-    const { data } = await supabase
-      .from('personal')
-      .select('*')
-      .eq('dni', busquedaDni)
-      .in('rol', ['enfermero', 'ADMIN'])
-      .maybeSingle();
-    
-    setEnfermeroEncontrado(data);
-    hideSpinner();
-    
-    if (!data) {
-      showError('DNI NO REGISTRADO');
+    if (!error) {
+      setNuevoPiso({ nombre_piso: '' });
+      showSuccess('SECTOR CREADO');
+      setMostrarModalPiso(false);
+      cargarDatos();
     } else {
-      showSuccess(`${data.jerarquia} ${data.apellido}`);
+      showError('ERROR AL CREAR SECTOR');
     }
   };
 
-  const totalRealPorItem = (item) => {
-    return (stocksPorItem[item] || 0) + (stocksUsoPorItem[item] || 0) + (stocksLavaderoPorItem[item] || 0);
+  const agregarHabitacion = async (pisoId, pisoSlug) => {
+    const nombre = prompt("Nombre de la Habitación (Ej: Medico Interno):");
+    if(nombre && nombre.trim()) {
+      showLoading('CREANDO HABITACIÓN...');
+      const slugH = `${pisoSlug}-${nombre.toLowerCase().replace(/ /g, '-')}`;
+      const { error } = await supabase.from('habitaciones_especiales').insert([{ piso_id: pisoId, nombre: nombre.trim(), slug: slugH }]);
+      if(!error) { 
+        showSuccess('HABITACIÓN CREADA'); 
+        cargarDatos(); 
+      } else {
+        showError('ERROR AL CREAR HABITACIÓN');
+      }
+    }
   };
+
+  const eliminarHabitacion = async (id, nombre) => {
+    if(window.confirm(`¿Eliminar habitación "${nombre}"?`)) { 
+      showLoading('ELIMINANDO HABITACIÓN...');
+      const { error } = await supabase.from('habitaciones_especiales').delete().eq('id', id); 
+      if(!error) { 
+        showSuccess('HABITACIÓN ELIMINADA'); 
+        cargarDatos(); 
+      } else {
+        showError('ERROR AL ELIMINAR HABITACIÓN');
+      }
+    }
+  };
+
+  const descargarQR = (path, titulo) => {
+    const urlApp = `${window.location.origin}${path}`; 
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>${titulo}</title><style>
+      body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}
+      h1{text-transform:uppercase;font-size:24px;margin-bottom:10px;font-weight:900}
+      img{width:300px}
+      p{margin-top:15px;font-size:14px;font-weight:bold;color:#444}
+      @media print { button { display: none; } }
+    </style></head><body>
+      <h1>${titulo}</h1>
+      <img src="${qrUrl}" />
+      <p>Dpto. Hotelería - HNPM</p>
+      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:16px">🖨️ Imprimir</button>
+      <script>setTimeout(()=>{window.close()},30000)</script>
+    </body></html>`);
+    win.document.close();
+  };
+
+  const toggleAuditoria = async () => {
+    const nuevoEstado = !auditoriaHabilitada;
+    showLoading(nuevoEstado ? 'ACTIVANDO AUDITORÍA...' : 'DESACTIVANDO AUDITORÍA...');
+    
+    await supabase.from('configuracion_sistema').upsert({ clave: 'MODO_AUDITORIA', valor: nuevoEstado.toString() });
+    setAuditoriaHabilitada(nuevoEstado);
+    
+    showSuccess(nuevoEstado ? 'AUDITORÍA ACTIVADA' : 'AUDITORÍA CERRADA');
+  };
+
+  const calcularTotalGlobal = () => {
+    const total = {};
+    ITEMS_REQUERIDOS.forEach(item => total[item] = 0);
+    Object.keys(stockPañol).forEach(piso => {
+      ITEMS_REQUERIDOS.forEach(item => {
+        total[item] += (stockPañol[piso]?.[item] || 0) + (stockUso[piso]?.[item] || 0) + (stockLavadero[piso]?.[item] || 0);
+      });
+    });
+    return total;
+  };
+
+  const totalGlobal = calcularTotalGlobal();
+  const formatearFechaGuardia = (fechaISO) => {
+    const fecha = new Date(fechaISO);
+    const opciones = { weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return fecha.toLocaleDateString('es-AR', opciones);
+  };
+
+  useEffect(() => {
+    cargarDatos();
+    cargarAdmins();
+  }, []);
+
+  useEffect(() => {
+    if (!habitacionesEspeciales.length) return;
+    setHabitacionStatus(prev => {
+      const next = { ...prev };
+      habitacionesEspeciales.forEach(hab => {
+        if (!next[hab.id]) {
+          next[hab.id] = { tipo: 'OTROS', camas: '1', texto: '' };
+        }
+      });
+      return next;
+    });
+  }, [habitacionesEspeciales]);
 
   if (spinner.visible) {
     return <SpinnerOverlay mensaje={spinner.mensaje} tipo={spinner.tipo} />;
   }
 
-  if (cargando) {
-    return (
-      <div className="p-10 text-white text-center">
-        <div className="animate-pulse">
-          <p className="text-blue-400 font-black text-base mb-2">SENTINEL HNPM</p>
-          <p className="text-slate-500 text-sm">Cargando...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!piso) {
-    return (
-      <div className="p-10 text-white text-center">
-        <div className="bg-red-900/20 p-8 rounded-xl border border-red-800">
-          <p className="text-red-400 font-black text-lg mb-2">ERROR DE ACCESO</p>
-          <button 
-            onClick={() => window.location.href = '/'}
-            className="mt-4 bg-slate-800 px-6 py-2 rounded-lg text-sm font-black"
-          >
-            VOLVER AL INICIO
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ==================== RENDER ====================
   return (
     <div className="p-6 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
       {/* Tabs */}
@@ -547,7 +846,8 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           Administración
         </button>
       </div>
-      {/* Panel CROQUIS - Monitor de ocupacion*/}
+
+      {/* Panel CROQUIS */}
       {activeTab === 'croquis' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -558,7 +858,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               value={pisoSeleccionado}
               onChange={(e) => {
                 setPisoSeleccionado(e.target.value);
-                setCroquisKey(prev => prev + 1); // Forzar recreación del croquis
+                setCroquisKey(prev => prev + 1);
               }}
               className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
             >
@@ -571,7 +871,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           
           {pisoSeleccionado ? (
             <CroquisPiso
-              key={croquisKey}  // 👈 Usar la key que cambia con cada selección
+              key={croquisKey}
               pisoId={pisoSeleccionado}
               pisoNombre={pisos.find(p => String(p.id) === String(pisoSeleccionado))?.nombre_piso}
               habitaciones={habitacionesEspeciales.filter(h => String(h.piso_id) === String(pisoSeleccionado))}
@@ -584,7 +884,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
         </div>
       )}
 
-      {/* Panel HISTORIAL - Monitor de stock */}
+      {/* Panel HISTORIAL */}
       {activeTab === 'historial' && (
         <div className="space-y-8">
           <div className="flex justify-between items-center">
@@ -664,107 +964,99 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           </div>
 
           {/* Stock por Piso */}
-          {Object.keys(stockPañol).map((nombrePiso) => {
-            const totalPiso = {};
-            ITEMS_REQUERIDOS.forEach(item => {
-              totalPiso[item] = (stockPañol[nombrePiso]?.[item] || 0) + (stockUso[nombrePiso]?.[item] || 0) + (stockLavadero[nombrePiso]?.[item] || 0);
-            });
-            
-            return (
-              <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-                <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
-                  <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
-                  <div className="bg-green-900/20 p-3 rounded-xl">
-                    <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
-                    <div className="grid grid-cols-4 gap-1 mt-2">
-                      {ITEMS_REQUERIDOS.map(item => (
-                        <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                          <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
-                            {stockPañol[nombrePiso]?.[item] || 0}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="bg-yellow-900/20 p-3 rounded-xl">
-                    <p className="text-sm font-semibold text-yellow-500 uppercase text-center">EN USO</p>
-                    <div className="grid grid-cols-4 gap-1 mt-2">
-                      {ITEMS_REQUERIDOS.map(item => (
-                        <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                          <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="bg-red-900/20 p-3 rounded-xl">
-                    <p className="text-sm font-semibold text-red-500 uppercase text-center">LAVADERO</p>
-                    <div className="grid grid-cols-4 gap-1 mt-2">
-                      {ITEMS_REQUERIDOS.map(item => (
-                        <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                          <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Historial de movimientos */}
-                <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
-                  {movimientosAgrupados[nombrePiso]?.length > 0 ? (
-                    movimientosAgrupados[nombrePiso].map((m) => (
-                      <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
-                        <div className="w-[22%] shrink-0 flex items-center gap-2">
-                          <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
-                          <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
-                        </div>
-                        <div className="flex-1 flex items-center justify-around gap-2">
-                          <div className="text-center min-w-[50px]">
-                            <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
-                            <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
-                          </div>
-                          <div className="text-center min-w-[50px]">
-                            <span className="text-[9px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
-                            <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
-                          </div>
-                          <div className="text-center min-w-[50px]">
-                            <span className="text-[9px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
-                            <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
-                          </div>
-                        </div>
-                        <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
-                          {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
-                            <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
-                              📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
-                            </span>
-                          )}
-                          {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
-                          {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
-                          <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
-                          <button 
-                            onClick={() => eliminarMovimiento(m.id)} 
-                            className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
-                            title="Eliminar movimiento"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
+          {Object.keys(stockPañol).map((nombrePiso) => (
+            <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+              <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
+                <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
+                <div className="bg-green-900/20 p-3 rounded-xl">
+                  <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
+                  <div className="grid grid-cols-4 gap-1 mt-2">
+                    {ITEMS_REQUERIDOS.map(item => (
+                      <div key={item} className="text-center">
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                        <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
+                          {stockPañol[nombrePiso]?.[item] || 0}
+                        </span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
-                  )}
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-yellow-900/20 p-3 rounded-xl">
+                  <p className="text-sm font-semibold text-yellow-500 uppercase text-center">EN USO</p>
+                  <div className="grid grid-cols-4 gap-1 mt-2">
+                    {ITEMS_REQUERIDOS.map(item => (
+                      <div key={item} className="text-center">
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                        <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-red-900/20 p-3 rounded-xl">
+                  <p className="text-sm font-semibold text-red-500 uppercase text-center">LAVADERO</p>
+                  <div className="grid grid-cols-4 gap-1 mt-2">
+                    {ITEMS_REQUERIDOS.map(item => (
+                      <div key={item} className="text-center">
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                        <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            );
-          })}
+              
+              <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
+                {movimientosAgrupados[nombrePiso]?.length > 0 ? (
+                  movimientosAgrupados[nombrePiso].map((m) => (
+                    <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
+                      <div className="w-[22%] shrink-0 flex items-center gap-2">
+                        <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
+                        <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
+                      </div>
+                      <div className="flex-1 flex items-center justify-around gap-2">
+                        <div className="text-center min-w-[50px]">
+                          <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
+                          <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
+                        </div>
+                        <div className="text-center min-w-[50px]">
+                          <span className="text-[9px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
+                          <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
+                        </div>
+                        <div className="text-center min-w-[50px]">
+                          <span className="text-[9px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
+                          <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
+                        </div>
+                      </div>
+                      <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
+                        {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
+                          <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
+                            📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
+                          </span>
+                        )}
+                        {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
+                        {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
+                        <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
+                        <button 
+                          onClick={() => eliminarMovimiento(m.id)} 
+                          className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
+                          title="Eliminar movimiento"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -915,231 +1207,213 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           </section>
 
           {/* Gestión de Pisos y QRs */}
-        <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">🏥 Sectores y QRs</h3>
-              <p className="text-xs text-slate-500 mt-1">Pisos, habitaciones y códigos QR</p>
+          <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">🏥 Sectores y QRs</h3>
+                <p className="text-xs text-slate-500 mt-1">Pisos, habitaciones y códigos QR</p>
+              </div>
+              <button
+                onClick={() => setMostrarModalPiso(true)}
+                className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
+              >
+                + Nuevo Sector
+              </button>
             </div>
-            <button
-              onClick={() => setMostrarModalPiso(true)}
-              className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
-            >
-              + Nuevo Sector
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-1 gap-5">
-            {pisos.length > 0 ? (
-              pisos.map(p => (
-                <div key={p.id} className="bg-slate-950 p-5 rounded-xl border border-slate-800 hover:border-slate-700 transition-all">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-                    <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
-                    <div className="flex flex-wrap gap-2">
-                      {/* QR OCUPACIÓN DEL PISO (NUEVO) */}
-                      <button 
-                        onClick={() => descargarQR(`/recorrido/${p.slug}`, `RECORRIDO OCUPACIÓN - ${p.nombre_piso}`)} 
-                        className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-purple-500 border border-purple-900/30 hover:bg-purple-900/30 transition-all"
-                      >
-                        🏥 QR Recorrido
-                      </button>
-                      
-                      <button 
-                        onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} 
-                        className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
-                      >
-                        🗄️ QR Pañol
-                      </button>
-                      
-                      <button 
-                        onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} 
-                        className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
-                      >
-                        🧺 QR Lavadero
-                      </button>
-                      
-                      <button 
-                        onClick={() => eliminarPiso(p.id, p.nombre_piso)} 
-                        className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
-                      >
-                        🗑️ Eliminar
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Habitaciones - Ahora con dos QR por habitación */}
-                  <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
-                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
-                        🏠 Habitaciones ({habitacionesEspeciales.filter(h => h.piso_id === p.id).length})
-                      </p>
-                      <button 
-                        onClick={() => agregarHabitacion(p.id, p.slug)} 
-                        className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all"
-                      >
-                        + Agregar Habitación
-                      </button>
+            
+            <div className="grid grid-cols-1 gap-5">
+              {pisos.length > 0 ? (
+                pisos.map(p => (
+                  <div key={p.id} className="bg-slate-950 p-5 rounded-xl border border-slate-800 hover:border-slate-700 transition-all">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                      <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
+                      <div className="flex flex-wrap gap-2">
+                        <button 
+                          onClick={() => descargarQR(`/recorrido/${p.slug}`, `RECORRIDO OCUPACIÓN - ${p.nombre_piso}`)} 
+                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-purple-500 border border-purple-900/30 hover:bg-purple-900/30 transition-all"
+                        >
+                          🏥 QR Recorrido
+                        </button>
+                        <button 
+                          onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} 
+                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
+                        >
+                          🗄️ QR Pañol
+                        </button>
+                        <button 
+                          onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} 
+                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
+                        >
+                          🧺 QR Lavadero
+                        </button>
+                        <button 
+                          onClick={() => eliminarPiso(p.id, p.nombre_piso)} 
+                          className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
+                          title="Eliminar sector y todos sus registros"
+                        >
+                          🗑️ Eliminar
+                        </button>
+                      </div>
                     </div>
                     
-                    <div className="flex flex-wrap gap-2">
-                      {habitacionesEspeciales.filter(h => h.piso_id === p.id).length > 0 ? (
-                        habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => {
-                          const config = habitacionStatus[hab.id] || { tipo: 'OTROS', camas: '1', texto: '' };
-                          const statusBg = config.tipo === 'INTERNACION'
-                            ? 'bg-emerald-900/30 border-emerald-600/40'
-                            : config.tipo === 'EN REPARACION'
-                              ? 'bg-amber-900/30 border-amber-600/40'
-                              : 'bg-slate-800/70 border-slate-700';
-                          const statusText = config.tipo === 'INTERNACION'
-                            ? 'text-emerald-300'
-                            : config.tipo === 'EN REPARACION'
-                              ? 'text-amber-300'
-                              : 'text-slate-300';
+                    {/* Habitaciones */}
+                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+                        <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
+                          🏠 Habitaciones ({habitacionesEspeciales.filter(h => h.piso_id === p.id).length})
+                        </p>
+                        <button 
+                          onClick={() => agregarHabitacion(p.id, p.slug)} 
+                          className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all"
+                        >
+                          + Agregar Habitación
+                        </button>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        {habitacionesEspeciales.filter(h => h.piso_id === p.id).length > 0 ? (
+                          habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => {
+                            const config = habitacionStatus[hab.id] || { tipo: 'OTROS', camas: '1', texto: '' };
+                            const statusBg = config.tipo === 'INTERNACION'
+                              ? 'bg-emerald-900/30 border-emerald-600/40'
+                              : config.tipo === 'EN REPARACION'
+                                ? 'bg-amber-900/30 border-amber-600/40'
+                                : 'bg-slate-800/70 border-slate-700';
+                            const statusText = config.tipo === 'INTERNACION'
+                              ? 'text-emerald-300'
+                              : config.tipo === 'EN REPARACION'
+                                ? 'text-amber-300'
+                                : 'text-slate-300';
 
-                          return (
-                            <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] max-w-[320px] w-full sm:w-[320px] ${statusBg}`}>
-                              <details
-                                className="group"
-                                open={!!habitacionesAbiertas[hab.id]}
-                                onToggle={(e) => setHabitacionesAbiertas(prev => ({
-                                  ...prev,
-                                  [hab.id]: e.target.open
-                                }))}
-                              >
-                                <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex items-center gap-2">
-                                      <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
-                                      {(config.tipo === 'INTERNACION' || config.tipo === 'OTROS') && (
-                                        <button
-                                          onClick={(e) => { e.stopPropagation();
-                                            if (config.tipo === 'INTERNACION') {
-                                              descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`);
-                                            } else {
-                                              descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`);
-                                            }
-                                          }}
-                                          className="inline-flex items-center gap-1 bg-slate-800/80 text-slate-200 border border-slate-600/40 px-2 py-1 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
-                                          title={config.tipo === 'INTERNACION' ? 'QR Ocupación' : 'QR Ropa limpia'}
-                                        >
-                                          {config.tipo === 'INTERNACION' ? 'QR OCP' : 'QR ROPA'}
-                                        </button>
-                                      )}
-                                    </div>
-                                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate`}>
-                                      {truncarTexto(formatearResumenHabitacion(config), 28)}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({
-                                        ...prev,
-                                        [hab.id]: !prev[hab.id]
-                                      })); }}
-                                      className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all"
-                                      title="Ver configuración"
-                                    >
-                                      ⚙️
-                                    </button>
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }}
-                                      className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
-                                      title="Eliminar habitación"
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                </summary>
-
-                                <div className="mt-3 space-y-3 text-sm">
-                                  <div className="grid gap-2 sm:grid-cols-[1.4fr_0.9fr]">
-                                    <select
-                                      value={config.tipo}
-                                      onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)}
-                                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
-                                    >
-                                      <option value="INTERNACION">INTERNACIÓN</option>
-                                      <option value="EN REPARACION">EN REPARACIÓN</option>
-                                      <option value="OTROS">OTROS</option>
-                                    </select>
-                                    <button
-                                      onClick={() => guardarEstadoHabitacion(hab.id)}
-                                      className="w-full bg-slate-700 text-slate-100 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] hover:bg-slate-600 transition-all"
-                                    >
-                                      💾 Guardar
-                                    </button>
-                                  </div>
-
-                                  {config.tipo === 'INTERNACION' && (
-                                    <div className="grid gap-2 sm:grid-cols-2">
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        value={config.camas}
-                                        onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
-                                        placeholder="Camas totales"
-                                      />
-                                      <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">
-                                        {config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}
+                            return (
+                              <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] max-w-[320px] w-full sm:w-[320px] ${statusBg}`}>
+                                <details
+                                  className="group"
+                                  open={!!habitacionesAbiertas[hab.id]}
+                                  onToggle={(e) => setHabitacionesAbiertas(prev => ({
+                                    ...prev,
+                                    [hab.id]: e.target.open
+                                  }))}
+                                >
+                                  <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
+                                    <div className="flex flex-col gap-1">
+                                      <div className="flex items-center gap-2">
+                                        <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
                                       </div>
+                                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate`}>
+                                        {truncarTexto(formatearResumenHabitacion(config), 28)}
+                                      </span>
                                     </div>
-                                  )}
-
-                                  {config.tipo === 'OTROS' && (
-                                    <input
-                                      type="text"
-                                      value={config.texto}
-                                      onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)}
-                                      placeholder="Oficina, guardia, médico interno..."
-                                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
-                                    />
-                                  )}
-
-                                  <div className="flex flex-wrap gap-2 items-center">
-                                    {config.tipo === 'INTERNACION' && (
+                                    <div className="flex items-center gap-2">
                                       <button
-                                        onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)}
-                                        className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-emerald-600/20 transition-all"
-                                        title="QR para registro de ocupación de pacientes"
+                                        onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({
+                                          ...prev,
+                                          [hab.id]: !prev[hab.id]
+                                        })); }}
+                                        className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all"
+                                        title="Ver configuración"
                                       >
-                                        🏥 QR Ocupación
+                                        ⚙️
                                       </button>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }}
+                                        className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
+                                        title="Eliminar habitación"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  </summary>
+
+                                  <div className="mt-3 space-y-3 text-sm">
+                                    <div className="grid gap-2 sm:grid-cols-[1.4fr_0.9fr]">
+                                      <select
+                                        value={config.tipo}
+                                        onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
+                                      >
+                                        <option value="INTERNACION">INTERNACIÓN</option>
+                                        <option value="EN REPARACION">EN REPARACIÓN</option>
+                                        <option value="OTROS">OTROS</option>
+                                      </select>
+                                      <button
+                                        onClick={() => guardarEstadoHabitacion(hab.id)}
+                                        className="w-full bg-slate-700 text-slate-100 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] hover:bg-slate-600 transition-all"
+                                      >
+                                        💾 Guardar
+                                      </button>
+                                    </div>
+
+                                    {config.tipo === 'INTERNACION' && (
+                                      <div className="grid gap-2 sm:grid-cols-2">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          value={config.camas}
+                                          onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
+                                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                          placeholder="Camas totales"
+                                        />
+                                        <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">
+                                          {config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}
+                                        </div>
+                                      </div>
                                     )}
 
                                     {config.tipo === 'OTROS' && (
-                                      <button
-                                        onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)}
-                                        className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
-                                        title="QR para registro de ropa de cama limpia"
-                                      >
-                                        🧺 QR Ropa limpia
-                                      </button>
+                                      <input
+                                        type="text"
+                                        value={config.texto}
+                                        onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)}
+                                        placeholder="Oficina, guardia, médico interno..."
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
+                                      />
                                     )}
 
-                                    {config.tipo === 'EN REPARACION' && (
-                                      <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">
-                                        🔧 En reparación
-                                      </span>
-                                    )}
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                      {config.tipo === 'INTERNACION' && (
+                                        <button
+                                          onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)}
+                                          className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-emerald-600/20 transition-all"
+                                          title="QR para registro de ocupación de pacientes"
+                                        >
+                                          🏥 QR Ocupación
+                                        </button>
+                                      )}
+
+                                      {config.tipo === 'OTROS' && (
+                                        <button
+                                          onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)}
+                                          className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
+                                          title="QR para registro de ropa de cama limpia"
+                                        >
+                                          🧺 QR Ropa limpia
+                                        </button>
+                                      )}
+
+                                      {config.tipo === 'EN REPARACION' && (
+                                        <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">
+                                          🔧 En reparación
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              </details>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <p className="text-sm text-slate-500 italic">No hay habitaciones registradas. Usa el botón "+ Agregar Habitación"</p>
-                      )}
+                                </details>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-sm text-slate-500 italic">No hay habitaciones registradas. Usa el botón "+ Agregar Habitación"</p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center text-slate-500 text-base py-8">📭 No hay sectores registrados. Crea el primer sector usando el botón arriba.</div>
-            )}
-          </div>
-        </section>
+                ))
+              ) : (
+                <div className="text-center text-slate-500 text-base py-8">📭 No hay sectores registrados. Crea el primer sector usando el botón arriba.</div>
+              )}
+            </div>
+          </section>
         </div>
       )}
       
