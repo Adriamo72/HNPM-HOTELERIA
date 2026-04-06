@@ -1,14 +1,16 @@
-// components/RecorridoOcupacion.jsx
+// components/RecorridoOcupacion.jsx (versión actualizada con spinner)
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import useSpinner from '../hooks/useSpinner';
+import SpinnerOverlay from '../components/SpinnerOverlay';
 
 const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const [piso, setPiso] = useState(null);
   const [habitaciones, setHabitaciones] = useState([]);
   const [ocupaciones, setOcupaciones] = useState({});
   const [guardando, setGuardando] = useState(false);
-  const [mensaje, setMensaje] = useState('');
-  const [cargando, setCargando] = useState(true);
+  const [nombrePiso, setNombrePiso] = useState('');
+  const { spinner, showLoading, showSuccess, showError, hideSpinner } = useSpinner();
 
   useEffect(() => {
     if (slugPiso) {
@@ -17,7 +19,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   }, [slugPiso]);
 
   const cargarDatos = async () => {
-    setCargando(true);
+    showLoading('CARGANDO SECTOR...');
     
     try {
       // 1. Obtener el piso por slug
@@ -29,6 +31,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       
       if (pisoError) throw pisoError;
       setPiso(pisoData);
+      setNombrePiso(pisoData.nombre_piso);
       
       // 2. Obtener TODAS las habitaciones del piso
       const { data: habitacionesData, error: habError } = await supabase
@@ -41,7 +44,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       
       if (!habitacionesData || habitacionesData.length === 0) {
         setHabitaciones([]);
-        setCargando(false);
+        hideSpinner();
         return;
       }
       
@@ -116,12 +119,12 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       setHabitaciones(habitacionesInternacion);
       setOcupaciones(ocupState);
       
+      hideSpinner();
+      
     } catch (error) {
       console.error("Error cargando datos:", error);
-      setMensaje("❌ Error al cargar el sector");
-      setTimeout(() => setMensaje(''), 3000);
-    } finally {
-      setCargando(false);
+      showError('ERROR AL CARGAR EL SECTOR');
+      setTimeout(() => hideSpinner(), 2000);
     }
   };
 
@@ -143,11 +146,12 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
 
   const guardarTodas = async () => {
     if (habitaciones.length === 0) {
-      setMensaje("⚠️ No hay habitaciones de internación para guardar");
-      setTimeout(() => setMensaje(''), 2000);
+      showError('NO HAY HABITACIONES PARA GUARDAR');
+      setTimeout(() => hideSpinner(), 2000);
       return;
     }
     
+    showLoading('GUARDANDO OCUPACIÓN...');
     setGuardando(true);
     const fecha = new Date().toISOString().split('T')[0];
     let guardados = 0;
@@ -182,20 +186,19 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       }
       
       if (errores === 0) {
-        setMensaje(`✅ ${guardados} habitaciones guardadas - ${new Date().toLocaleTimeString()}`);
+        showSuccess(`✅ ${guardados} HABITACIONES GUARDADAS`);
       } else {
-        setMensaje(`⚠️ ${guardados} guardadas, ${errores} errores`);
+        showError(`⚠️ ${guardados} GUARDADAS, ${errores} ERRORES`);
       }
       
-      setTimeout(() => setMensaje(''), 2500);
-      
-      // Recargar datos para mostrar los valores actualizados
-      setTimeout(() => cargarDatos(), 500);
+      // Recargar datos después de guardar
+      setTimeout(() => {
+        cargarDatos();
+      }, 1500);
       
     } catch (error) {
       console.error("Error guardando:", error);
-      setMensaje("❌ Error al guardar la ocupación");
-      setTimeout(() => setMensaje(''), 3000);
+      showError('ERROR AL GUARDAR LA OCUPACIÓN');
     } finally {
       setGuardando(false);
     }
@@ -206,18 +209,12 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const totalOcupadas = habitaciones.reduce((sum, hab) => sum + (ocupaciones[hab.id]?.camas_ocupadas || 0), 0);
   const porcentaje = totalCamas > 0 ? (totalOcupadas / totalCamas) * 100 : 0;
 
-  if (cargando) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center">
-        <div className="animate-pulse text-center">
-          <div className="w-16 h-16 bg-purple-600 rounded-2xl mx-auto mb-4 animate-bounce"></div>
-          <p className="text-slate-400 font-mono text-sm">Cargando recorrido...</p>
-        </div>
-      </div>
-    );
+  // Mostrar spinner mientras carga
+  if (spinner.visible) {
+    return <SpinnerOverlay mensaje={spinner.mensaje} tipo={spinner.tipo} />;
   }
 
-  if (!piso) {
+  if (!piso && !spinner.visible) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
         <div className="bg-red-900/20 rounded-2xl p-8 text-center max-w-md border border-red-800">
@@ -235,14 +232,14 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     );
   }
 
-  if (habitaciones.length === 0) {
+  if (habitaciones.length === 0 && !spinner.visible) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
         <div className="bg-slate-900 rounded-2xl p-8 text-center max-w-md border border-slate-800">
           <div className="text-6xl mb-4">🏥</div>
           <h2 className="text-xl font-bold text-white mb-2">Sin habitaciones de internación</h2>
           <p className="text-slate-400 text-sm">
-            El sector <span className="text-purple-400 font-bold">{piso.nombre_piso}</span> no tiene habitaciones configuradas para internación.
+            El sector <span className="text-purple-400 font-bold">{nombrePiso}</span> no tiene habitaciones configuradas para internación.
           </p>
           <p className="text-slate-500 text-xs mt-2">
             Contacte al administrador para configurar las habitaciones.
@@ -260,25 +257,23 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 pb-32">
-      {/* Header fijo */}
+      {/* Header fijo con nombre del piso */}
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-purple-900/30">
         <div className="p-4">
           <div className="flex justify-between items-center mb-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold text-white">RECORRIDO OCUPACIÓN</h1>
-                  <p className="text-xs text-purple-400 font-bold uppercase">{piso.nombre_piso}</p>
-                </div>
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-900/40">
+                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-[10px] text-purple-400 font-black uppercase tracking-wider">RECORRIDO DE OCUPACIÓN</p>
+                <h1 className="text-xl font-bold text-white">{nombrePiso}</h1>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[10px] text-slate-500 uppercase">Operador</p>
+              <p className="text-[9px] text-slate-500 uppercase">Operador</p>
               <p className="text-sm font-bold text-white">{perfilUsuario?.jerarquia} {perfilUsuario?.apellido}</p>
             </div>
           </div>
@@ -418,13 +413,6 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
           )}
         </button>
       </div>
-      
-      {/* Mensaje flotante */}
-      {mensaje && (
-        <div className="fixed top-20 left-4 right-4 bg-slate-900 border border-purple-600 text-white p-3 rounded-xl text-center shadow-2xl z-50 animate-in slide-in-from-top-5">
-          <p className="font-bold text-sm">{mensaje}</p>
-        </div>
-      )}
     </div>
   );
 };

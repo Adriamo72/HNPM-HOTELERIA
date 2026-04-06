@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
 import LiveQRScanner from './LiveQRScanner';
+import useSpinner from '../hooks/useSpinner';
+import SpinnerOverlay from './SpinnerOverlay';
 
 const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   const [adminUser, setAdminUser] = useState('');
@@ -12,6 +14,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   const [bloqueado, setBloqueado] = useState(false);
   const [tiempoRestante, setTiempoRestante] = useState(0);
   const timerRef = useRef(null);
+  const { spinner, showLoading, showSuccess, showError, hideSpinner } = useSpinner();
 
   // Determinar si estamos en modo admin (solo en raíz)
   const esModoAdmin = modoAcceso === null;
@@ -24,94 +27,99 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   }, []);
 
   const handleScanSuccess = async (decodedText) => {
-  console.log("=== QR ESCANEADO ===");
-  console.log("Texto decodificado:", decodedText);
-  console.log("Longitud:", decodedText?.length);
-  console.log("Contiene /auth/?", decodedText?.includes('/auth/'));
-  
-  if (verificando) {
-    console.log("Ya está verificando, ignorando...");
-    return;
-  }
-  
-  setVerificando(true);
-  
-  try {
-    if (decodedText.includes('/auth/')) {
-      const token = decodedText.split('/auth/')[1];
-      console.log("Token extraído:", token);
-      
-      const { data: tokenData, error: tokenError } = await supabase
-        .from('tokens_acceso')
-        .select('dni, activo, expira_en')
-        .eq('token', token)
-        .eq('activo', true)
-        .maybeSingle();
-      
-      console.log("TokenData:", tokenData);
-      console.log("TokenError:", tokenError);
-      
-      if (tokenError || !tokenData) {
-        setError("QR inválido. Contacta al administrador.");
-        setVerificando(false);
-        return;
-      }
-      
-      if (tokenData.expira_en && new Date(tokenData.expira_en) < new Date()) {
-        setError("Credencial expirada. Solicita renovación.");
-        setVerificando(false);
-        return;
-      }
-      
-      const { data: usuario, error: userError } = await supabase
-        .from('personal')
-        .select('*')
-        .eq('dni', tokenData.dni)
-        .maybeSingle();
-      
-      console.log("Usuario encontrado:", usuario);
-      console.log("UserError:", userError);
-      
-      if (userError || !usuario) {
-        setError("Usuario no encontrado.");
-        setVerificando(false);
-        return;
-      }
-      
-      if (usuario.es_admin || usuario.rol === 'ADMIN') {
-        setError("Acceso no autorizado.");
-        setVerificando(false);
-        return;
-      }
-      
-      await supabase
-        .from('tokens_acceso')
-        .update({ ultimo_uso: new Date().toISOString() })
-        .eq('token', token);
-      
-      const sesion = {
-        usuario: usuario,
-        expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
-      };
-      localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
-      
-      console.log("✅ Login exitoso para:", usuario.apellido);
-      onLoginSuccess(usuario);
-      
-    } else {
-      console.log("❌ No es un QR de autenticación");
-      setError("❌ Escanea tu CREDENCIAL PERSONAL (debe contener /auth/)");
-      setTimeout(() => {
-        setError('');
-        setVerificando(false);
-      }, 3000);
+    console.log("=== QR ESCANEADO ===");
+    console.log("Texto decodificado:", decodedText);
+    console.log("Longitud:", decodedText?.length);
+    console.log("Contiene /auth/?", decodedText?.includes('/auth/'));
+    
+    if (verificando) {
+      console.log("Ya está verificando, ignorando...");
+      return;
     }
-  } catch (err) {
-    console.error("Error en handleScanSuccess:", err);
-    setError("Error al verificar credencial: " + err.message);
-    setVerificando(false);
-  }
-};
+    
+    setVerificando(true);
+    showLoading('VERIFICANDO CREDENCIAL...');
+    
+    try {
+      if (decodedText.includes('/auth/')) {
+        const token = decodedText.split('/auth/')[1];
+        console.log("Token extraído:", token);
+        
+        const { data: tokenData, error: tokenError } = await supabase
+          .from('tokens_acceso')
+          .select('dni, activo, expira_en')
+          .eq('token', token)
+          .eq('activo', true)
+          .maybeSingle();
+        
+        console.log("TokenData:", tokenData);
+        console.log("TokenError:", tokenError);
+        
+        if (tokenError || !tokenData) {
+          showError("QR INVÁLIDO. CONTACTA AL ADMINISTRADOR.");
+          setVerificando(false);
+          return;
+        }
+        
+        if (tokenData.expira_en && new Date(tokenData.expira_en) < new Date()) {
+          showError("CREDENCIAL EXPIRADA. SOLICITA RENOVACIÓN.");
+          setVerificando(false);
+          return;
+        }
+        
+        const { data: usuario, error: userError } = await supabase
+          .from('personal')
+          .select('*')
+          .eq('dni', tokenData.dni)
+          .maybeSingle();
+        
+        console.log("Usuario encontrado:", usuario);
+        console.log("UserError:", userError);
+        
+        if (userError || !usuario) {
+          showError("USUARIO NO ENCONTRADO.");
+          setVerificando(false);
+          return;
+        }
+        
+        if (usuario.es_admin || usuario.rol === 'ADMIN') {
+          showError("ACCESO NO AUTORIZADO.");
+          setVerificando(false);
+          return;
+        }
+        
+        await supabase
+          .from('tokens_acceso')
+          .update({ ultimo_uso: new Date().toISOString() })
+          .eq('token', token);
+        
+        const sesion = {
+          usuario: usuario,
+          expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+        };
+        localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
+        
+        console.log("✅ Login exitoso para:", usuario.apellido);
+        showSuccess(`BIENVENIDO ${usuario.jerarquia} ${usuario.apellido}`);
+        
+        setTimeout(() => {
+          onLoginSuccess(usuario);
+        }, 500);
+        
+      } else {
+        console.log("❌ No es un QR de autenticación");
+        showError("❌ ESCANEA TU CREDENCIAL PERSONAL (debe contener /auth/)");
+        setTimeout(() => {
+          hideSpinner();
+          setVerificando(false);
+        }, 2000);
+      }
+    } catch (err) {
+      console.error("Error en handleScanSuccess:", err);
+      showError("ERROR AL VERIFICAR CREDENCIAL: " + err.message);
+      setVerificando(false);
+    }
+  };
 
   const handleScanError = (err) => {
     console.warn("Error scanner:", err);
@@ -135,6 +143,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     
     setVerificando(true);
     setError('');
+    showLoading('VERIFICANDO ACCESO ADMIN...');
     
     try {
       const { data: admin, error: adminError } = await supabase
@@ -145,7 +154,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
         .maybeSingle();
       
       if (adminError || !admin) {
-        setError("Usuario administrador no válido.");
+        showError("USUARIO ADMINISTRADOR NO VÁLIDO.");
         setVerificando(false);
         return;
       }
@@ -157,11 +166,12 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
         iniciarContador(segundosRestantes);
         setError(`Cuenta bloqueada. Intenta nuevamente en ${Math.ceil(segundosRestantes / 60)} minutos.`);
         setVerificando(false);
+        hideSpinner();
         return;
       }
       
       if (!admin.pin_hash) {
-        setError("PIN no configurado. Contacta al administrador del sistema.");
+        showError("PIN NO CONFIGURADO. CONTACTA AL ADMINISTRADOR DEL SISTEMA.");
         setVerificando(false);
         return;
       }
@@ -183,13 +193,13 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
           
           setBloqueado(true);
           iniciarContador(900);
-          setError(`PIN incorrecto. Cuenta bloqueada por 15 minutos.`);
+          showError(`PIN INCORRECTO. CUENTA BLOQUEADA POR 15 MINUTOS.`);
         } else {
           await supabase
             .from('admin_acceso')
             .update({ intentos_fallidos: nuevosIntentos })
             .eq('id', admin.id);
-          setError(`PIN incorrecto. Intentos restantes: ${3 - nuevosIntentos}`);
+          showError(`PIN INCORRECTO. INTENTOS RESTANTES: ${3 - nuevosIntentos}`);
         }
         setVerificando(false);
         return;
@@ -225,11 +235,15 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
       };
       localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
       
-      onLoginSuccess(adminData);
+      showSuccess(`BIENVENIDO ADMINISTRADOR ${adminUser.toUpperCase()}`);
+      
+      setTimeout(() => {
+        onLoginSuccess(adminData);
+      }, 500);
       
     } catch (err) {
       console.error("Error:", err);
-      setError("Error al verificar credenciales");
+      showError("ERROR AL VERIFICAR CREDENCIALES");
       setVerificando(false);
     }
   };
@@ -248,6 +262,11 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
       });
     }, 1000);
   };
+
+  // Mostrar spinner si está visible
+  if (spinner.visible) {
+    return <SpinnerOverlay mensaje={spinner.mensaje} tipo={spinner.tipo} />;
+  }
 
   // ========== PANTALLA ADMIN (RAÍZ) ==========
   if (esModoAdmin) {
@@ -323,9 +342,19 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
             <button
               type="submit"
               disabled={verificando || bloqueado}
-              className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-600 text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 uppercase disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-600 text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 uppercase disabled:opacity-50 disabled:active:scale-100"
             >
-              {verificando ? 'VERIFICANDO...' : 'INGRESAR AL PANEL'}
+              {verificando ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  VERIFICANDO...
+                </span>
+              ) : (
+                'INGRESAR AL PANEL'
+              )}
             </button>
           </form>
           
@@ -337,7 +366,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     );
   }
 
-  // ========== PANTALLA OPERADOR (QR) con SimpleQRScanner ==========
+  // ========== PANTALLA OPERADOR (QR) ==========
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
       <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-6 max-w-md w-full text-center shadow-2xl border border-blue-900/30">
@@ -358,14 +387,14 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
         {/* Indicador del sector */}
         <div className="mb-3">
           <span className="inline-block bg-blue-600/20 text-blue-400 px-3 py-1 rounded-full text-[10px] font-semibold uppercase">
-            {modoAcceso === 'piso' ? '📦 PAÑOL' : modoAcceso === 'lavadero' ? '🧺 LAVADERO' : '🏠 HABITACIÓN'}
+            {modoAcceso === 'piso' ? '📦 PAÑOL' : modoAcceso === 'lavadero' ? '🧺 LAVADERO' : modoAcceso === 'habitacion' ? '🏠 HABITACIÓN' : modoAcceso === 'recorrido' ? '🏥 RECORRIDO' : '🔐 ACCESO'}
           </span>
         </div>
 
-        {/* SimpleQRScanner */}
+        {/* Scanner QR */}
         <LiveQRScanner 
-        onScanSuccess={handleScanSuccess}
-        onScanError={handleScanError}
+          onScanSuccess={handleScanSuccess}
+          onScanError={handleScanError}
         />
         
         <p className="text-slate-400 text-xs mt-4">

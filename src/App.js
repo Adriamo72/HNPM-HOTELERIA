@@ -142,21 +142,29 @@ function App() {
               </p>
             </div>
           </div>
+          
+          {/* Mostrar nombre del piso si está en un modo específico */}
+          <div className="text-center">
+            {slugCompleto && modoAcceso && modoAcceso !== 'admin' && (
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Sector</p>
+            )}
+            <p className="text-sm font-bold text-white">
+              {modoAcceso === 'recorrido' ? 'RECORRIDO' : 
+              modoAcceso === 'piso' ? 'PAÑOL' : 
+              modoAcceso === 'lavadero' ? 'LAVADERO' : 
+              modoAcceso === 'habitacion' ? 'HABITACIÓN' : ''}
+            </p>
+          </div>
+          
           <div className="flex gap-3 items-center">
             <div className="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
               <span className="text-[10px] font-black uppercase">
                 {rol === 'admin' ? (
-                  <span className="text-red-400">🔐 ADMINISTRADOR</span>
+                  <span className="text-red-400">🔐 ADMIN</span>
                 ) : (
-                  <span className="text-blue-400">👤 {datosUsuario?.jerarquia || 'OPERADOR'}</span>
+                  <span className="text-blue-400">👤 OPERADOR</span>
                 )}
               </span>
-            </div>
-            <div className="text-right hidden sm:block">
-              <p className="text-[9px] text-slate-500 uppercase leading-tight">Conectado</p>
-              <p className="text-[11px] font-bold text-white leading-tight">
-                {datosUsuario?.apellido}, {datosUsuario?.nombre}
-              </p>
             </div>
             <button 
               onClick={cerrarSesion} 
