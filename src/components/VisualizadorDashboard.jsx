@@ -25,6 +25,13 @@ const VisualizadorDashboard = () => {
     cargarDatos();
   }, []);
 
+  // Recargar datos cuando se cambia a la pestaña monitor y no hay datos
+  useEffect(() => {
+    if (activeTab === 'monitor' && Object.keys(stockPañol).length === 0 && !cargandoMonitor) {
+      cargarDatos();
+    }
+  }, [activeTab, stockPañol, cargandoMonitor]);
+
   const mostrarSplash = (mensaje) => {
     setNotificacion({ visible: true, mensaje });
     setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
