@@ -783,25 +783,37 @@ const AdminDashboard = () => {
     }
   };
 
-  const descargarQR = (path, titulo) => {
-    const urlApp = `${window.location.origin}${path}`; 
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
-    const win = window.open('', '_blank');
-    win.document.write(`<html><head><title>${titulo}</title><style>
-      body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}
-      h1{text-transform:uppercase;font-size:24px;margin-bottom:10px;font-weight:900}
-      img{width:300px}
-      p{margin-top:15px;font-size:14px;font-weight:bold;color:#444}
-      @media print { button { display: none; } }
-    </style></head><body>
-      <h1>${titulo}</h1>
+  const descargarQR = (path, titulo, textoAdicional = '') => {
+  const urlApp = `${window.location.origin}${path}`; 
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
+  const win = window.open('', '_blank');
+  
+  // Si hay texto adicional, mostrarlo en el QR
+  const textoExtra = textoAdicional ? `<p style="margin-top:10px;font-size:12px;color:#666;max-width:300px;">${textoAdicional}</p>` : '';
+  
+  win.document.write(`<html><head><title>${titulo}</title><style>
+    body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;background:#f5f5f5}
+    .container{background:white;padding:30px;border-radius:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1)}
+    h1{text-transform:uppercase;font-size:20px;margin-bottom:10px;font-weight:900;color:#1e293b}
+    h2{font-size:16px;color:#475569;margin-bottom:20px}
+    img{width:280px;margin:10px auto;border:1px solid #e2e8f0;border-radius:10px;padding:10px}
+    p{margin-top:15px;font-size:14px;font-weight:bold;color:#3b82f6}
+    .info{font-size:11px;color:#94a3b8;margin-top:10px}
+    @media print { button { display: none; } }
+  </style></head><body>
+    <div class="container">
+      <h1>${titulo.split(' - ')[0]}</h1>
+      <h2>${titulo.split(' - ')[1] || ''}</h2>
       <img src="${qrUrl}" />
+      ${textoExtra}
       <p>Dpto. Hotelería - HNPM</p>
-      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:16px">🖨️ Imprimir</button>
+      <div class="info">Escanee este código QR para registrar</div>
+      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:14px;background:#3b82f6;color:white;border:none;border-radius:10px;cursor:pointer">🖨️ Imprimir</button>
       <script>setTimeout(()=>{window.close()},30000)</script>
-    </body></html>`);
-    win.document.close();
-  };
+    </div>
+  </body></html>`);
+  win.document.close();
+};
 
   const toggleAuditoria = async () => {
     const nuevoEstado = !auditoriaHabilitada;
@@ -1274,52 +1286,45 @@ const AdminDashboard = () => {
 
                                 return (
                                   <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] max-w-[320px] w-full sm:w-[320px] ${statusBg}`}>
-                                    <details className="group" open={!!habitacionesAbiertas[hab.id]} onToggle={(e) => setHabitacionesAbiertas(prev => ({ ...prev, [hab.id]: e.target.open }))}>
-                                      <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
-                                        <div className="flex flex-col gap-1">
-                                          <div className="flex items-center gap-2">
-                                            <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
-                                          </div>
-                                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate`}>
-                                            {truncarTexto(formatearResumenHabitacion(config), 28)}
-                                          </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <button onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({ ...prev, [hab.id]: !prev[hab.id] })); }} className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all">⚙️</button>
-                                          <button onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }} className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">×</button>
-                                        </div>
-                                      </summary>
-                                      <div className="mt-3 space-y-3 text-sm">
-                                        <div className="grid gap-2 sm:grid-cols-[1.4fr_0.9fr]">
-                                          <select value={config.tipo} onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500">
-                                            <option value="INTERNACION">INTERNACIÓN</option>
-                                            <option value="EN REPARACION">EN REPARACIÓN</option>
-                                            <option value="OTROS">OTROS</option>
-                                          </select>
-                                          <button onClick={() => guardarEstadoHabitacion(hab.id)} className="w-full bg-slate-700 text-slate-100 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] hover:bg-slate-600 transition-all">💾 Guardar</button>
-                                        </div>
-                                        {config.tipo === 'INTERNACION' && (
-                                          <div className="grid gap-2 sm:grid-cols-2">
-                                            <input type="number" min="1" value={config.camas} onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Camas totales" />
-                                            <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">{config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}</div>
-                                          </div>
-                                        )}
-                                        {config.tipo === 'OTROS' && (
-                                          <input type="text" value={config.texto} onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)} placeholder="Oficina, guardia, médico interno..." className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500" />
-                                        )}
-                                        <div className="flex flex-wrap gap-2 items-center">
-                                          {config.tipo === 'INTERNACION' && (
-                                            <button onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)} className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-emerald-600/20 transition-all">🏥 QR Ocupación</button>
-                                          )}
+                                    <div className="flex justify-between items-center">
+                                      <div className="flex-1">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
+                                          {/* Botón QR Ropa Limpia para OTROS - al costado derecho */}
                                           {config.tipo === 'OTROS' && (
-                                            <button onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)} className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all">🧺 QR Ropa limpia</button>
-                                          )}
-                                          {config.tipo === 'EN REPARACION' && (
-                                            <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">🔧 En reparación</span>
+                                            <button
+                                              onClick={() => descargarQR(
+                                                `/habitacion/${hab.slug}`, 
+                                                `${hab.nombre} - ${p.nombre_piso}`,
+                                                `📝 ${config.texto || 'Sector de oficina/guardia'} - Ropa de cama y blancos`
+                                              )}
+                                              className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
+                                            >
+                                              🧺 QR Ropa limpia
+                                            </button>
                                           )}
                                         </div>
+                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate block mt-1`}>
+                                          {truncarTexto(formatearResumenHabitacion(config), 28)}
+                                        </span>
                                       </div>
-                                    </details>
+                                      <div className="flex items-center gap-2 ml-2">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({ ...prev, [hab.id]: !prev[hab.id] })); }}
+                                          className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all"
+                                          title="Ver configuración"
+                                        >
+                                          ⚙️
+                                        </button>
+                                        <button 
+                                          onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }}
+                                          className="text-red-500 font-semibold text-base px-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
+                                          title="Eliminar habitación"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    </div>
                                   </div>
                                 );
                               })

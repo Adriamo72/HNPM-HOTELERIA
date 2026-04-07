@@ -1,3 +1,4 @@
+// components/FormularioPiso.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -29,6 +30,11 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       setCargando(false);
     }
   }, [slugPiso]);
+
+  const mostrarSplash = (msj) => {
+    setNotificacion({ visible: true, mensaje: msj });
+    setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
+  };
 
   const cargarContexto = async () => {
     setCargando(true);
@@ -88,7 +94,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           }
           
           if (!stockData) {
-            console.log(`Creando registro inicial para ${item} en piso ${pisoData.nombre_piso}`);
             const { error: insertError } = await supabase
               .from('stock_piso')
               .insert({
@@ -126,11 +131,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     }
   };
 
-  const mostrarSplash = (msj) => {
-    setNotificacion({ visible: true, mensaje: msj });
-    setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
-  };
-
   const actualizarStockCompleto = async (item, nuevoPañol, nuevoUso, nuevoLavadero) => {
     const { error } = await supabase
       .from('stock_piso')
@@ -150,7 +150,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     return true;
   };
 
-  // ==================== REGISTRO HABITACIÓN ====================
   const registrarHabitacion = async () => {
     if (!piso?.id) {
       mostrarSplash("ERROR: Piso no identificado");
@@ -211,7 +210,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setRegistrando(false);
   };
 
-  // ==================== CAMBIO ESTÁNDAR HABITACIÓN ====================
   const ejecutarCambioEstandar = async () => {
     if (!piso?.id) {
       mostrarSplash("ERROR: Piso no identificado");
@@ -289,7 +287,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     }
   };
 
-  // ==================== REGISTRO LAVADERO ====================
   const registrarLavadero = async (e) => {
     e.preventDefault();
     
@@ -383,7 +380,6 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     setRegistrando(false);
   };
 
-  // ==================== REGISTRO PAÑOL - ENTREGA A PISO ====================
   const registrarEntregaPiso = async (e) => {
     e.preventDefault();
     
@@ -467,12 +463,8 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     if (!data) {
       mostrarSplash("DNI NO REGISTRADO");
     } else {
-      mostrarSplash(`${data.jerarquia} ${data.apellido}`);
+      mostrarSplash(`${data.jerarquia} ${data.apellido} encontrado`);
     }
-  };
-
-  const totalRealPorItem = (item) => {
-    return (stocksPorItem[item] || 0) + (stocksUsoPorItem[item] || 0) + (stocksLavaderoPorItem[item] || 0);
   };
 
   if (cargando) {
@@ -517,65 +509,62 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       </div>
 
       {modo === 'habitacion' ? (
-  <div className="space-y-4">
-    {/* Selector de item con información de stock */}
-    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-      <p className="text-sm font-black text-slate-500 uppercase mb-4">ITEM PARA ENTREGAR</p>
-      
-      <select 
-        className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-4"
-        value={itemSeleccionadoHabitacion}
-        onChange={(e) => setItemSeleccionadoHabitacion(e.target.value)}
-      >
-        {ITEMS_HOTELERIA.map(item => (
-          <option key={item} value={item}>
-            {item} - Pañol: {stocksPorItem[item] || 0} | Uso: {stocksUsoPorItem[item] || 0} | Lav: {stocksLavaderoPorItem[item] || 0}
-          </option>
-        ))}
-      </select>
+        <div className="space-y-4">
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <p className="text-sm font-black text-slate-500 uppercase mb-4">ITEM PARA ENTREGAR</p>
+            
+            <select 
+              className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 font-black text-blue-400 outline-none text-lg mb-4"
+              value={itemSeleccionadoHabitacion}
+              onChange={(e) => setItemSeleccionadoHabitacion(e.target.value)}
+            >
+              {ITEMS_HOTELERIA.map(item => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
 
-      <div>
-        <label className="text-sm font-black text-green-500 uppercase block mb-2">
-          CANTIDAD
-        </label>
-        <input
-  type="number"
-  min="0"
-  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-  value={cantidadHabitacion || ""}
-  onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
-  placeholder="0"
-/>
-      </div>
-    </div>
+            <div>
+              <label className="text-sm font-black text-green-500 uppercase block mb-2">
+                CANTIDAD
+              </label>
+              <input
+                type="number"
+                min="0"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-3xl text-green-400 font-black text-center outline-none"
+                value={cantidadHabitacion || ""}
+                onChange={(e) => setCantidadHabitacion(parseInt(e.target.value) || 0)}
+                placeholder="0"
+              />
+            </div>
+          </div>
 
-    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-      <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
-      <textarea 
-        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
-        rows="2" 
-        value={novedades} 
-        onChange={(e) => setNovedades(e.target.value)}
-        placeholder="Ej: No había toallón sucio..."
-      />
-    </div>
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+            <p className="text-sm font-black text-slate-500 uppercase mb-3">Novedades</p>
+            <textarea 
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-blue-400 outline-none"
+              rows="2" 
+              value={novedades} 
+              onChange={(e) => setNovedades(e.target.value)}
+              placeholder="Ej: No había toallón sucio..."
+            />
+          </div>
 
-    <button 
-      onClick={ejecutarCambioEstandar}
-      disabled={registrando}
-      className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
-    >
-      {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
-    </button>
+          <button 
+            onClick={ejecutarCambioEstandar}
+            disabled={registrando}
+            className={`w-full p-4 rounded-xl font-black uppercase text-base transition-all ${registrando ? 'bg-slate-600 cursor-not-allowed' : 'bg-green-600 active:scale-95'}`}
+          >
+            {registrando ? 'REGISTRANDO...' : 'Cambio Estándar (2 Sábanas + 1 Toalla + 1 Toallón)'}
+          </button>
 
-    <button 
-      onClick={registrarHabitacion} 
-      disabled={registrando || cantidadHabitacion <= 0}
-      className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(registrando || cantidadHabitacion <= 0) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
-    >
-      {registrando ? 'REGISTRANDO...' : 'Registrar Entrega'}
-    </button>
-  </div>
+          <button 
+            onClick={registrarHabitacion} 
+            disabled={registrando || cantidadHabitacion <= 0}
+            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(registrando || cantidadHabitacion <= 0) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
+          >
+            {registrando ? 'REGISTRANDO...' : 'Registrar Entrega'}
+          </button>
+        </div>
       ) : modo === 'lavadero' ? (
         <form onSubmit={registrarLavadero} className="space-y-4">
           <select 
@@ -606,12 +595,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               RECIBE SUCIO DEL PISO (Uso → Lavadero)
             </label>
             <input 
-  type="number" 
-  className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" 
-  value={datos.retirado_sucio || ""} 
-  onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
-  placeholder="0"
-/>
+              type="number" 
+              className="bg-transparent w-full text-5xl font-black text-red-400 outline-none text-center" 
+              value={datos.retirado_sucio || ""} 
+              onChange={e => setDatos({...datos, retirado_sucio: e.target.value})} 
+              placeholder="0"
+            />
             <p className="text-xs text-slate-500 mt-2">Stock en uso: {stocksUsoPorItem[datos.item] || 0}</p>
           </div>
 
@@ -620,12 +609,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               ENTREGA LIMPIA AL PAÑOL (Lavadero → Pañol)
             </label>
             <input 
-  type="number" 
-  className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" 
-  value={datos.carga_lavadero || ""} 
-  onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
-  placeholder="0"
-/>
+              type="number" 
+              className="bg-transparent w-full text-5xl font-black text-green-400 outline-none text-center" 
+              value={datos.carga_lavadero || ""} 
+              onChange={e => setDatos({...datos, carga_lavadero: e.target.value})} 
+              placeholder="0"
+            />
             <p className="text-xs text-slate-500 mt-2">Stock en lavadero: {stocksLavaderoPorItem[datos.item] || 0}</p>
           </div>
 
@@ -677,23 +666,26 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
             <div className="flex gap-3">
               <input 
                 type="text" 
-                className="flex-1 bg-slate-950 p-3 rounded-xl border border-slate-800 text-base outline-none"
+                className="flex-1 bg-slate-950 p-3 rounded-xl border border-slate-800 text-base outline-none font-mono"
                 value={busquedaDni}
                 onChange={(e) => setBusquedaDni(e.target.value)}
-                placeholder="DNI"
+                placeholder="DNI del encargado"
               />
               <button 
                 type="button" 
                 onClick={buscarEnfermero} 
-                className="bg-blue-600 px-5 rounded-xl text-sm font-black uppercase"
+                className="bg-blue-600 px-5 rounded-xl text-sm font-black uppercase hover:bg-blue-500 transition-all"
               >
                 Buscar
               </button>
             </div>
             {enfermeroEncontrado && (
-              <p className="text-green-400 text-sm mt-3 font-bold">
-                ✓ {enfermeroEncontrado.jerarquia} {enfermeroEncontrado.apellido}
-              </p>
+              <div className="mt-3 p-3 bg-green-900/30 rounded-xl border border-green-800/50">
+                <p className="text-green-400 text-sm font-bold">
+                  📋 {enfermeroEncontrado.jerarquia} {enfermeroEncontrado.apellido}, {enfermeroEncontrado.nombre}
+                </p>
+                <p className="text-green-500/70 text-[10px] mt-1">DNI: {enfermeroEncontrado.dni}</p>
+              </div>
             )}
           </div>
 
@@ -702,12 +694,12 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
               CANTIDAD A ENTREGAR AL PISO (Pañol → Uso)
             </label>
             <input 
-  type="number" 
-  className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-orange-400 outline-none border border-orange-900/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" 
-  placeholder="0" 
-  value={datos.entrega_piso || ""} 
-  onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
-/>
+              type="number" 
+              className="w-full bg-slate-950 p-4 rounded-xl text-5xl text-center font-black text-orange-400 outline-none border border-orange-900/20" 
+              placeholder="0" 
+              value={datos.entrega_piso || ""} 
+              onChange={e => setDatos({...datos, entrega_piso: e.target.value})} 
+            />
             <p className="text-sm text-slate-500 text-center mt-3">
               Stock en pañol: {stocksPorItem[datos.item] || 0}
             </p>
