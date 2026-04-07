@@ -4,7 +4,6 @@ import { supabase } from './supabaseClient';
 import LoginConQR from './components/LoginConQR';
 import FormularioPiso from './components/FormularioPiso';
 import AdminDashboard from './components/AdminDashboard';
-import RegistroOcupacionQR from './components/RegistroOcupacionQR';
 import RecorridoOcupacion from './components/RecorridoOcupacion';
 
 function App() {
