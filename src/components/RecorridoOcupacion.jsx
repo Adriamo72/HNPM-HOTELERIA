@@ -126,25 +126,23 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     setGuardando(true);
     mostrarNotificacion("Guardando ocupación...", 'loading');
     
-    const fechaISO = new Date().toISOString();
-    const fechaSoloDia = fechaISO.split('T')[0];
+    const fecha = new Date().toISOString().split('T')[0];
     let guardados = 0;
     let errores = 0;
     
     try {
-      // 1. Guardar el estado individual de cada habitación en ocupacion_habitaciones
       for (const hab of habitaciones) {
         const ocupActual = ocupaciones[hab.id];
         
         const payload = {
           habitacion_id: hab.id,
-          fecha: fechaSoloDia,
+          fecha: fecha,
           tipo_habitacion: 'activa',
           total_camas: hab.total_camas,
           camas_ocupadas: ocupActual?.camas_ocupadas || 0,
           observaciones: null,
           actualizado_por: perfilUsuario?.dni,
-          actualizado_en: fechaISO
+          actualizado_en: new Date().toISOString()
         };
         
         const { error } = await supabase
@@ -157,41 +155,18 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
           guardados++;
         }
       }
-
-      // 2. REGISTRO EN EL LOG DE RECORRIDOS (Auditoría de todo el piso)
-      if (guardados > 0) {
-        // Calculamos totales para el log
-        const totalCamasPiso = habitaciones.reduce((sum, h) => sum + (h.total_camas || 0), 0);
-        const totalOcupadasPiso = habitaciones.reduce((sum, h) => sum + (ocupaciones[h.id]?.camas_ocupadas || 0), 0);
-        const totalLibresPiso = totalCamasPiso - totalOcupadasPiso;
-
-        const { error: logError } = await supabase
-          .from('log_recorridos')
-          .insert([{
-            piso_id: piso.id,
-            dni_responsible: perfilUsuario?.dni,
-            jerarquia_hist: perfilUsuario?.jerarquia,
-            apellido_hist: perfilUsuario?.apellido,
-            nombre_hist: perfilUsuario?.nombre,
-            camas_ocupadas: totalOcupadasPiso,
-            camas_libres: totalLibresPiso,
-            fecha_registro: fechaISO
-          }]);
-
-        if (logError) console.error("Error al registrar en Log de Recorridos:", logError);
-      }
       
-      // 3. Notificaciones finales
       if (errores === 0) {
-        mostrarNotificacion(`Recorrido registrado en el Log y habitaciones guardadas`, 'success');
+        mostrarNotificacion(`${guardados} habitaciones guardadas correctamente`, 'success');
+        // Recargar datos para actualizar la vista
         setTimeout(() => cargarDatos(), 1000);
       } else {
-        mostrarNotificacion(`⚠️ ${guardados} guardadas, ${errores} errores en habitaciones`, 'error');
+        mostrarNotificacion(`⚠️ ${guardados} guardadas, ${errores} errores`, 'error');
       }
       
     } catch (err) {
-      console.error("Error crítico en el proceso de guardado:", err);
-      mostrarNotificacion("Error al procesar el recorrido", 'error');
+      console.error("Error guardando:", err);
+      mostrarNotificacion("Error al guardar la ocupación", 'error');
     } finally {
       setGuardando(false);
     }
