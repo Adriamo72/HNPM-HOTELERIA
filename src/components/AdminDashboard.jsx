@@ -1620,17 +1620,17 @@ const recargarAdmin = () => cargarDatos('admin');
                               >
                                 <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
                                   <div className="flex-1">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
-                                      {config.tipo === 'OTROS' && (
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`); }}
-                                          className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-2 py-1 rounded-lg text-[9px] font-semibold uppercase hover:bg-slate-600 transition-all"
-                                        >
-                                          🧺 QR Ropa
-                                        </button>
-                                      )}
-                                    </div>
+                                    <div className="flex items-center gap-2">
+  <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
+  {config.tipo === 'OTROS' && (
+    <button
+      onClick={(e) => { e.stopPropagation(); descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`); }}
+      className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-1.5 py-0.5 rounded-lg text-[8px] font-semibold uppercase hover:bg-slate-600 transition-all"
+    >
+      🧺 Ropa
+    </button>
+  )}
+</div>
                                     <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate block mt-1`}>
                                       {truncarTexto(formatearResumenHabitacion(config), 28)}
                                     </span>
