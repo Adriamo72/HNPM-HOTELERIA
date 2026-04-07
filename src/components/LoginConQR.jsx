@@ -7,13 +7,11 @@ import LiveQRScanner from './LiveQRScanner';
 const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
   const [adminUser, setAdminUser] = useState('');
   const [adminPin, setAdminPin] = useState('');
-  const [visualizadorUser, setVisualizadorUser] = useState('');
-  const [visualizadorPin, setVisualizadorPin] = useState('');
   const [error, setError] = useState('');
   const [verificando, setVerificando] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
   const [tiempoRestante, setTiempoRestante] = useState(0);
-  const [modoLogin, setModoLogin] = useState('qr'); // 'qr', 'admin', 'visualizador'
+  const [mostrarAdminPanel, setMostrarAdminPanel] = useState(false);
   const timerRef = useRef(null);
 
   const esModoAdmin = modoAcceso === null;
@@ -64,9 +62,15 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
           return;
         }
         
-        // Permitir acceso a pañoleros y visualizadores por QR
+        // Solo pañoleros pueden acceder por QR (ni admin ni visualizador)
         if (usuario.rol === 'ADMIN') {
           setError("ACCESO NO AUTORIZADO - Use panel de administración");
+          setVerificando(false);
+          return;
+        }
+        
+        if (usuario.rol === 'visualizador') {
+          setError("ACCESO NO AUTORIZADO - Use acceso con PIN");
           setVerificando(false);
           return;
         }
@@ -105,8 +109,8 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     }
   };
 
-  // Login para ADMIN (usuario + PIN)
-  const handleAdminLogin = async (e) => {
+  // Login para ADMIN y VISUALIZADOR (usuario + PIN)
+  const handlePinLogin = async (e, tipo) => {
     e.preventDefault();
     
     if (bloqueado) {
@@ -123,21 +127,32 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     setError('');
     
     try {
-      const { data: admin, error: adminError } = await supabase
-        .from('admin_acceso')
+      let tabla = '';
+      let nombreTabla = '';
+      
+      if (tipo === 'admin') {
+        tabla = 'admin_acceso';
+        nombreTabla = 'Administrador';
+      } else {
+        tabla = 'visualizador_acceso';
+        nombreTabla = 'Visualizador';
+      }
+      
+      const { data: usuarioDB, error: dbError } = await supabase
+        .from(tabla)
         .select('*')
         .eq('usuario', adminUser.toLowerCase().trim())
         .eq('activo', true)
         .maybeSingle();
       
-      if (adminError || !admin) {
-        setError("Usuario administrador no válido.");
+      if (dbError || !usuarioDB) {
+        setError(`${nombreTabla} no válido.`);
         setVerificando(false);
         return;
       }
       
-      if (admin.bloqueado_hasta && new Date(admin.bloqueado_hasta) > new Date()) {
-        const segundosRestantes = Math.ceil((new Date(admin.bloqueado_hasta) - new Date()) / 1000);
+      if (usuarioDB.bloqueado_hasta && new Date(usuarioDB.bloqueado_hasta) > new Date()) {
+        const segundosRestantes = Math.ceil((new Date(usuarioDB.bloqueado_hasta) - new Date()) / 1000);
         setTiempoRestante(segundosRestantes);
         setBloqueado(true);
         iniciarContador(segundosRestantes);
@@ -146,35 +161,35 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
         return;
       }
       
-      if (!admin.pin_hash) {
+      if (!usuarioDB.pin_hash) {
         setError("PIN no configurado.");
         setVerificando(false);
         return;
       }
       
-      const pinValido = bcrypt.compareSync(adminPin, admin.pin_hash);
+      const pinValido = bcrypt.compareSync(adminPin, usuarioDB.pin_hash);
       
       if (!pinValido) {
-        const nuevosIntentos = (admin.intentos_fallidos || 0) + 1;
+        const nuevosIntentos = (usuarioDB.intentos_fallidos || 0) + 1;
         
         if (nuevosIntentos >= 3) {
           const bloqueoHasta = new Date(Date.now() + 15 * 60 * 1000);
           await supabase
-            .from('admin_acceso')
+            .from(tabla)
             .update({ 
               intentos_fallidos: nuevosIntentos,
               bloqueado_hasta: bloqueoHasta.toISOString()
             })
-            .eq('id', admin.id);
+            .eq('id', usuarioDB.id);
           
           setBloqueado(true);
           iniciarContador(900);
           setError(`PIN incorrecto. Cuenta bloqueada por 15 minutos.`);
         } else {
           await supabase
-            .from('admin_acceso')
+            .from(tabla)
             .update({ intentos_fallidos: nuevosIntentos })
-            .eq('id', admin.id);
+            .eq('id', usuarioDB.id);
           setError(`PIN incorrecto. Intentos restantes: ${3 - nuevosIntentos}`);
         }
         setVerificando(false);
@@ -182,146 +197,52 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
       }
       
       await supabase
-        .from('admin_acceso')
+        .from(tabla)
         .update({ 
           intentos_fallidos: 0, 
           bloqueado_hasta: null,
           ultimo_acceso: new Date().toISOString()
         })
-        .eq('id', admin.id);
+        .eq('id', usuarioDB.id);
       
-      const { data: usuarioAdmin, error: userError } = await supabase
-        .from('personal')
-        .select('*')
-        .or('es_admin.eq.true,rol.eq.ADMIN')
-        .maybeSingle();
+      // Crear objeto de usuario según el tipo
+      let usuarioData = {};
       
-      const adminData = usuarioAdmin || {
-        dni: 'admin',
-        nombre: 'Administrador',
-        apellido: 'Sistema',
-        jerarquia: 'ADMINISTRADOR',
-        rol: 'ADMIN',
-        es_admin: true
-      };
-      
-      const sesion = {
-        usuario: adminData,
-        expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
-      };
-      localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
-      
-      onLoginSuccess(adminData);
-      
-    } catch (err) {
-      console.error("Error:", err);
-      setError("Error al verificar credenciales");
-      setVerificando(false);
-    }
-  };
-
-  // Login para VISUALIZADOR (usuario + PIN)
-  const handleVisualizadorLogin = async (e) => {
-    e.preventDefault();
-    
-    if (bloqueado) {
-      setError(`Demasiados intentos. Espera ${tiempoRestante} segundos.`);
-      return;
-    }
-    
-    if (!visualizadorUser.trim() || !visualizadorPin.trim()) {
-      setError("Ingrese usuario y PIN");
-      return;
-    }
-    
-    setVerificando(true);
-    setError('');
-    
-    try {
-      const { data: visualizador, error: visError } = await supabase
-        .from('visualizador_acceso')
-        .select('*')
-        .eq('usuario', visualizadorUser.toLowerCase().trim())
-        .eq('activo', true)
-        .maybeSingle();
-      
-      if (visError || !visualizador) {
-        setError("Usuario visualizador no válido.");
-        setVerificando(false);
-        return;
-      }
-      
-      if (visualizador.bloqueado_hasta && new Date(visualizador.bloqueado_hasta) > new Date()) {
-        const segundosRestantes = Math.ceil((new Date(visualizador.bloqueado_hasta) - new Date()) / 1000);
-        setTiempoRestante(segundosRestantes);
-        setBloqueado(true);
-        iniciarContador(segundosRestantes);
-        setError(`Cuenta bloqueada. Intenta nuevamente en ${Math.ceil(segundosRestantes / 60)} minutos.`);
-        setVerificando(false);
-        return;
-      }
-      
-      if (!visualizador.pin_hash) {
-        setError("PIN no configurado.");
-        setVerificando(false);
-        return;
-      }
-      
-      const pinValido = bcrypt.compareSync(visualizadorPin, visualizador.pin_hash);
-      
-      if (!pinValido) {
-        const nuevosIntentos = (visualizador.intentos_fallidos || 0) + 1;
+      if (tipo === 'admin') {
+        // Buscar admin en tabla personal o crear ficticio
+        const { data: adminReal } = await supabase
+          .from('personal')
+          .select('*')
+          .or('es_admin.eq.true,rol.eq.ADMIN')
+          .maybeSingle();
         
-        if (nuevosIntentos >= 3) {
-          const bloqueoHasta = new Date(Date.now() + 15 * 60 * 1000);
-          await supabase
-            .from('visualizador_acceso')
-            .update({ 
-              intentos_fallidos: nuevosIntentos,
-              bloqueado_hasta: bloqueoHasta.toISOString()
-            })
-            .eq('id', visualizador.id);
-          
-          setBloqueado(true);
-          iniciarContador(900);
-          setError(`PIN incorrecto. Cuenta bloqueada por 15 minutos.`);
-        } else {
-          await supabase
-            .from('visualizador_acceso')
-            .update({ intentos_fallidos: nuevosIntentos })
-            .eq('id', visualizador.id);
-          setError(`PIN incorrecto. Intentos restantes: ${3 - nuevosIntentos}`);
-        }
-        setVerificando(false);
-        return;
+        usuarioData = adminReal || {
+          dni: 'admin',
+          nombre: 'Administrador',
+          apellido: 'Sistema',
+          jerarquia: 'ADMINISTRADOR',
+          rol: 'ADMIN',
+          es_admin: true
+        };
+      } else {
+        // Visualizador
+        usuarioData = {
+          dni: `vis_${usuarioDB.usuario}`,
+          nombre: 'Visualizador',
+          apellido: usuarioDB.usuario.toUpperCase(),
+          jerarquia: 'VISUALIZADOR',
+          rol: 'visualizador',
+          es_admin: false
+        };
       }
       
-      await supabase
-        .from('visualizador_acceso')
-        .update({ 
-          intentos_fallidos: 0, 
-          bloqueado_hasta: null,
-          ultimo_acceso: new Date().toISOString()
-        })
-        .eq('id', visualizador.id);
-      
-      // Crear un objeto de usuario visualizador
-      const visualizadorData = {
-        dni: `vis_${visualizador.usuario}`,
-        nombre: 'Visualizador',
-        apellido: visualizador.usuario.toUpperCase(),
-        jerarquia: 'VISUALIZADOR',
-        rol: 'visualizador',
-        es_admin: false
-      };
-      
       const sesion = {
-        usuario: visualizadorData,
+        usuario: usuarioData,
         expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
       };
       localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
       
-      onLoginSuccess(visualizadorData);
+      onLoginSuccess(usuarioData);
       
     } catch (err) {
       console.error("Error:", err);
@@ -345,7 +266,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     }, 1000);
   };
 
-  // Pantalla de selección de modo (cuando no hay modo de acceso específico)
+  // Pantalla Admin/Visualizador (usuario + PIN)
   if (esModoAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
@@ -360,30 +281,24 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
             <p className="text-blue-400 text-xs uppercase mt-2 font-semibold">Sistema de Trazabilidad</p>
           </div>
           
-          {/* Selector de modo de acceso */}
+          {/* Selector de tipo de acceso */}
           <div className="flex gap-2 mb-6 bg-slate-800 p-1 rounded-xl">
             <button
-              onClick={() => setModoLogin('qr')}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold uppercase transition-all ${modoLogin === 'qr' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+              onClick={() => setMostrarAdminPanel(false)}
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold uppercase transition-all ${!mostrarAdminPanel ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
             >
-              📱 QR
+              📱 QR (Operador)
             </button>
             <button
-              onClick={() => setModoLogin('visualizador')}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold uppercase transition-all ${modoLogin === 'visualizador' ? 'bg-green-600 text-white' : 'text-slate-400'}`}
+              onClick={() => setMostrarAdminPanel(true)}
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold uppercase transition-all ${mostrarAdminPanel ? 'bg-red-600 text-white' : 'text-slate-400'}`}
             >
-              👁️ Visualizador
-            </button>
-            <button
-              onClick={() => setModoLogin('admin')}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold uppercase transition-all ${modoLogin === 'admin' ? 'bg-red-600 text-white' : 'text-slate-400'}`}
-            >
-              ⚙️ Admin
+              🔐 PIN (Admin/Visualizador)
             </button>
           </div>
           
-          {/* Panel QR */}
-          {modoLogin === 'qr' && (
+          {/* Panel QR - para operadores (pañoleros) */}
+          {!mostrarAdminPanel && (
             <div>
               <LiveQRScanner 
                 onScanSuccess={handleScanSuccess}
@@ -398,96 +313,82 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
             </div>
           )}
           
-          {/* Panel VISUALIZADOR */}
-          {modoLogin === 'visualizador' && (
-            <form onSubmit={handleVisualizadorLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">USUARIO VISUALIZADOR</label>
-                <input
-                  type="text"
-                  value={visualizadorUser}
-                  onChange={(e) => setVisualizadorUser(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-lg outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="usuario"
-                  required
-                  disabled={bloqueado}
-                />
+          {/* Panel PIN - para Admin y Visualizador */}
+          {mostrarAdminPanel && (
+            <div>
+              <div className="flex gap-2 mb-4">
+                <button
+                  id="btnAdmin"
+                  className="flex-1 py-2 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold uppercase"
+                >
+                  Administrador
+                </button>
+                <button
+                  id="btnVisualizador"
+                  className="flex-1 py-2 bg-green-600/20 text-green-400 rounded-lg text-xs font-semibold uppercase"
+                >
+                  Visualizador
+                </button>
               </div>
               
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">PIN DE ACCESO</label>
-                <input
-                  type="password"
-                  value={visualizadorPin}
-                  onChange={(e) => setVisualizadorPin(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-2xl text-center tracking-[0.5em] outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="••••"
-                  maxLength="6"
-                  required
-                  disabled={bloqueado}
-                />
-              </div>
-              
-              {error && (
-                <div className="p-3 bg-red-900/30 border border-red-800 rounded-xl">
-                  <p className="text-sm text-center text-red-400">{error}</p>
+              <form id="formLoginPin" className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-2">USUARIO</label>
+                  <input
+                    type="text"
+                    id="inputUsuario"
+                    value={adminUser}
+                    onChange={(e) => setAdminUser(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-lg outline-none focus:ring-2 focus:ring-red-500"
+                    placeholder="usuario"
+                    required
+                    disabled={bloqueado}
+                  />
                 </div>
-              )}
-              
-              <button
-                type="submit"
-                disabled={verificando || bloqueado}
-                className="w-full bg-gradient-to-r from-green-600 to-green-500 text-white font-black py-4 rounded-xl shadow-lg active:scale-95 uppercase disabled:opacity-50"
-              >
-                {verificando ? 'VERIFICANDO...' : 'INGRESAR COMO VISUALIZADOR'}
-              </button>
-            </form>
-          )}
-          
-          {/* Panel ADMIN */}
-          {modoLogin === 'admin' && (
-            <form onSubmit={handleAdminLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">USUARIO ADMIN</label>
-                <input
-                  type="text"
-                  value={adminUser}
-                  onChange={(e) => setAdminUser(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-lg outline-none focus:ring-2 focus:ring-red-500"
-                  placeholder="admin"
-                  required
-                  disabled={bloqueado}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">PIN DE ACCESO</label>
-                <input
-                  type="password"
-                  value={adminPin}
-                  onChange={(e) => setAdminPin(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-2xl text-center tracking-[0.5em] outline-none focus:ring-2 focus:ring-red-500"
-                  placeholder="••••"
-                  maxLength="6"
-                  required
-                  disabled={bloqueado}
-                />
-              </div>
-              
-              {error && (
-                <div className="p-3 bg-red-900/30 border border-red-800 rounded-xl">
-                  <p className="text-sm text-center text-red-400">{error}</p>
+                
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-2">PIN DE ACCESO</label>
+                  <input
+                    type="password"
+                    id="inputPin"
+                    value={adminPin}
+                    onChange={(e) => setAdminPin(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-2xl text-center tracking-[0.5em] outline-none focus:ring-2 focus:ring-red-500"
+                    placeholder="••••"
+                    maxLength="6"
+                    required
+                    disabled={bloqueado}
+                  />
                 </div>
-              )}
-              
-              <button
-                type="submit"
-                disabled={verificando || bloqueado}
-                className="w-full bg-gradient-to-r from-red-600 to-red-500 text-white font-black py-4 rounded-xl shadow-lg active:scale-95 uppercase disabled:opacity-50"
-              >
-                {verificando ? 'VERIFICANDO...' : 'INGRESAR AL PANEL'}
-              </button>
-            </form>
+                
+                {error && (
+                  <div className="p-3 bg-red-900/30 border border-red-800 rounded-xl">
+                    <p className="text-sm text-center text-red-400">{error}</p>
+                  </div>
+                )}
+                
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    id="btnLoginAdmin"
+                    onClick={(e) => handlePinLogin(e, 'admin')}
+                    disabled={verificando || bloqueado}
+                    className="flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white font-black py-4 rounded-xl shadow-lg active:scale-95 uppercase disabled:opacity-50"
+                  >
+                    {verificando ? 'VERIFICANDO...' : 'ADMIN'}
+                  </button>
+                  <button
+                    type="button"
+                    id="btnLoginVisualizador"
+                    onClick={(e) => handlePinLogin(e, 'visualizador')}
+                    disabled={verificando || bloqueado}
+                    className="flex-1 bg-gradient-to-r from-green-600 to-green-500 text-white font-black py-4 rounded-xl shadow-lg active:scale-95 uppercase disabled:opacity-50"
+                  >
+                    {verificando ? 'VERIFICANDO...' : 'VISUALIZADOR'}
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
         </div>
       </div>
