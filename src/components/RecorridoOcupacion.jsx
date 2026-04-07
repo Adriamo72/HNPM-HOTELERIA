@@ -157,7 +157,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       }
       
       if (errores === 0) {
-        mostrarNotificacion(`✅ ${guardados} habitaciones guardadas correctamente`, 'success');
+        mostrarNotificacion(`${guardados} habitaciones guardadas correctamente`, 'success');
         // Recargar datos para actualizar la vista
         setTimeout(() => cargarDatos(), 1000);
       } else {
@@ -166,7 +166,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       
     } catch (err) {
       console.error("Error guardando:", err);
-      mostrarNotificacion("❌ Error al guardar la ocupación", 'error');
+      mostrarNotificacion("Error al guardar la ocupación", 'error');
     } finally {
       setGuardando(false);
     }
@@ -408,12 +408,12 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
 
       {/* Notificación de éxito */}
       {mensajeExito && (
-        <div className="fixed top-20 left-4 right-4 bg-green-600 text-white p-4 rounded-xl text-center shadow-2xl z-50 animate-in slide-in-from-top-5 fade-in duration-300">
+        <div className="fixed top-20 left-4 right-4 bg-slate-800 text-slate-200 p-4 rounded-lg text-center shadow-lg z-50 border border-slate-600">
           <div className="flex items-center justify-center gap-2">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            <span className="font-bold">{mensajeExito}</span>
+            <span className="font-medium">{mensajeExito}</span>
           </div>
         </div>
       )}
