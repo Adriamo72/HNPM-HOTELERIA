@@ -1,5 +1,4 @@
-// components/CroquisPiso.jsx - Versión simplificada con limpieza garantizada
-
+// components/CroquisPiso.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -16,10 +15,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [ocupacion, setOcupacion] = useState({});
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState('');
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(fechaConsulta || new Date().toISOString().split('T')[0]);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
   const [estadisticas, setEstadisticas] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
-  const [mostrarEstadisticas, setMostrarEstadisticas] = useState(true);
+  const [estadisticasGlobales, setEstadisticasGlobales] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
   
   // Estados para zoom y arrastre
   const [zoom, setZoom] = useState(1);
@@ -33,7 +32,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
 
   // RESETEAR COMPLETO cuando cambia el pisoId
   useEffect(() => {
-    // Resetear todos los estados
     setCroquis(null);
     setCoordenadas({});
     setOcupacion({});
@@ -45,9 +43,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setModoMovimiento(false);
     setEstadisticas({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
     
-    // Cargar nuevo croquis
     if (normalizedPisoId !== '' && normalizedPisoId !== null && normalizedPisoId !== undefined) {
       cargarCroquis();
+      cargarEstadisticasGlobales();
     }
   }, [normalizedPisoId]);
 
@@ -65,7 +63,74 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   }, [ocupacion, habitaciones]);
 
-  // Calcular estadísticas de camas
+  // Cargar estadísticas globales de todo el hospital
+  const cargarEstadisticasGlobales = async () => {
+    try {
+      // Obtener todas las habitaciones especiales
+      const { data: todasHabitaciones, error: habError } = await supabase
+        .from('habitaciones_especiales')
+        .select('id, piso_id, nombre');
+      
+      if (habError) throw habError;
+      
+      if (!todasHabitaciones || todasHabitaciones.length === 0) {
+        setEstadisticasGlobales({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
+        return;
+      }
+      
+      // Obtener ocupación para la fecha seleccionada
+      const fecha = fechaSeleccionada;
+      const hoy = new Date().toISOString().split('T')[0];
+      
+      let query = supabase
+        .from('ocupacion_habitaciones')
+        .select('*')
+        .in('habitacion_id', todasHabitaciones.map(h => h.id));
+      
+      if (fecha === hoy) {
+        query = query.order('fecha', { ascending: false }).order('actualizado_en', { ascending: false });
+      } else {
+        query = query.eq('fecha', fecha).order('actualizado_en', { ascending: false });
+      }
+      
+      const { data: ocupaciones, error: occError } = await query;
+      
+      if (occError) throw occError;
+      
+      // Procesar ocupaciones (tomar la más reciente por habitación)
+      const ocupMap = {};
+      (ocupaciones || []).forEach(occ => {
+        if (!ocupMap[occ.habitacion_id]) {
+          ocupMap[occ.habitacion_id] = occ;
+        }
+      });
+      
+      // Calcular totales
+      let totalCamasGlobal = 0;
+      let camasOcupadasGlobal = 0;
+      
+      todasHabitaciones.forEach(hab => {
+        const ocup = ocupMap[hab.id];
+        if (ocup && ocup.tipo_habitacion === 'activa') {
+          totalCamasGlobal += ocup.total_camas || 1;
+          camasOcupadasGlobal += ocup.camas_ocupadas || 0;
+        }
+      });
+      
+      const porcentajeGlobal = totalCamasGlobal > 0 ? (camasOcupadasGlobal / totalCamasGlobal) * 100 : 0;
+      
+      setEstadisticasGlobales({
+        totalCamas: totalCamasGlobal,
+        camasOcupadas: camasOcupadasGlobal,
+        porcentaje: porcentajeGlobal
+      });
+      
+    } catch (error) {
+      console.error("Error cargando estadísticas globales:", error);
+    }
+  };
+
+  // Calcular estadísticas del piso actual
   const calcularEstadisticas = () => {
     let totalCamas = 0;
     let camasOcupadas = 0;
@@ -155,6 +220,31 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  const guardarCoordenada = async (habitacionId, x, y) => {
+    if (!croquis) return;
+    
+    try {
+      const { error } = await supabase
+        .from('habitacion_coordenadas')
+        .upsert({
+          habitacion_id: habitacionId,
+          croquis_id: croquis.id,
+          x: Math.round(x),
+          y: Math.round(y),
+          ancho: 40,
+          alto: 40
+        }, { onConflict: 'habitacion_id,croquis_id' });
+      
+      if (error) throw error;
+      
+      setCoordenadas(prev => ({ ...prev, [habitacionId]: { x, y, ancho: 40, alto: 40 } }));
+      
+    } catch (error) {
+      console.error("Error guardando coordenada:", error);
+      throw error;
+    }
+  };
+
   const subirCroquis = async (file) => {
     if (!file) return;
     
@@ -186,7 +276,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       
       if (insertError) throw insertError;
       
-      setMensaje("✅  subido correctamente");
+      setMensaje("✅ Croquis subido correctamente");
       setTimeout(() => setMensaje(''), 2000);
       cargarCroquis();
       
@@ -194,31 +284,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       console.error("Error:", error);
       setMensaje("❌ Error al subir croquis");
       setTimeout(() => setMensaje(''), 2000);
-    }
-  };
-
-  const guardarCoordenada = async (habitacionId, x, y) => {
-    if (!croquis) return;
-    
-    try {
-      const { error } = await supabase
-        .from('habitacion_coordenadas')
-        .upsert({
-          habitacion_id: habitacionId,
-          croquis_id: croquis.id,
-          x: Math.round(x),
-          y: Math.round(y),
-          ancho: 40,
-          alto: 40
-        }, { onConflict: 'habitacion_id,croquis_id' });
-      
-      if (error) throw error;
-      
-      setCoordenadas(prev => ({ ...prev, [habitacionId]: { x, y, ancho: 40, alto: 40 } }));
-      
-    } catch (error) {
-      console.error("Error guardando coordenada:", error);
-      throw error;
     }
   };
 
@@ -316,7 +381,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
-  // Manejar zoom con rueda
   const handleWheel = (e) => {
     if (!modoEdicion) return;
     e.preventDefault();
@@ -324,7 +388,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setZoom(prev => Math.min(Math.max(prev + delta, 0.5), 3));
   };
 
-  // Manejar arrastre
   const handleMouseDown = (e) => {
     if (!modoEdicion || modoMovimiento) return;
     
@@ -418,7 +481,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   if (cargando) {
     return (
       <div className="bg-slate-800 rounded-xl p-12 text-center">
-        <div className="animate-pulse"><p className="text-slate-400">Cargando croquis...</p></div>
+        <div className="animate-pulse">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400">Cargando croquis...</p>
+        </div>
       </div>
     );
   }
@@ -429,52 +495,89 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         <div className="text-6xl mb-4">🗺️</div>
         <h3 className="text-xl font-bold text-white mb-2">Croquis no disponible</h3>
         <p className="text-slate-400 mb-4">Sube la imagen del croquis para {pisoNombre}</p>
-        <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2">
-          📤 Subir plano (PNG/JPG)
-          <input type="file" accept="image/png,image/jpeg,image/jpg" className="hidden" onChange={(e) => e.target.files[0] && subirCroquis(e.target.files[0])} />
-        </label>
+        {!esVisualizador && (
+          <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition-all">
+            📤 Subir plano (PNG/JPG)
+            <input type="file" accept="image/png,image/jpeg,image/jpg" className="hidden" onChange={(e) => e.target.files[0] && subirCroquis(e.target.files[0])} />
+          </label>
+        )}
+        {esVisualizador && (
+          <p className="text-yellow-500 text-sm mt-2">Modo visualización - No se pueden subir croquis</p>
+        )}
       </div>
     );
   }
 
   return (
     <div className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-700">
+      {/* Header con estadísticas HNPM */}
       <div className="flex flex-wrap justify-between items-center p-4 border-b border-slate-700 gap-3">
         <div>
-          <h3 className="text-xl font-bold text-green-400">{pisoNombre}</h3>
+          <h3 className="text-xl font-bold text-blue-400">{pisoNombre}</h3>
           <p className="text-xs text-slate-500">{esVisualizador ? '👁️ Modo Visualización' : (modoEdicion ? (modoMovimiento ? '🖱️ Modo Movimiento' : '✎ Modo Edición') : '👁️ Modo Visualización')}</p>
         </div>
+        
+        {/* Estadísticas HNPM Globales */}
+        <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
+          <div className="flex gap-6">
+            <div>
+              <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL CAMAS HNPM</p>
+              <p className="text-2xl font-black text-green-400">{estadisticasGlobales.totalCamas}</p>
+            </div>
+            <div className="border-l border-slate-700 pl-6">
+              <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">CAMAS OCUPADAS HNPM</p>
+              <p className="text-2xl font-black text-yellow-400">{estadisticasGlobales.camasOcupadas}</p>
+            </div>
+            <div className="border-l border-slate-700 pl-6">
+              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">OCUPACIÓN GLOBAL</p>
+              <p className="text-2xl font-black text-blue-400">{estadisticasGlobales.porcentaje.toFixed(0)}%</p>
+            </div>
+          </div>
+        </div>
+        
         <div className="flex gap-2 flex-wrap">
           <input 
             type="date" 
-            value={fechaConsulta || fechaSeleccionada} 
-            onChange={(e) => setFechaSeleccionada(e.target.value)} 
+            value={fechaSeleccionada} 
+            onChange={(e) => {
+              setFechaSeleccionada(e.target.value);
+              cargarEstadisticasGlobales();
+            }} 
             className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" 
           />
+          <button 
+            onClick={() => {
+              cargarCroquis();
+              cargarEstadisticasGlobales();
+            }} 
+            className="px-4 py-2 rounded-lg text-sm font-bold bg-slate-700 hover:bg-slate-600 transition-all"
+          >
+            🔄 Recargar
+          </button>
           {!esVisualizador && (
             <>
               <button onClick={() => { setModoEdicion(!modoEdicion); setModoMovimiento(false); if (!modoEdicion) setPosicion({ x: 0, y: 0 }); }} className={`px-4 py-2 rounded-lg text-sm font-bold ${modoEdicion && !modoMovimiento ? 'bg-green-600' : 'bg-yellow-600'}`}>
                 {modoEdicion && !modoMovimiento ? '✓ Terminar' : '✎ Editar'}
               </button>
               {modoEdicion && (<button onClick={() => setModoMovimiento(!modoMovimiento)} className={`px-4 py-2 rounded-lg text-sm font-bold ${modoMovimiento ? 'bg-blue-600' : 'bg-slate-700'}`}>🖱️ {modoMovimiento ? 'ON' : 'OFF'}</button>)}
-              <button onClick={eliminarCroquis} className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600">🗑️ Eliminar</button>
+              <button onClick={eliminarCroquis} className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600 hover:bg-red-500 transition-all">🗑️ Eliminar</button>
             </>
           )}
-          <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg text-sm font-bold bg-slate-700">🔄 Recargar</button>
         </div>
       </div>
 
-      {mostrarEstadisticas && estadisticas.totalCamas > 0 && (
+      {/* Estadísticas del piso actual */}
+      {estadisticas.totalCamas > 0 && (
         <div className="bg-slate-800/50 p-3 mx-4 mt-2 rounded-lg">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div className="flex gap-4 text-sm">
-              <span className="text-green-400">Total de camas: {estadisticas.totalCamas}</span>
-              <span className="text-yellow-400">Camas ocupadas: {estadisticas.camasOcupadas}</span>
-              <span className="text-yellow-400">{estadisticas.porcentaje.toFixed(1)}%</span>
+              <span className="text-green-400">Camas en este piso: {estadisticas.totalCamas}</span>
+              <span className="text-yellow-400">Ocupadas: {estadisticas.camasOcupadas}</span>
+              <span className="text-blue-400">{estadisticas.porcentaje.toFixed(1)}% ocupación</span>
             </div>
             {ultimaActualizacion && (
               <div className="text-xs uppercase text-slate-400 tracking-[0.12em]">
-                Última pasada: {ultimaActualizacion.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                Última actualización: {ultimaActualizacion.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
               </div>
             )}
           </div>
@@ -499,7 +602,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        {/* Contenedor para zoom y arrastre */}
         <div
           style={{
             transform: `translate(${posicion.x}px, ${posicion.y}px) scale(${zoom})`,
@@ -579,7 +681,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             {esVisualizador ? '🔍 Solo visualización - Click derecho para ver detalles' : `🔍 Zoom: ${Math.round(zoom * 100)}% | 🖱️ ${modoMovimiento ? 'Arrastra marcadores' : (modoEdicion ? 'Click para posicionar' : 'Solo visualización')}`}
           </div>
         </div>
-        {mensaje && <p className="text-center text-sm mt-2 text-green-400">{mensaje}</p>}
+        {mensaje && <p className="text-center text-sm mt-2 text-blue-400">{mensaje}</p>}
       </div>
     </div>
   );

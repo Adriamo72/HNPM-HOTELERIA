@@ -1338,7 +1338,7 @@ const eliminarVisualizador = async (visId, usuario) => {
             />
           ) : (
             <div className="bg-slate-800 rounded-xl p-12 text-center">
-              <p className="text-slate-400">Selecciona un piso para ver su croquis</p>
+              <p className="text-slate-400">Selecciona un piso para ver su plano</p>
             </div>
           )}
         </div>

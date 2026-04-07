@@ -140,7 +140,7 @@ const VisualizadorDashboard = () => {
           onClick={() => setActiveTab('croquis')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'croquis' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
-          Croquis
+          Pisos
         </button>
         <button 
           onClick={() => setActiveTab('monitor')} 
@@ -182,7 +182,7 @@ const VisualizadorDashboard = () => {
                 }}
                 className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
               >
-                <option value="">Seleccionar sector...</option>
+                <option value="">Seleccionar ...</option>
                 {pisos.map(p => (
                   <option key={p.id} value={p.id}>{p.nombre_piso}</option>
                 ))}
@@ -203,7 +203,7 @@ const VisualizadorDashboard = () => {
             />
           ) : (
             <div className="bg-slate-800 rounded-xl p-12 text-center">
-              <p className="text-slate-400">Selecciona un sector para ver su croquis</p>
+              <p className="text-slate-400">Selecciona un piso para ver su plano</p>
             </div>
           )}
         </div>
