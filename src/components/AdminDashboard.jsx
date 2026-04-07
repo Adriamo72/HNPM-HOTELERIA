@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
 import CroquisPiso from './CroquisPiso';
+import SpinnerCarga from './SpinnerCarga';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('historial');
@@ -17,6 +18,9 @@ const AdminDashboard = () => {
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [sincronizando, setSincronizando] = useState(false);
+  const [cargandoCroquis, setCargandoCroquis] = useState(false);
+  const [cargandoMonitor, setCargandoMonitor] = useState(false);
+  const [cargandoAdmin, setCargandoAdmin] = useState(false);
   
   // Estados para modales
   const [mostrarModalAdmin, setMostrarModalAdmin] = useState(false);
@@ -67,9 +71,9 @@ const AdminDashboard = () => {
   const [croquisKey, setCroquisKey] = useState(0);
 
   useEffect(() => {
-    cargarDatos();
-    cargarAdmins();
-  }, []);
+  cargarDatos('todos');
+  cargarAdmins();
+}, []);
 
   useEffect(() => {
     if (!habitacionesEspeciales.length) return;
@@ -265,15 +269,22 @@ const AdminDashboard = () => {
   };
 
   // ==================== CARGAR DATOS PRINCIPAL ====================
-  const cargarDatos = async () => {
-    setSincronizando(true);
-    mostrarSplash("🔄 SINCRONIZANDO...");
-    
-    try {
-      const resPers = await supabase.from('personal').select('*').order('apellido');
+const cargarDatos = async (tipo = 'todos') => {
+  if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(true);
+  if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(true);
+  if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(true);
+  
+  try {
+    if (tipo === 'croquis' || tipo === 'todos') {
       const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
       const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
-      
+      setPisos(resPisos.data || []);
+      setHabitacionesEspeciales(resHabs.data || []);
+      await cargarEstadoHabitaciones(resHabs.data || []);
+    }
+    
+    if (tipo === 'monitor' || tipo === 'todos') {
+      const resPers = await supabase.from('personal').select('*').order('apellido');
       const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
       setAuditoriaHabilitada(config?.valor === 'true');
 
@@ -291,8 +302,8 @@ const AdminDashboard = () => {
       const stockUsoMap = {};
       const stockLavaderoMap = {};
       
-      if (resPisos.data) {
-        for (const piso of resPisos.data) {
+      if (pisos.length > 0) {
+        for (const piso of pisos) {
           stockPañolMap[piso.nombre_piso] = {};
           stockUsoMap[piso.nombre_piso] = {};
           stockLavaderoMap[piso.nombre_piso] = {};
@@ -320,22 +331,26 @@ const AdminDashboard = () => {
       }, {}) : {};
       
       setPersonal(resPers.data || []);
-      setPisos(resPisos.data || []);
-      setHabitacionesEspeciales(resHabs.data || []);
-      await cargarEstadoHabitaciones(resHabs.data || []);
       setMovimientosAgrupados(agrupados);
       setStockPañol(stockPañolMap);
       setStockUso(stockUsoMap);
       setStockLavadero(stockLavaderoMap);
-      
-      mostrarSplash("✅ DATOS ACTUALIZADOS");
-    } catch (error) {
-      console.error(error);
-      mostrarSplash("❌ ERROR AL SINCRONIZAR");
-    } finally {
-      setSincronizando(false);
     }
-  };
+    
+    if (tipo === 'admin' || tipo === 'todos') {
+      await cargarAdmins();
+    }
+    
+    mostrarSplash("✅ DATOS ACTUALIZADOS");
+  } catch (error) {
+    console.error(error);
+    mostrarSplash("❌ ERROR AL SINCRONIZAR");
+  } finally {
+    if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(false);
+    if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(false);
+    if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(false);
+  }
+};
 
   // ==================== GESTIÓN DE ADMINISTRADORES ====================
   const cargarAdmins = async () => {
@@ -351,6 +366,11 @@ const AdminDashboard = () => {
       console.error("Error cargando admins:", error);
     }
   };
+
+  // Funciones de recarga por pestaña
+const recargarCroquis = () => cargarDatos('croquis');
+const recargarMonitor = () => cargarDatos('monitor');
+const recargarAdmin = () => cargarDatos('admin');
 
   const agregarAdmin = async () => {
     if (!nuevoAdmin.usuario.trim()) {
@@ -1118,24 +1138,35 @@ const AdminDashboard = () => {
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
               HOTELERIA
             </h2>
-            <select
-              value={pisoSeleccionado}
-              onChange={(e) => {
-                setPisoSeleccionado(e.target.value);
-                setCroquisKey(prev => prev + 1); // Forzar recreación del croquis
-              }}
-              className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
-            >
-              <option value="">Seleccionar piso...</option>
-              {pisos.map(p => (
-                <option key={p.id} value={p.id}>{p.nombre_piso}</option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <button 
+                onClick={recargarCroquis} 
+                disabled={cargandoCroquis}
+                className="text-xs px-4 py-2 rounded-xl font-semibold bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 transition-all disabled:opacity-50"
+              >
+                {cargandoCroquis ? '🔄 CARGANDO...' : '🔄 RECARGAR'}
+              </button>
+              <select
+                value={pisoSeleccionado}
+                onChange={(e) => {
+                  setPisoSeleccionado(e.target.value);
+                  setCroquisKey(prev => prev + 1);
+                }}
+                className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
+              >
+                <option value="">Seleccionar piso...</option>
+                {pisos.map(p => (
+                  <option key={p.id} value={p.id}>{p.nombre_piso}</option>
+                ))}
+              </select>
+            </div>
           </div>
           
-          {pisoSeleccionado ? (
+          {cargandoCroquis ? (
+            <SpinnerCarga mensaje="CARGANDO SECTORES..." />
+          ) : pisoSeleccionado ? (
             <CroquisPiso
-              key={croquisKey}  // 👈 Usar la key que cambia con cada selección
+              key={croquisKey}
               pisoId={pisoSeleccionado}
               pisoNombre={pisos.find(p => String(p.id) === String(pisoSeleccionado))?.nombre_piso}
               habitaciones={habitacionesEspeciales.filter(h => String(h.piso_id) === String(pisoSeleccionado))}
@@ -1150,335 +1181,356 @@ const AdminDashboard = () => {
 
       {/* Panel HISTORIAL - Monitor de stock */}
       {activeTab === 'historial' && (
-        <div className="space-y-8">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Control de Activos</h2>
-            <button 
-              onClick={cargarDatos} 
-              disabled={sincronizando}
-              className={`text-xs px-5 py-2 rounded-xl font-semibold transition-all ${sincronizando ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
-            >
-              {sincronizando ? '⌛ SINCRONIZANDO...' : '🔄 SINCRONIZAR'}
-            </button>
+  <div className="space-y-8">
+    <div className="flex justify-between items-center">
+      <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Control de Activos</h2>
+      <button 
+        onClick={recargarMonitor} 
+        disabled={cargandoMonitor}
+        className={`text-xs px-5 py-2 rounded-xl font-semibold transition-all ${cargandoMonitor ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
+      >
+        {cargandoMonitor ? '⌛ CARGANDO...' : '🔄 RECARGAR'}
+      </button>
+    </div>
+    
+    {cargandoMonitor ? (
+      <SpinnerCarga mensaje="CARGANDO MOVIMIENTOS..." />
+    ) : (
+      <>
+        {/* Stock Total Consolidado */}
+        <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6">
+          <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4 text-center">
+            STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+            {ITEMS_REQUERIDOS.map(item => (
+              <div key={item} className="bg-slate-900/80 p-3 rounded-xl border border-blue-800/40 text-center">
+                <span className="text-[10px] text-slate-500 font-semibold uppercase block">{item}</span>
+                <span className={`text-2xl font-semibold ${totalGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>
+                  {totalGlobal[item] || 0}
+                </span>
+              </div>
+            ))}
           </div>
           
-          {/* Stock Total Consolidado */}
-          <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6">
-            <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4 text-center">
-              STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-              {ITEMS_REQUERIDOS.map(item => (
-                <div key={item} className="bg-slate-900/80 p-3 rounded-xl border border-blue-800/40 text-center">
-                  <span className="text-[10px] text-slate-500 font-semibold uppercase block">{item}</span>
-                  <span className={`text-2xl font-semibold ${totalGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>
-                    {totalGlobal[item] || 0}
-                  </span>
-                </div>
-              ))}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-green-900/20 p-3 rounded-xl border border-green-900/30">
+              <p className="text-xs font-semibold text-green-500 uppercase text-center">PAÑOL (Limpio disponible)</p>
+              <div className="grid grid-cols-4 gap-1 mt-2">
+                {ITEMS_REQUERIDOS.map(item => {
+                  let total = 0;
+                  Object.keys(stockPañol).forEach(piso => { total += stockPañol[piso]?.[item] || 0; });
+                  return (
+                    <div key={item} className="text-center">
+                      <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                      <span className={`text-base font-semibold ${total < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>{total}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-green-900/20 p-3 rounded-xl border border-green-900/30">
-                <p className="text-xs font-semibold text-green-500 uppercase text-center">PAÑOL (Limpio disponible)</p>
-                <div className="grid grid-cols-4 gap-1 mt-2">
-                  {ITEMS_REQUERIDOS.map(item => {
-                    let total = 0;
-                    Object.keys(stockPañol).forEach(piso => { total += stockPañol[piso]?.[item] || 0; });
-                    return (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className={`text-base font-semibold ${total < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>{total}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="bg-yellow-900/20 p-3 rounded-xl border border-yellow-900/30">
+              <p className="text-xs font-semibold text-yellow-500 uppercase text-center">EN USO</p>
+              <div className="grid grid-cols-4 gap-1 mt-2">
+                {ITEMS_REQUERIDOS.map(item => {
+                  let total = 0;
+                  Object.keys(stockUso).forEach(piso => { total += stockUso[piso]?.[item] || 0; });
+                  return (
+                    <div key={item} className="text-center">
+                      <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                      <span className="text-base font-semibold text-yellow-400">{total}</span>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="bg-yellow-900/20 p-3 rounded-xl border border-yellow-900/30">
-                <p className="text-xs font-semibold text-yellow-500 uppercase text-center">EN USO</p>
-                <div className="grid grid-cols-4 gap-1 mt-2">
-                  {ITEMS_REQUERIDOS.map(item => {
-                    let total = 0;
-                    Object.keys(stockUso).forEach(piso => { total += stockUso[piso]?.[item] || 0; });
-                    return (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className="text-base font-semibold text-yellow-400">{total}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="bg-red-900/20 p-3 rounded-xl border border-red-900/30">
-                <p className="text-xs font-semibold text-red-500 uppercase text-center">LAVADERO</p>
-                <div className="grid grid-cols-4 gap-1 mt-2">
-                  {ITEMS_REQUERIDOS.map(item => {
-                    let total = 0;
-                    Object.keys(stockLavadero).forEach(piso => { total += stockLavadero[piso]?.[item] || 0; });
-                    return (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className="text-base font-semibold text-red-400">{total}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+            </div>
+            <div className="bg-red-900/20 p-3 rounded-xl border border-red-900/30">
+              <p className="text-xs font-semibold text-red-500 uppercase text-center">LAVADERO</p>
+              <div className="grid grid-cols-4 gap-1 mt-2">
+                {ITEMS_REQUERIDOS.map(item => {
+                  let total = 0;
+                  Object.keys(stockLavadero).forEach(piso => { total += stockLavadero[piso]?.[item] || 0; });
+                  return (
+                    <div key={item} className="text-center">
+                      <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                      <span className="text-base font-semibold text-red-400">{total}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Stock por Piso */}
-          {Object.keys(stockPañol).map((nombrePiso) => {
-            const totalPiso = {};
-            ITEMS_REQUERIDOS.forEach(item => {
-              totalPiso[item] = (stockPañol[nombrePiso]?.[item] || 0) + (stockUso[nombrePiso]?.[item] || 0) + (stockLavadero[nombrePiso]?.[item] || 0);
-            });
-            
-            return (
-              <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-                <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
-                  <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
-                  <div className="bg-green-900/20 p-3 rounded-xl">
-                    <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
-                    <div className="grid grid-cols-4 gap-1 mt-2">
-                      {ITEMS_REQUERIDOS.map(item => (
-                        <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                          <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
-                            {stockPañol[nombrePiso]?.[item] || 0}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="bg-yellow-900/20 p-3 rounded-xl">
-                    <p className="text-sm font-semibold text-yellow-500 uppercase text-center">EN USO</p>
-                    <div className="grid grid-cols-4 gap-1 mt-2">
-                      {ITEMS_REQUERIDOS.map(item => (
-                        <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                          <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="bg-red-900/20 p-3 rounded-xl">
-                    <p className="text-sm font-semibold text-red-500 uppercase text-center">LAVADERO</p>
-                    <div className="grid grid-cols-4 gap-1 mt-2">
-                      {ITEMS_REQUERIDOS.map(item => (
-                        <div key={item} className="text-center">
-                          <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                          <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Historial de movimientos */}
-                <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
-                  {movimientosAgrupados[nombrePiso]?.length > 0 ? (
-                    movimientosAgrupados[nombrePiso].map((m) => (
-                      <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
-                        <div className="w-[22%] shrink-0 flex items-center gap-2">
-                          <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
-                          <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
-                        </div>
-                        <div className="flex-1 flex items-center justify-around gap-2">
-                          <div className="text-center min-w-[50px]">
-                            <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
-                            <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
-                          </div>
-                          <div className="text-center min-w-[50px]">
-                            <span className="text-[9px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
-                            <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
-                          </div>
-                          <div className="text-center min-w-[50px]">
-                            <span className="text-[9px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
-                            <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
-                          </div>
-                        </div>
-                        <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
-                          {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
-                            <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
-                              📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
-                            </span>
-                          )}
-                          {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
-                          {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
-                          <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
-                          <button 
-                            onClick={() => eliminarMovimiento(m.id)} 
-                            className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
-                            title="Eliminar movimiento"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
+        {/* Stock por Piso */}
+        {Object.keys(stockPañol).map((nombrePiso) => {
+          const totalPiso = {};
+          ITEMS_REQUERIDOS.forEach(item => {
+            totalPiso[item] = (stockPañol[nombrePiso]?.[item] || 0) + (stockUso[nombrePiso]?.[item] || 0) + (stockLavadero[nombrePiso]?.[item] || 0);
+          });
+          
+          return (
+            <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+              <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
+                <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
+                <div className="bg-green-900/20 p-3 rounded-xl">
+                  <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
+                  <div className="grid grid-cols-4 gap-1 mt-2">
+                    {ITEMS_REQUERIDOS.map(item => (
+                      <div key={item} className="text-center">
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                        <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
+                          {stockPañol[nombrePiso]?.[item] || 0}
+                        </span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
-                  )}
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-yellow-900/20 p-3 rounded-xl">
+                  <p className="text-sm font-semibold text-yellow-500 uppercase text-center">EN USO</p>
+                  <div className="grid grid-cols-4 gap-1 mt-2">
+                    {ITEMS_REQUERIDOS.map(item => (
+                      <div key={item} className="text-center">
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                        <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-red-900/20 p-3 rounded-xl">
+                  <p className="text-sm font-semibold text-red-500 uppercase text-center">LAVADERO</p>
+                  <div className="grid grid-cols-4 gap-1 mt-2">
+                    {ITEMS_REQUERIDOS.map(item => (
+                      <div key={item} className="text-center">
+                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                        <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+              
+              {/* Historial de movimientos */}
+              <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
+                {movimientosAgrupados[nombrePiso]?.length > 0 ? (
+                  movimientosAgrupados[nombrePiso].map((m) => (
+                    <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
+                      <div className="w-[22%] shrink-0 flex items-center gap-2">
+                        <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
+                        <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
+                      </div>
+                      <div className="flex-1 flex items-center justify-around gap-2">
+                        <div className="text-center min-w-[50px]">
+                          <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
+                          <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
+                        </div>
+                        <div className="text-center min-w-[50px]">
+                          <span className="text-[9px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
+                          <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
+                        </div>
+                        <div className="text-center min-w-[50px]">
+                          <span className="text-[9px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
+                          <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
+                        </div>
+                      </div>
+                      <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
+                        {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
+                          <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
+                            📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
+                          </span>
+                        )}
+                        {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
+                        {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
+                        <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
+                        <button 
+                          onClick={() => eliminarMovimiento(m.id)} 
+                          className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
+                          title="Eliminar movimiento"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </>
+    )}
+  </div>
+)}
 
       {/* Panel ADMINISTRACIÓN */}
       {activeTab === 'admin' && (
-        <div className="space-y-6">
-          {/* Auditoría */}
-          <section className="bg-slate-900 p-6 rounded-2xl border border-yellow-600/30 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="text-center sm:text-left">
-              <h3 className="text-lg font-semibold uppercase text-yellow-500">🔐 Mando de Auditoría</h3>
-              <p className="text-xs text-slate-500 uppercase font-semibold">Ajuste manual de stock habilitado</p>
+  <div className="space-y-6">
+    <div className="flex justify-between items-center mb-4">
+      <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Administración</h2>
+      <button 
+        onClick={recargarAdmin} 
+        disabled={cargandoAdmin}
+        className={`text-xs px-5 py-2 rounded-xl font-semibold transition-all ${cargandoAdmin ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
+      >
+        {cargandoAdmin ? '⌛ CARGANDO...' : '🔄 RECARGAR'}
+      </button>
+    </div>
+    
+    {cargandoAdmin ? (
+      <SpinnerCarga mensaje="CARGANDO CONFIGURACIÓN..." />
+    ) : (
+      <>
+        {/* Auditoría */}
+        <section className="bg-slate-900 p-6 rounded-2xl border border-yellow-600/30 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="text-center sm:text-left">
+            <h3 className="text-lg font-semibold uppercase text-yellow-500">🔐 Mando de Auditoría</h3>
+            <p className="text-xs text-slate-500 uppercase font-semibold">Ajuste manual de stock habilitado</p>
+          </div>
+          <button 
+            onClick={toggleAuditoria} 
+            className={`px-6 py-2.5 rounded-xl font-semibold text-sm uppercase transition-all ${auditoriaHabilitada ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-green-600 text-white hover:bg-green-500'}`}
+          >
+            {auditoriaHabilitada ? '🔴 Desactivar' : '🟢 Activar'}
+          </button>
+        </section>
+
+        {/* Gestión de Administradores */}
+        <section className="bg-slate-900 p-6 rounded-2xl border border-purple-800/30">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-purple-400 uppercase tracking-wider">
+                👑 Administradores del Sistema
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">Gestiona los accesos de administradores</p>
             </div>
-            <button 
-              onClick={toggleAuditoria} 
-              className={`px-6 py-2.5 rounded-xl font-semibold text-sm uppercase transition-all ${auditoriaHabilitada ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-green-600 text-white hover:bg-green-500'}`}
+            <button
+              onClick={() => setMostrarModalAdmin(true)}
+              className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
             >
-              {auditoriaHabilitada ? '🔴 Desactivar' : '🟢 Activar'}
+              + Nuevo Admin
             </button>
-          </section>
-
-          {/* Gestión de Administradores */}
-          <section className="bg-slate-900 p-6 rounded-2xl border border-purple-800/30">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-purple-400 uppercase tracking-wider">
-                  👑 Administradores del Sistema
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">Gestiona los accesos de administradores</p>
-              </div>
-              <button
-                onClick={() => setMostrarModalAdmin(true)}
-                className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
-              >
-                + Nuevo Admin
-              </button>
-            </div>
-            
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {admins.length > 0 ? (
-                admins.map(admin => (
-                  <div key={admin.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 hover:border-purple-800/50 transition-all">
-                    <div className="flex justify-between items-center flex-wrap gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold text-white uppercase">
-                            {admin.usuario}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                            admin.activo ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
-                          }`}>
-                            {admin.activo ? 'ACTIVO' : 'INACTIVO'}
-                          </span>
-                        </div>
-                        <div className="flex gap-3 mt-1 text-[10px] text-slate-500 flex-wrap">
-                          <span>🕐 Creado: {new Date(admin.created_at).toLocaleDateString()}</span>
-                          {admin.ultimo_acceso && (
-                            <span>📱 Último acceso: {new Date(admin.ultimo_acceso).toLocaleString()}</span>
-                          )}
-                          {admin.intentos_fallidos > 0 && (
-                            <span className="text-orange-400">⚠️ Intentos fallidos: {admin.intentos_fallidos}</span>
-                          )}
-                        </div>
+          </div>
+          
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {admins.length > 0 ? (
+              admins.map(admin => (
+                <div key={admin.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 hover:border-purple-800/50 transition-all">
+                  <div className="flex justify-between items-center flex-wrap gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-white uppercase">
+                          {admin.usuario}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          admin.activo ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
+                        }`}>
+                          {admin.activo ? 'ACTIVO' : 'INACTIVO'}
+                        </span>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setAdminSeleccionado(admin);
-                            setMostrarModalCambioPin(true);
-                          }}
-                          className="px-3 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg text-xs font-semibold hover:bg-yellow-600 hover:text-white transition-all"
-                          title="Cambiar PIN"
-                        >
-                          🔑 Cambiar PIN
-                        </button>
-                        <button
-                          onClick={() => cambiarEstadoAdmin(admin.id, admin.activo)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            admin.activo 
-                              ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600 hover:text-white'
-                              : 'bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white'
-                          }`}
-                        >
-                          {admin.activo ? '🔴 Desactivar' : '🟢 Activar'}
-                        </button>
-                        <button
-                          onClick={() => eliminarAdmin(admin.id, admin.usuario)}
-                          className="px-3 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-600 hover:text-white transition-all"
-                          title="Eliminar permanentemente"
-                        >
-                          🗑️ Eliminar
-                        </button>
+                      <div className="flex gap-3 mt-1 text-[10px] text-slate-500 flex-wrap">
+                        <span>🕐 Creado: {new Date(admin.created_at).toLocaleDateString()}</span>
+                        {admin.ultimo_acceso && (
+                          <span>📱 Último acceso: {new Date(admin.ultimo_acceso).toLocaleString()}</span>
+                        )}
+                        {admin.intentos_fallidos > 0 && (
+                          <span className="text-orange-400">⚠️ Intentos fallidos: {admin.intentos_fallidos}</span>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center text-slate-500 text-sm py-8">
-                  📭 No hay administradores registrados
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Gestión de Personal */}
-          <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">👥 Tripulación</h3>
-                <p className="text-xs text-slate-500 mt-1">Personal operativo del sistema</p>
-              </div>
-              <button
-                onClick={() => setMostrarModalPersonal(true)}
-                className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
-              >
-                + Nuevo Personal
-              </button>
-            </div>
-            
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {personal.length > 0 ? (
-                personal.map(p => (
-                  <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
-                    <span>
-                      {p.jerarquia} {p.apellido}, {p.nombre} 
-                      <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{p.rol}]</span>
-                    </span>
                     <div className="flex gap-2">
-                      <button 
-                        onClick={() => generarQRPersonal(p)}
-                        className="bg-green-600/20 text-green-400 text-xs font-semibold uppercase hover:bg-green-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
-                        title="Generar credencial QR"
+                      <button
+                        onClick={() => {
+                          setAdminSeleccionado(admin);
+                          setMostrarModalCambioPin(true);
+                        }}
+                        className="px-3 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg text-xs font-semibold hover:bg-yellow-600 hover:text-white transition-all"
+                        title="Cambiar PIN"
                       >
-                        📱 QR
+                        🔑 Cambiar PIN
                       </button>
-                      <button 
-                        onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} 
-                        className="bg-red-600/20 text-red-400 text-xs font-semibold uppercase hover:bg-red-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
+                      <button
+                        onClick={() => cambiarEstadoAdmin(admin.id, admin.activo)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          admin.activo 
+                            ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600 hover:text-white'
+                            : 'bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white'
+                        }`}
                       >
-                        Eliminar
+                        {admin.activo ? '🔴 Desactivar' : '🟢 Activar'}
+                      </button>
+                      <button
+                        onClick={() => eliminarAdmin(admin.id, admin.usuario)}
+                        className="px-3 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-600 hover:text-white transition-all"
+                        title="Eliminar permanentemente"
+                      >
+                        🗑️ Eliminar
                       </button>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center text-slate-500 text-sm py-4">📭 No hay personal registrado</div>
-              )}
-            </div>
-          </section>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-slate-500 text-sm py-8">
+                📭 No hay administradores registrados
+              </div>
+            )}
+          </div>
+        </section>
 
-          {/* Gestión de Pisos y QRs */}
+        {/* Gestión de Personal */}
+        <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">👥 Tripulación</h3>
+              <p className="text-xs text-slate-500 mt-1">Personal operativo del sistema</p>
+            </div>
+            <button
+              onClick={() => setMostrarModalPersonal(true)}
+              className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
+            >
+              + Nuevo Personal
+            </button>
+          </div>
+          
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {personal.length > 0 ? (
+              personal.map(p => (
+                <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
+                  <span>
+                    {p.jerarquia} {p.apellido}, {p.nombre} 
+                    <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{p.rol}]</span>
+                  </span>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => generarQRPersonal(p)}
+                      className="bg-green-600/20 text-green-400 text-xs font-semibold uppercase hover:bg-green-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
+                      title="Generar credencial QR"
+                    >
+                      📱 QR
+                    </button>
+                    <button 
+                      onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} 
+                      className="bg-red-600/20 text-red-400 text-xs font-semibold uppercase hover:bg-red-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-slate-500 text-sm py-4">📭 No hay personal registrado</div>
+            )}
+          </div>
+        </section>
+
+        {/* Gestión de Pisos y QRs */}
         <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
           <div className="flex justify-between items-center mb-4">
             <div>
@@ -1500,28 +1552,24 @@ const AdminDashboard = () => {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                     <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
                     <div className="flex flex-wrap gap-2">
-                      {/* QR OCUPACIÓN DEL PISO (NUEVO) */}
                       <button 
                         onClick={() => descargarQR(`/recorrido/${p.slug}`, `RECORRIDO OCUPACIÓN - ${p.nombre_piso}`)} 
                         className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-purple-500 border border-purple-900/30 hover:bg-purple-900/30 transition-all"
                       >
                         🏥 QR Recorrido
                       </button>
-                      
                       <button 
                         onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} 
                         className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
                       >
                         🗄️ QR Pañol
                       </button>
-                      
                       <button 
                         onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} 
                         className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
                       >
                         🧺 QR Lavadero
                       </button>
-                      
                       <button 
                         onClick={() => eliminarPiso(p.id, p.nombre_piso)} 
                         className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
@@ -1531,7 +1579,7 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                   
-                  {/* Habitaciones - Ahora con dos QR por habitación */}
+                  {/* Habitaciones */}
                   <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
                       <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
@@ -1571,30 +1619,23 @@ const AdminDashboard = () => {
                                 }))}
                               >
                                 <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex items-center gap-2">
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between gap-2">
                                       <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
-                                      {(config.tipo === 'INTERNACION' || config.tipo === 'OTROS') && (
+                                      {config.tipo === 'OTROS' && (
                                         <button
-                                          onClick={(e) => { e.stopPropagation();
-                                            if (config.tipo === 'INTERNACION') {
-                                              descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`);
-                                            } else {
-                                              descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`);
-                                            }
-                                          }}
-                                          className="inline-flex items-center gap-1 bg-slate-800/80 text-slate-200 border border-slate-600/40 px-2 py-1 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
-                                          title={config.tipo === 'INTERNACION' ? 'QR Ocupación' : 'QR Ropa limpia'}
+                                          onClick={(e) => { e.stopPropagation(); descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`); }}
+                                          className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-2 py-1 rounded-lg text-[9px] font-semibold uppercase hover:bg-slate-600 transition-all"
                                         >
-                                          {config.tipo === 'INTERNACION' ? 'QR OCP' : 'QR ROPA'}
+                                          🧺 QR Ropa
                                         </button>
                                       )}
                                     </div>
-                                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate`}>
+                                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate block mt-1`}>
                                       {truncarTexto(formatearResumenHabitacion(config), 28)}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 ml-2">
                                     <button
                                       onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({
                                         ...prev,
@@ -1704,8 +1745,10 @@ const AdminDashboard = () => {
             )}
           </div>
         </section>
-        </div>
-      )}
+      </>
+    )}
+  </div>
+)}
       
       {/* Modal para crear nuevo admin */}
       {mostrarModalAdmin && (
