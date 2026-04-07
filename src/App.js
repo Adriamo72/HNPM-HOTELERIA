@@ -122,53 +122,58 @@ function App() {
     <div className="App bg-slate-950 min-h-screen font-sans text-slate-200">
       <div className="flex flex-col min-h-screen">
         {/* Header */}
-        <header className="bg-slate-900/90 backdrop-blur-sm border-b border-blue-900/50 p-4 flex justify-between items-center shadow-2xl sticky top-0 z-50">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/40">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <header className="bg-slate-900/90 backdrop-blur-sm border-b border-blue-900/50 p-3 flex justify-between items-center shadow-2xl sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-gradient-to-r from-blue-600 to-blue-500 rounded-lg flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-blue-500 font-black text-xs uppercase tracking-widest leading-none">
-                SENTINEL HNPM
+              <h1 className="text-blue-500 font-black text-[10px] uppercase tracking-wider leading-none">
+                HNPM HOTELERÍA
               </h1>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 tracking-wider">
-                {modoAcceso === 'recorrido' ? 'RECORRIDO OCUPACIÓN' : 
-                  modoAcceso === 'piso' ? 'CONTROL PAÑOL' : 
-                  modoAcceso === 'lavadero' ? 'CONTROL LAVADERO' : 
-                  modoAcceso === 'habitacion' ? 'SERVICIO HABITACIÓN' : 
-                  'PANEL DE CONTROL'}
+              <p className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">
+                SENTINEL
               </p>
             </div>
           </div>
           
-          {/* Mostrar nombre del piso si está en un modo específico */}
+          {/* Mostrar el sector actual si estamos en un modo específico */}
           <div className="text-center">
-            {slugCompleto && modoAcceso && modoAcceso !== 'admin' && (
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Sector</p>
+            {modoAcceso === 'recorrido' && (
+              <>
+                <p className="text-[8px] text-purple-400 uppercase tracking-wider">Recorrido</p>
+                <p className="text-xs font-bold text-white">{slugCompleto?.replace(/-/g, ' ').toUpperCase() || 'PISO'}</p>
+              </>
             )}
-            <p className="text-sm font-bold text-white">
-              {modoAcceso === 'recorrido' ? 'RECORRIDO' : 
-              modoAcceso === 'piso' ? 'PAÑOL' : 
-              modoAcceso === 'lavadero' ? 'LAVADERO' : 
-              modoAcceso === 'habitacion' ? 'HABITACIÓN' : ''}
-            </p>
+            {modoAcceso === 'piso' && (
+              <>
+                <p className="text-[8px] text-blue-400 uppercase tracking-wider">Pañol</p>
+                <p className="text-xs font-bold text-white">{slugCompleto?.replace(/-/g, ' ').toUpperCase() || 'SECTOR'}</p>
+              </>
+            )}
+            {modoAcceso === 'lavadero' && (
+              <>
+                <p className="text-[8px] text-green-400 uppercase tracking-wider">Lavadero</p>
+                <p className="text-xs font-bold text-white">{slugCompleto?.replace(/-/g, ' ').toUpperCase() || 'SECTOR'}</p>
+              </>
+            )}
+            {modoAcceso === 'habitacion' && (
+              <>
+                <p className="text-[8px] text-yellow-400 uppercase tracking-wider">Habitación</p>
+                <p className="text-xs font-bold text-white">{slugCompleto?.replace(/-/g, ' ').toUpperCase() || 'HAB'}</p>
+              </>
+            )}
+            {!modoAcceso && rol === 'admin' && (
+              <p className="text-xs font-bold text-red-400">ADMIN</p>
+            )}
           </div>
           
-          <div className="flex gap-3 items-center">
-            <div className="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
-              <span className="text-[10px] font-black uppercase">
-                {rol === 'admin' ? (
-                  <span className="text-red-400">🔐 ADMIN</span>
-                ) : (
-                  <span className="text-blue-400">👤 OPERADOR</span>
-                )}
-              </span>
-            </div>
+          <div className="flex gap-2 items-center">
             <button 
               onClick={cerrarSesion} 
-              className="bg-red-950/40 text-red-400 border border-red-900/50 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all duration-200"
+              className="bg-red-950/40 text-red-400 border border-red-900/50 px-3 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-red-600 hover:text-white transition-all"
             >
               Salir
             </button>
