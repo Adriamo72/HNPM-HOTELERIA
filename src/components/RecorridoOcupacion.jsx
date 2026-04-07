@@ -270,13 +270,13 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
           <div className="bg-slate-800/50 rounded-xl p-3 transition-all duration-300">
             <div className="flex justify-between text-sm mb-2">
               <span className="text-slate-400">
-                🛏️ Total camas: <span className="text-white font-bold">{totalCamas}</span>
+                Total camas: <span className="text-white font-bold">{totalCamas}</span>
               </span>
               <span className="text-slate-400">
-                👤 Ocupadas: <span className="text-yellow-400 font-bold">{totalOcupadas}</span>
+                Ocupadas: <span className="text-yellow-400 font-bold">{totalOcupadas}</span>
               </span>
               <span className="text-slate-400">
-                ✅ Disponibles: <span className="text-green-400 font-bold">{totalCamas - totalOcupadas}</span>
+                Disponibles: <span className="text-green-400 font-bold">{totalCamas - totalOcupadas}</span>
               </span>
             </div>
             <div className="w-full bg-slate-700 rounded-full h-2.5">

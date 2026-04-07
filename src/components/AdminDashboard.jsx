@@ -1300,7 +1300,7 @@ const AdminDashboard = () => {
                                               )}
                                               className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
                                             >
-                                              🧺 QR Ropa limpia
+                                              🧺 QR Ropa
                                             </button>
                                           )}
                                         </div>
