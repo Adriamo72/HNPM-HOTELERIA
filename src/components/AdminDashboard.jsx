@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
 import CroquisPiso from './CroquisPiso';
+import SpinnerCarga from './SpinnerCarga';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
@@ -15,8 +16,12 @@ const AdminDashboard = () => {
   const [stockUso, setStockUso] = useState({});
   const [stockLavadero, setStockLavadero] = useState({});
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
-  const [sincronizando, setSincronizando] = useState(false);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
+  
+  // Estados de carga para cada pestaña
+  const [cargandoCroquis, setCargandoCroquis] = useState(false);
+  const [cargandoMonitor, setCargandoMonitor] = useState(false);
+  const [cargandoAdmin, setCargandoAdmin] = useState(false);
   
   // Estados para modales
   const [mostrarModalAdmin, setMostrarModalAdmin] = useState(false);
@@ -233,77 +238,95 @@ const AdminDashboard = () => {
     }
   };
 
-  const cargarDatos = async () => {
-    setSincronizando(true);
-    mostrarSplash('🔄 SINCRONIZANDO...');
+  const cargarDatos = async (tipo = 'todos') => {
+    if (tipo === 'croquis' || tipo === 'todos') {
+      setCargandoCroquis(true);
+    }
+    if (tipo === 'monitor' || tipo === 'todos') {
+      setCargandoMonitor(true);
+    }
+    if (tipo === 'admin' || tipo === 'todos') {
+      setCargandoAdmin(true);
+    }
     
     try {
-      const resPers = await supabase.from('personal').select('*').order('apellido');
-      const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
-      const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
+      if (tipo === 'croquis' || tipo === 'todos') {
+        const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
+        const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
+        
+        setPisos(resPisos.data || []);
+        setHabitacionesEspeciales(resHabs.data || []);
+        await cargarEstadoHabitaciones(resHabs.data || []);
+      }
       
-      const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
-      setAuditoriaHabilitada(config?.valor === 'true');
+      if (tipo === 'monitor' || tipo === 'todos') {
+        const resPers = await supabase.from('personal').select('*').order('apellido');
+        const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
+        setAuditoriaHabilitada(config?.valor === 'true');
 
-      const { data: movs } = await supabase.from('movimientos_stock')
-        .select(`
-          *, 
-          pisos(nombre_piso, id), 
-          pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), 
-          enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(500);
+        const { data: movs } = await supabase.from('movimientos_stock')
+          .select(`
+            *, 
+            pisos(nombre_piso, id), 
+            pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), 
+            enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)
+          `)
+          .order('created_at', { ascending: false })
+          .limit(500);
 
-      const stockPañolMap = {};
-      const stockUsoMap = {};
-      const stockLavaderoMap = {};
-      
-      if (resPisos.data) {
-        for (const piso of resPisos.data) {
-          stockPañolMap[piso.nombre_piso] = {};
-          stockUsoMap[piso.nombre_piso] = {};
-          stockLavaderoMap[piso.nombre_piso] = {};
-          
-          for (const item of ITEMS_REQUERIDOS) {
-            const { data: stockData } = await supabase
-              .from('stock_piso')
-              .select('stock_pañol, stock_en_uso, stock_lavadero')
-              .eq('piso_id', piso.id)
-              .eq('item', item)
-              .maybeSingle();
+        const stockPañolMap = {};
+        const stockUsoMap = {};
+        const stockLavaderoMap = {};
+        
+        const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
+        if (resPisos.data) {
+          for (const piso of resPisos.data) {
+            stockPañolMap[piso.nombre_piso] = {};
+            stockUsoMap[piso.nombre_piso] = {};
+            stockLavaderoMap[piso.nombre_piso] = {};
             
-            stockPañolMap[piso.nombre_piso][item] = stockData?.stock_pañol || 0;
-            stockUsoMap[piso.nombre_piso][item] = stockData?.stock_en_uso || 0;
-            stockLavaderoMap[piso.nombre_piso][item] = stockData?.stock_lavadero || 0;
+            for (const item of ITEMS_REQUERIDOS) {
+              const { data: stockData } = await supabase
+                .from('stock_piso')
+                .select('stock_pañol, stock_en_uso, stock_lavadero')
+                .eq('piso_id', piso.id)
+                .eq('item', item)
+                .maybeSingle();
+              
+              stockPañolMap[piso.nombre_piso][item] = stockData?.stock_pañol || 0;
+              stockUsoMap[piso.nombre_piso][item] = stockData?.stock_en_uso || 0;
+              stockLavaderoMap[piso.nombre_piso][item] = stockData?.stock_lavadero || 0;
+            }
           }
         }
-      }
 
-      const agrupados = movs ? movs.reduce((acc, curr) => {
-        const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
-        if (!acc[nombrePiso]) acc[nombrePiso] = [];
-        acc[nombrePiso].push(curr);
-        return acc;
-      }, {}) : {};
+        const agrupados = movs ? movs.reduce((acc, curr) => {
+          const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
+          if (!acc[nombrePiso]) acc[nombrePiso] = [];
+          acc[nombrePiso].push(curr);
+          return acc;
+        }, {}) : {};
+        
+        setPersonal(resPers.data || []);
+        setMovimientosAgrupados(agrupados);
+        setStockPañol(stockPañolMap);
+        setStockUso(stockUsoMap);
+        setStockLavadero(stockLavaderoMap);
+      }
       
-      setPersonal(resPers.data || []);
-      setPisos(resPisos.data || []);
-      setHabitacionesEspeciales(resHabs.data || []);
-      setMovimientosAgrupados(agrupados);
-      setStockPañol(stockPañolMap);
-      setStockUso(stockUsoMap);
-      setStockLavadero(stockLavaderoMap);
+      if (tipo === 'admin' || tipo === 'todos') {
+        await cargarAdmins();
+      }
       
-      await cargarEstadoHabitaciones(resHabs.data || []);
-      
-      mostrarSplash('✅ DATOS SINCRONIZADOS');
+      mostrarSplash('✅ DATOS CARGADOS');
       
     } catch (error) {
       console.error(error);
-      mostrarSplash('❌ ERROR AL SINCRONIZAR');
+      mostrarSplash('❌ ERROR AL CARGAR DATOS');
     } finally {
-      setSincronizando(false);
+      if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(false);
+      if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(false);
+      if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(false);
     }
   };
 
@@ -319,6 +342,18 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error("Error cargando admins:", error);
     }
+  };
+
+  const recargarCroquis = () => {
+    cargarDatos('croquis');
+  };
+
+  const recargarMonitor = () => {
+    cargarDatos('monitor');
+  };
+
+  const recargarAdmin = () => {
+    cargarDatos('admin');
   };
 
   const agregarAdmin = async () => {
@@ -635,7 +670,7 @@ const AdminDashboard = () => {
       
       await recalcularStockPiso(movimiento.piso_id);
       mostrarSplash('✅ REGISTRO ELIMINADO');
-      cargarDatos();
+      recargarMonitor();
       
     } catch (error) {
       console.error("Error:", error);
@@ -654,7 +689,8 @@ const AdminDashboard = () => {
         await supabase.from('pisos').delete().eq('id', pisoId);
         
         mostrarSplash(`✅ SECTOR "${pisoNombre}" ELIMINADO`);
-        cargarDatos();
+        recargarCroquis();
+        recargarMonitor();
       } catch (error) {
         console.error("Error:", error);
         mostrarSplash('❌ ERROR AL ELIMINAR SECTOR');
@@ -677,7 +713,7 @@ const AdminDashboard = () => {
       setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
       mostrarSplash('✅ PERSONAL REGISTRADO');
       setMostrarModalPersonal(false);
-      cargarDatos();
+      recargarAdmin();
     } else {
       mostrarSplash('❌ ERROR AL REGISTRAR PERSONAL');
     }
@@ -691,7 +727,7 @@ const AdminDashboard = () => {
       
       if (!error) { 
         mostrarSplash('✅ PERSONAL ELIMINADO'); 
-        cargarDatos(); 
+        recargarAdmin();
       } else {
         mostrarSplash('❌ ERROR AL ELIMINAR PERSONAL');
       }
@@ -713,7 +749,7 @@ const AdminDashboard = () => {
       setNuevoPiso({ nombre_piso: '' });
       mostrarSplash('✅ SECTOR CREADO');
       setMostrarModalPiso(false);
-      cargarDatos();
+      recargarCroquis();
     } else {
       mostrarSplash('❌ ERROR AL CREAR SECTOR');
     }
@@ -727,7 +763,7 @@ const AdminDashboard = () => {
       const { error } = await supabase.from('habitaciones_especiales').insert([{ piso_id: pisoId, nombre: nombre.trim(), slug: slugH }]);
       if(!error) { 
         mostrarSplash('✅ HABITACIÓN CREADA'); 
-        cargarDatos(); 
+        recargarCroquis();
       } else {
         mostrarSplash('❌ ERROR AL CREAR HABITACIÓN');
       }
@@ -740,7 +776,7 @@ const AdminDashboard = () => {
       const { error } = await supabase.from('habitaciones_especiales').delete().eq('id', id); 
       if(!error) { 
         mostrarSplash('✅ HABITACIÓN ELIMINADA'); 
-        cargarDatos(); 
+        recargarCroquis();
       } else {
         mostrarSplash('❌ ERROR AL ELIMINAR HABITACIÓN');
       }
@@ -797,8 +833,7 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    cargarDatos();
-    cargarAdmins();
+    cargarDatos('todos');
   }, []);
 
   useEffect(() => {
@@ -838,27 +873,38 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      {/* Panel CROQUIS */}
+      {/* Panel HOTELERÍA (croquis) */}
       {activeTab === 'croquis' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">HOTELERIA</h2>
-            <select
-              value={pisoSeleccionado}
-              onChange={(e) => {
-                setPisoSeleccionado(e.target.value);
-                setCroquisKey(prev => prev + 1);
-              }}
-              className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
-            >
-              <option value="">Seleccionar piso...</option>
-              {pisos.map(p => (
-                <option key={p.id} value={p.id}>{p.nombre_piso}</option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <button 
+                onClick={recargarCroquis}
+                disabled={cargandoCroquis}
+                className="text-xs px-4 py-2 rounded-xl font-semibold bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 transition-all disabled:opacity-50"
+              >
+                {cargandoCroquis ? '🔄 CARGANDO...' : '🔄 RECARGAR'}
+              </button>
+              <select
+                value={pisoSeleccionado}
+                onChange={(e) => {
+                  setPisoSeleccionado(e.target.value);
+                  setCroquisKey(prev => prev + 1);
+                }}
+                className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
+              >
+                <option value="">Seleccionar piso...</option>
+                {pisos.map(p => (
+                  <option key={p.id} value={p.id}>{p.nombre_piso}</option>
+                ))}
+              </select>
+            </div>
           </div>
           
-          {pisoSeleccionado ? (
+          {cargandoCroquis ? (
+            <SpinnerCarga mensaje="CARGANDO SECTORES..." />
+          ) : pisoSeleccionado ? (
             <CroquisPiso
               key={croquisKey}
               pisoId={pisoSeleccionado}
@@ -873,401 +919,424 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Panel HISTORIAL */}
+      {/* Panel MONITOR (historial) */}
       {activeTab === 'historial' && (
         <div className="space-y-8">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Control de Activos</h2>
             <button 
-              onClick={cargarDatos} 
-              disabled={sincronizando}
-              className={`text-xs px-5 py-2 rounded-xl font-semibold transition-all ${sincronizando ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
+              onClick={recargarMonitor} 
+              disabled={cargandoMonitor}
+              className={`text-xs px-5 py-2 rounded-xl font-semibold transition-all ${cargandoMonitor ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
             >
-              {sincronizando ? '⌛ SINCRONIZANDO...' : '🔄 SINCRONIZAR'}
+              {cargandoMonitor ? '⌛ CARGANDO...' : '🔄 RECARGAR'}
             </button>
           </div>
           
-          {/* Stock Total Consolidado */}
-          <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6">
-            <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4 text-center">
-              STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-              {ITEMS_REQUERIDOS.map(item => (
-                <div key={item} className="bg-slate-900/80 p-3 rounded-xl border border-blue-800/40 text-center">
-                  <span className="text-[10px] text-slate-500 font-semibold uppercase block">{item}</span>
-                  <span className={`text-2xl font-semibold ${totalGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>
-                    {totalGlobal[item] || 0}
-                  </span>
+          {cargandoMonitor ? (
+            <SpinnerCarga mensaje="CARGANDO MOVIMIENTOS..." />
+          ) : (
+            <>
+              {/* Stock Total Consolidado */}
+              <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6">
+                <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4 text-center">
+                  STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+                  {ITEMS_REQUERIDOS.map(item => (
+                    <div key={item} className="bg-slate-900/80 p-3 rounded-xl border border-blue-800/40 text-center">
+                      <span className="text-[10px] text-slate-500 font-semibold uppercase block">{item}</span>
+                      <span className={`text-2xl font-semibold ${totalGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>
+                        {totalGlobal[item] || 0}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-green-900/20 p-3 rounded-xl border border-green-900/30">
-                <p className="text-xs font-semibold text-green-500 uppercase text-center">PAÑOL (Limpio disponible)</p>
-                <div className="grid grid-cols-4 gap-1 mt-2">
-                  {ITEMS_REQUERIDOS.map(item => {
-                    let total = 0;
-                    Object.keys(stockPañol).forEach(piso => { total += stockPañol[piso]?.[item] || 0; });
-                    return (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className={`text-base font-semibold ${total < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>{total}</span>
-                      </div>
-                    );
-                  })}
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-green-900/20 p-3 rounded-xl border border-green-900/30">
+                    <p className="text-xs font-semibold text-green-500 uppercase text-center">PAÑOL (Limpio disponible)</p>
+                    <div className="grid grid-cols-4 gap-1 mt-2">
+                      {ITEMS_REQUERIDOS.map(item => {
+                        let total = 0;
+                        Object.keys(stockPañol).forEach(piso => { total += stockPañol[piso]?.[item] || 0; });
+                        return (
+                          <div key={item} className="text-center">
+                            <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                            <span className={`text-base font-semibold ${total < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>{total}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="bg-yellow-900/20 p-3 rounded-xl border border-yellow-900/30">
+                    <p className="text-xs font-semibold text-yellow-500 uppercase text-center">EN USO</p>
+                    <div className="grid grid-cols-4 gap-1 mt-2">
+                      {ITEMS_REQUERIDOS.map(item => {
+                        let total = 0;
+                        Object.keys(stockUso).forEach(piso => { total += stockUso[piso]?.[item] || 0; });
+                        return (
+                          <div key={item} className="text-center">
+                            <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                            <span className="text-base font-semibold text-yellow-400">{total}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="bg-red-900/20 p-3 rounded-xl border border-red-900/30">
+                    <p className="text-xs font-semibold text-red-500 uppercase text-center">LAVADERO</p>
+                    <div className="grid grid-cols-4 gap-1 mt-2">
+                      {ITEMS_REQUERIDOS.map(item => {
+                        let total = 0;
+                        Object.keys(stockLavadero).forEach(piso => { total += stockLavadero[piso]?.[item] || 0; });
+                        return (
+                          <div key={item} className="text-center">
+                            <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                            <span className="text-base font-semibold text-red-400">{total}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="bg-yellow-900/20 p-3 rounded-xl border border-yellow-900/30">
-                <p className="text-xs font-semibold text-yellow-500 uppercase text-center">EN USO</p>
-                <div className="grid grid-cols-4 gap-1 mt-2">
-                  {ITEMS_REQUERIDOS.map(item => {
-                    let total = 0;
-                    Object.keys(stockUso).forEach(piso => { total += stockUso[piso]?.[item] || 0; });
-                    return (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className="text-base font-semibold text-yellow-400">{total}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="bg-red-900/20 p-3 rounded-xl border border-red-900/30">
-                <p className="text-xs font-semibold text-red-500 uppercase text-center">LAVADERO</p>
-                <div className="grid grid-cols-4 gap-1 mt-2">
-                  {ITEMS_REQUERIDOS.map(item => {
-                    let total = 0;
-                    Object.keys(stockLavadero).forEach(piso => { total += stockLavadero[piso]?.[item] || 0; });
-                    return (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className="text-base font-semibold text-red-400">{total}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Stock por Piso */}
-          {Object.keys(stockPañol).map((nombrePiso) => (
-            <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-              <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
-                <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
-                <div className="bg-green-900/20 p-3 rounded-xl">
-                  <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
-                  <div className="grid grid-cols-4 gap-1 mt-2">
-                    {ITEMS_REQUERIDOS.map(item => (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
-                          {stockPañol[nombrePiso]?.[item] || 0}
-                        </span>
-                      </div>
-                    ))}
+              {/* Stock por Piso */}
+              {Object.keys(stockPañol).map((nombrePiso) => (
+                <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                  <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
+                    <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
                   </div>
-                </div>
-                <div className="bg-yellow-900/20 p-3 rounded-xl">
-                  <p className="text-sm font-semibold text-yellow-500 uppercase text-center">EN USO</p>
-                  <div className="grid grid-cols-4 gap-1 mt-2">
-                    {ITEMS_REQUERIDOS.map(item => (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-red-900/20 p-3 rounded-xl">
-                  <p className="text-sm font-semibold text-red-500 uppercase text-center">LAVADERO</p>
-                  <div className="grid grid-cols-4 gap-1 mt-2">
-                    {ITEMS_REQUERIDOS.map(item => (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
-                {movimientosAgrupados[nombrePiso]?.length > 0 ? (
-                  movimientosAgrupados[nombrePiso].map((m) => (
-                    <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
-                      <div className="w-[22%] shrink-0 flex items-center gap-2">
-                        <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
-                        <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
-                      </div>
-                      <div className="flex-1 flex items-center justify-around gap-2">
-                        <div className="text-center min-w-[50px]">
-                          <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
-                          <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
-                        </div>
-                        <div className="text-center min-w-[50px]">
-                          <span className="text-[9px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
-                          <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
-                        </div>
-                        <div className="text-center min-w-[50px]">
-                          <span className="text-[9px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
-                          <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
-                        </div>
-                      </div>
-                      <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
-                        {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
-                          <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
-                            📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
-                          </span>
-                        )}
-                        {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
-                        {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
-                        <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
-                        <button 
-                          onClick={() => eliminarMovimiento(m.id)} 
-                          className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
-                          title="Eliminar movimiento"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
+                    <div className="bg-green-900/20 p-3 rounded-xl">
+                      <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
+                      <div className="grid grid-cols-4 gap-1 mt-2">
+                        {ITEMS_REQUERIDOS.map(item => (
+                          <div key={item} className="text-center">
+                            <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                            <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
+                              {stockPañol[nombrePiso]?.[item] || 0}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
-                )}
-              </div>
-            </div>
-          ))}
+                    <div className="bg-yellow-900/20 p-3 rounded-xl">
+                      <p className="text-sm font-semibold text-yellow-500 uppercase text-center">EN USO</p>
+                      <div className="grid grid-cols-4 gap-1 mt-2">
+                        {ITEMS_REQUERIDOS.map(item => (
+                          <div key={item} className="text-center">
+                            <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                            <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-red-900/20 p-3 rounded-xl">
+                      <p className="text-sm font-semibold text-red-500 uppercase text-center">LAVADERO</p>
+                      <div className="grid grid-cols-4 gap-1 mt-2">
+                        {ITEMS_REQUERIDOS.map(item => (
+                          <div key={item} className="text-center">
+                            <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
+                            <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
+                    {movimientosAgrupados[nombrePiso]?.length > 0 ? (
+                      movimientosAgrupados[nombrePiso].map((m) => (
+                        <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
+                          <div className="w-[22%] shrink-0 flex items-center gap-2">
+                            <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
+                            <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
+                          </div>
+                          <div className="flex-1 flex items-center justify-around gap-2">
+                            <div className="text-center min-w-[50px]">
+                              <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
+                              <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
+                            </div>
+                            <div className="text-center min-w-[50px]">
+                              <span className="text-[9px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
+                              <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
+                            </div>
+                            <div className="text-center min-w-[50px]">
+                              <span className="text-[9px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
+                              <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
+                            </div>
+                          </div>
+                          <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
+                            {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
+                              <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
+                                📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
+                              </span>
+                            )}
+                            {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
+                            {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
+                            <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
+                            <button 
+                              onClick={() => eliminarMovimiento(m.id)} 
+                              className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
+                              title="Eliminar movimiento"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 
       {/* Panel ADMINISTRACIÓN */}
       {activeTab === 'admin' && (
         <div className="space-y-6">
-          {/* Auditoría */}
-          <section className="bg-slate-900 p-6 rounded-2xl border border-yellow-600/30 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="text-center sm:text-left">
-              <h3 className="text-lg font-semibold uppercase text-yellow-500">🔐 Mando de Auditoría</h3>
-              <p className="text-xs text-slate-500 uppercase font-semibold">Ajuste manual de stock habilitado</p>
-            </div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Administración</h2>
             <button 
-              onClick={toggleAuditoria} 
-              className={`px-6 py-2.5 rounded-xl font-semibold text-sm uppercase transition-all ${auditoriaHabilitada ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-green-600 text-white hover:bg-green-500'}`}
+              onClick={recargarAdmin} 
+              disabled={cargandoAdmin}
+              className={`text-xs px-5 py-2 rounded-xl font-semibold transition-all ${cargandoAdmin ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
             >
-              {auditoriaHabilitada ? '🔴 Desactivar' : '🟢 Activar'}
+              {cargandoAdmin ? '⌛ CARGANDO...' : '🔄 RECARGAR'}
             </button>
-          </section>
+          </div>
+          
+          {cargandoAdmin ? (
+            <SpinnerCarga mensaje="CARGANDO CONFIGURACIÓN..." />
+          ) : (
+            <>
+              {/* Auditoría */}
+              <section className="bg-slate-900 p-6 rounded-2xl border border-yellow-600/30 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="text-center sm:text-left">
+                  <h3 className="text-lg font-semibold uppercase text-yellow-500">🔐 Mando de Auditoría</h3>
+                  <p className="text-xs text-slate-500 uppercase font-semibold">Ajuste manual de stock habilitado</p>
+                </div>
+                <button 
+                  onClick={toggleAuditoria} 
+                  className={`px-6 py-2.5 rounded-xl font-semibold text-sm uppercase transition-all ${auditoriaHabilitada ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-green-600 text-white hover:bg-green-500'}`}
+                >
+                  {auditoriaHabilitada ? '🔴 Desactivar' : '🟢 Activar'}
+                </button>
+              </section>
 
-          {/* Gestión de Administradores */}
-          <section className="bg-slate-900 p-6 rounded-2xl border border-purple-800/30">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-purple-400 uppercase tracking-wider">
-                  👑 Administradores del Sistema
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">Gestiona los accesos de administradores</p>
-              </div>
-              <button
-                onClick={() => setMostrarModalAdmin(true)}
-                className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
-              >
-                + Nuevo Admin
-              </button>
-            </div>
-            
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {admins.length > 0 ? (
-                admins.map(admin => (
-                  <div key={admin.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 hover:border-purple-800/50 transition-all">
-                    <div className="flex justify-between items-center flex-wrap gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold text-white uppercase">{admin.usuario}</span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${admin.activo ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
-                            {admin.activo ? 'ACTIVO' : 'INACTIVO'}
-                          </span>
-                        </div>
-                        <div className="flex gap-3 mt-1 text-[10px] text-slate-500 flex-wrap">
-                          <span>🕐 Creado: {new Date(admin.created_at).toLocaleDateString()}</span>
-                          {admin.ultimo_acceso && <span>📱 Último acceso: {new Date(admin.ultimo_acceso).toLocaleString()}</span>}
-                          {admin.intentos_fallidos > 0 && <span className="text-orange-400">⚠️ Intentos fallidos: {admin.intentos_fallidos}</span>}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setAdminSeleccionado(admin);
-                            setMostrarModalCambioPin(true);
-                          }}
-                          className="px-3 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg text-xs font-semibold hover:bg-yellow-600 hover:text-white transition-all"
-                        >
-                          🔑 Cambiar PIN
-                        </button>
-                        <button
-                          onClick={() => cambiarEstadoAdmin(admin.id, admin.activo)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${admin.activo ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600 hover:text-white' : 'bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white'}`}
-                        >
-                          {admin.activo ? '🔴 Desactivar' : '🟢 Activar'}
-                        </button>
-                        <button
-                          onClick={() => eliminarAdmin(admin.id, admin.usuario)}
-                          className="px-3 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-600 hover:text-white transition-all"
-                        >
-                          🗑️ Eliminar
-                        </button>
-                      </div>
-                    </div>
+              {/* Gestión de Administradores */}
+              <section className="bg-slate-900 p-6 rounded-2xl border border-purple-800/30">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-purple-400 uppercase tracking-wider">
+                      👑 Administradores del Sistema
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">Gestiona los accesos de administradores</p>
                   </div>
-                ))
-              ) : (
-                <div className="text-center text-slate-500 text-sm py-8">📭 No hay administradores registrados</div>
-              )}
-            </div>
-          </section>
+                  <button
+                    onClick={() => setMostrarModalAdmin(true)}
+                    className="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
+                  >
+                    + Nuevo Admin
+                  </button>
+                </div>
+                
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {admins.length > 0 ? (
+                    admins.map(admin => (
+                      <div key={admin.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 hover:border-purple-800/50 transition-all">
+                        <div className="flex justify-between items-center flex-wrap gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-bold text-white uppercase">{admin.usuario}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${admin.activo ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
+                                {admin.activo ? 'ACTIVO' : 'INACTIVO'}
+                              </span>
+                            </div>
+                            <div className="flex gap-3 mt-1 text-[10px] text-slate-500 flex-wrap">
+                              <span>🕐 Creado: {new Date(admin.created_at).toLocaleDateString()}</span>
+                              {admin.ultimo_acceso && <span>📱 Último acceso: {new Date(admin.ultimo_acceso).toLocaleString()}</span>}
+                              {admin.intentos_fallidos > 0 && <span className="text-orange-400">⚠️ Intentos fallidos: {admin.intentos_fallidos}</span>}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setAdminSeleccionado(admin);
+                                setMostrarModalCambioPin(true);
+                              }}
+                              className="px-3 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg text-xs font-semibold hover:bg-yellow-600 hover:text-white transition-all"
+                            >
+                              🔑 Cambiar PIN
+                            </button>
+                            <button
+                              onClick={() => cambiarEstadoAdmin(admin.id, admin.activo)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${admin.activo ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600 hover:text-white' : 'bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white'}`}
+                            >
+                              {admin.activo ? '🔴 Desactivar' : '🟢 Activar'}
+                            </button>
+                            <button
+                              onClick={() => eliminarAdmin(admin.id, admin.usuario)}
+                              className="px-3 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-600 hover:text-white transition-all"
+                            >
+                              🗑️ Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-slate-500 text-sm py-8">📭 No hay administradores registrados</div>
+                  )}
+                </div>
+              </section>
 
-          {/* Gestión de Personal */}
-          <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">👥 Tripulación</h3>
-                <p className="text-xs text-slate-500 mt-1">Personal operativo del sistema</p>
-              </div>
-              <button
-                onClick={() => setMostrarModalPersonal(true)}
-                className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
-              >
-                + Nuevo Personal
-              </button>
-            </div>
-            
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {personal.length > 0 ? (
-                personal.map(p => (
-                  <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
-                    <span>
-                      {p.jerarquia} {p.apellido}, {p.nombre} 
-                      <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{p.rol}]</span>
-                    </span>
-                    <div className="flex gap-2">
-                      <button onClick={() => generarQRPersonal(p)} className="bg-green-600/20 text-green-400 text-xs font-semibold uppercase hover:bg-green-600 hover:text-white transition-all px-3 py-1.5 rounded-lg">📱 QR</button>
-                      <button onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} className="bg-red-600/20 text-red-400 text-xs font-semibold uppercase hover:bg-red-600 hover:text-white transition-all px-3 py-1.5 rounded-lg">Eliminar</button>
-                    </div>
+              {/* Gestión de Personal */}
+              <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">👥 Tripulación</h3>
+                    <p className="text-xs text-slate-500 mt-1">Personal operativo del sistema</p>
                   </div>
-                ))
-              ) : (
-                <div className="text-center text-slate-500 text-sm py-4">📭 No hay personal registrado</div>
-              )}
-            </div>
-          </section>
-
-          {/* Gestión de Pisos y QRs */}
-          <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">🏥 Sectores y QRs</h3>
-                <p className="text-xs text-slate-500 mt-1">Pisos, habitaciones y códigos QR</p>
-              </div>
-              <button onClick={() => setMostrarModalPiso(true)} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all">+ Nuevo Sector</button>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-5">
-              {pisos.length > 0 ? (
-                pisos.map(p => (
-                  <div key={p.id} className="bg-slate-950 p-5 rounded-xl border border-slate-800 hover:border-slate-700 transition-all">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-                      <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
-                      <div className="flex flex-wrap gap-2">
-                        <button onClick={() => descargarQR(`/recorrido/${p.slug}`, `RECORRIDO OCUPACIÓN - ${p.nombre_piso}`)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-purple-500 border border-purple-900/30 hover:bg-purple-900/30 transition-all">🏥 QR Recorrido</button>
-                        <button onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all">🗄️ QR Pañol</button>
-                        <button onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all">🧺 QR Lavadero</button>
-                        <button onClick={() => eliminarPiso(p.id, p.nombre_piso)} className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all">🗑️ Eliminar</button>
+                  <button
+                    onClick={() => setMostrarModalPersonal(true)}
+                    className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
+                  >
+                    + Nuevo Personal
+                  </button>
+                </div>
+                
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {personal.length > 0 ? (
+                    personal.map(p => (
+                      <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
+                        <span>
+                          {p.jerarquia} {p.apellido}, {p.nombre} 
+                          <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{p.rol}]</span>
+                        </span>
+                        <div className="flex gap-2">
+                          <button onClick={() => generarQRPersonal(p)} className="bg-green-600/20 text-green-400 text-xs font-semibold uppercase hover:bg-green-600 hover:text-white transition-all px-3 py-1.5 rounded-lg">📱 QR</button>
+                          <button onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} className="bg-red-600/20 text-red-400 text-xs font-semibold uppercase hover:bg-red-600 hover:text-white transition-all px-3 py-1.5 rounded-lg">Eliminar</button>
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
-                        <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">🏠 Habitaciones ({habitacionesEspeciales.filter(h => h.piso_id === p.id).length})</p>
-                        <button onClick={() => agregarHabitacion(p.id, p.slug)} className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all">+ Agregar Habitación</button>
-                      </div>
-                      
-                      <div className="flex flex-wrap gap-2">
-                        {habitacionesEspeciales.filter(h => h.piso_id === p.id).length > 0 ? (
-                          habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => {
-                            const config = habitacionStatus[hab.id] || { tipo: 'OTROS', camas: '1', texto: '' };
-                            const statusBg = config.tipo === 'INTERNACION' ? 'bg-emerald-900/30 border-emerald-600/40' : config.tipo === 'EN REPARACION' ? 'bg-amber-900/30 border-amber-600/40' : 'bg-slate-800/70 border-slate-700';
-                            const statusText = config.tipo === 'INTERNACION' ? 'text-emerald-300' : config.tipo === 'EN REPARACION' ? 'text-amber-300' : 'text-slate-300';
+                    ))
+                  ) : (
+                    <div className="text-center text-slate-500 text-sm py-4">📭 No hay personal registrado</div>
+                  )}
+                </div>
+              </section>
 
-                            return (
-                              <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] max-w-[320px] w-full sm:w-[320px] ${statusBg}`}>
-                                <details className="group" open={!!habitacionesAbiertas[hab.id]} onToggle={(e) => setHabitacionesAbiertas(prev => ({ ...prev, [hab.id]: e.target.open }))}>
-                                  <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex items-center gap-2">
-                                        <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
+              {/* Gestión de Pisos y QRs */}
+              <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">🏥 Sectores y QRs</h3>
+                    <p className="text-xs text-slate-500 mt-1">Pisos, habitaciones y códigos QR</p>
+                  </div>
+                  <button onClick={() => setMostrarModalPiso(true)} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all">+ Nuevo Sector</button>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-5">
+                  {pisos.length > 0 ? (
+                    pisos.map(p => (
+                      <div key={p.id} className="bg-slate-950 p-5 rounded-xl border border-slate-800 hover:border-slate-700 transition-all">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                          <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
+                          <div className="flex flex-wrap gap-2">
+                            <button onClick={() => descargarQR(`/recorrido/${p.slug}`, `RECORRIDO OCUPACIÓN - ${p.nombre_piso}`)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-purple-500 border border-purple-900/30 hover:bg-purple-900/30 transition-all">🏥 QR Recorrido</button>
+                            <button onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all">🗄️ QR Pañol</button>
+                            <button onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all">🧺 QR Lavadero</button>
+                            <button onClick={() => eliminarPiso(p.id, p.nombre_piso)} className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all">🗑️ Eliminar</button>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+                            <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">🏠 Habitaciones ({habitacionesEspeciales.filter(h => h.piso_id === p.id).length})</p>
+                            <button onClick={() => agregarHabitacion(p.id, p.slug)} className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all">+ Agregar Habitación</button>
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-2">
+                            {habitacionesEspeciales.filter(h => h.piso_id === p.id).length > 0 ? (
+                              habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => {
+                                const config = habitacionStatus[hab.id] || { tipo: 'OTROS', camas: '1', texto: '' };
+                                const statusBg = config.tipo === 'INTERNACION' ? 'bg-emerald-900/30 border-emerald-600/40' : config.tipo === 'EN REPARACION' ? 'bg-amber-900/30 border-amber-600/40' : 'bg-slate-800/70 border-slate-700';
+                                const statusText = config.tipo === 'INTERNACION' ? 'text-emerald-300' : config.tipo === 'EN REPARACION' ? 'text-amber-300' : 'text-slate-300';
+
+                                return (
+                                  <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] max-w-[320px] w-full sm:w-[320px] ${statusBg}`}>
+                                    <details className="group" open={!!habitacionesAbiertas[hab.id]} onToggle={(e) => setHabitacionesAbiertas(prev => ({ ...prev, [hab.id]: e.target.open }))}>
+                                      <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
+                                        <div className="flex flex-col gap-1">
+                                          <div className="flex items-center gap-2">
+                                            <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
+                                          </div>
+                                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate`}>
+                                            {truncarTexto(formatearResumenHabitacion(config), 28)}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <button onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({ ...prev, [hab.id]: !prev[hab.id] })); }} className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all">⚙️</button>
+                                          <button onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }} className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">×</button>
+                                        </div>
+                                      </summary>
+                                      <div className="mt-3 space-y-3 text-sm">
+                                        <div className="grid gap-2 sm:grid-cols-[1.4fr_0.9fr]">
+                                          <select value={config.tipo} onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500">
+                                            <option value="INTERNACION">INTERNACIÓN</option>
+                                            <option value="EN REPARACION">EN REPARACIÓN</option>
+                                            <option value="OTROS">OTROS</option>
+                                          </select>
+                                          <button onClick={() => guardarEstadoHabitacion(hab.id)} className="w-full bg-slate-700 text-slate-100 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] hover:bg-slate-600 transition-all">💾 Guardar</button>
+                                        </div>
+                                        {config.tipo === 'INTERNACION' && (
+                                          <div className="grid gap-2 sm:grid-cols-2">
+                                            <input type="number" min="1" value={config.camas} onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Camas totales" />
+                                            <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">{config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}</div>
+                                          </div>
+                                        )}
+                                        {config.tipo === 'OTROS' && (
+                                          <input type="text" value={config.texto} onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)} placeholder="Oficina, guardia, médico interno..." className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500" />
+                                        )}
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                          {config.tipo === 'INTERNACION' && (
+                                            <button onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)} className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-emerald-600/20 transition-all">🏥 QR Ocupación</button>
+                                          )}
+                                          {config.tipo === 'OTROS' && (
+                                            <button onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)} className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all">🧺 QR Ropa limpia</button>
+                                          )}
+                                          {config.tipo === 'EN REPARACION' && (
+                                            <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">🔧 En reparación</span>
+                                          )}
+                                        </div>
                                       </div>
-                                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate`}>
-                                        {truncarTexto(formatearResumenHabitacion(config), 28)}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <button onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({ ...prev, [hab.id]: !prev[hab.id] })); }} className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all">⚙️</button>
-                                      <button onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }} className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">×</button>
-                                    </div>
-                                  </summary>
-                                  <div className="mt-3 space-y-3 text-sm">
-                                    <div className="grid gap-2 sm:grid-cols-[1.4fr_0.9fr]">
-                                      <select value={config.tipo} onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500">
-                                        <option value="INTERNACION">INTERNACIÓN</option>
-                                        <option value="EN REPARACION">EN REPARACIÓN</option>
-                                        <option value="OTROS">OTROS</option>
-                                      </select>
-                                      <button onClick={() => guardarEstadoHabitacion(hab.id)} className="w-full bg-slate-700 text-slate-100 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] hover:bg-slate-600 transition-all">💾 Guardar</button>
-                                    </div>
-                                    {config.tipo === 'INTERNACION' && (
-                                      <div className="grid gap-2 sm:grid-cols-2">
-                                        <input type="number" min="1" value={config.camas} onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Camas totales" />
-                                        <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">{config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}</div>
-                                      </div>
-                                    )}
-                                    {config.tipo === 'OTROS' && (
-                                      <input type="text" value={config.texto} onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)} placeholder="Oficina, guardia, médico interno..." className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500" />
-                                    )}
-                                    <div className="flex flex-wrap gap-2 items-center">
-                                      {config.tipo === 'INTERNACION' && (
-                                        <button onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)} className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-emerald-600/20 transition-all">🏥 QR Ocupación</button>
-                                      )}
-                                      {config.tipo === 'OTROS' && (
-                                        <button onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)} className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all">🧺 QR Ropa limpia</button>
-                                      )}
-                                      {config.tipo === 'EN REPARACION' && (
-                                        <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">🔧 En reparación</span>
-                                      )}
-                                    </div>
+                                    </details>
                                   </div>
-                                </details>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <p className="text-sm text-slate-500 italic">No hay habitaciones registradas. Usa el botón "+ Agregar Habitación"</p>
-                        )}
+                                );
+                              })
+                            ) : (
+                              <p className="text-sm text-slate-500 italic">No hay habitaciones registradas. Usa el botón "+ Agregar Habitación"</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center text-slate-500 text-base py-8">📭 No hay sectores registrados. Crea el primer sector usando el botón arriba.</div>
-              )}
-            </div>
-          </section>
+                    ))
+                  ) : (
+                    <div className="text-center text-slate-500 text-base py-8">📭 No hay sectores registrados. Crea el primer sector usando el botón arriba.</div>
+                  )}
+                </div>
+              </section>
+            </>
+          )}
         </div>
       )}
       
