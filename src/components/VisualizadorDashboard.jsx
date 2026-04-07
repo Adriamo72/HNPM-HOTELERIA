@@ -193,7 +193,6 @@ const VisualizadorDashboard = () => {
                 className="text-lg px-6 py-3 rounded-xl font-bold bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all disabled:opacity-50 flex items-center gap-2"
               >
                 <span className="text-2xl">{cargandoCroquis ? '🔄' : '🔄'}</span>
-                {cargandoCroquis ? 'CARGANDO...' : 'ACTUALIZAR'}
               </button>
             </div>
           </div>
@@ -228,7 +227,6 @@ const VisualizadorDashboard = () => {
               className={`text-lg px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${cargandoMonitor ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white'}`}
             >
               <span className="text-2xl">{cargandoMonitor ? '⌛' : '🔄'}</span>
-              {cargandoMonitor ? 'CARGANDO...' : 'ACTUALIZAR'}
             </button>
           </div>
           

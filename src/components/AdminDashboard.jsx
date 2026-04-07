@@ -82,6 +82,13 @@ const AdminDashboard = () => {
   cargarVisualizadores();
 }, []);
 
+  // Recargar datos cuando se cambia a la pestaña historial y no hay datos
+  useEffect(() => {
+    if (activeTab === 'historial' && Object.keys(stockPañol).length === 0 && !cargandoMonitor) {
+      cargarDatos('monitor');
+    }
+  }, [activeTab, stockPañol, cargandoMonitor]);
+
   useEffect(() => {
     if (!habitacionesEspeciales.length) return;
     setHabitacionStatus(prev => {
@@ -1304,13 +1311,6 @@ const eliminarVisualizador = async (visId, usuario) => {
               HOTELERIA
             </h2>
             <div className="flex gap-2">
-              <button 
-                onClick={recargarCroquis} 
-                disabled={cargandoCroquis}
-                className="text-xs px-4 py-2 rounded-xl font-semibold bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 transition-all disabled:opacity-50"
-              >
-                {cargandoCroquis ? '🔄 CARGANDO...' : '🔄 RECARGAR'}
-              </button>
               <select
                 value={pisoSeleccionado}
                 onChange={(e) => {
@@ -1324,6 +1324,13 @@ const eliminarVisualizador = async (visId, usuario) => {
                   <option key={p.id} value={p.id}>{p.nombre_piso}</option>
                 ))}
               </select>
+              <button 
+                onClick={recargarCroquis} 
+                disabled={cargandoCroquis}
+                className="text-lg px-6 py-3 rounded-xl font-bold bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                <span className="text-2xl">{cargandoCroquis ? '🔄' : '🔄'}</span>
+              </button>
             </div>
           </div>
           
@@ -1352,9 +1359,9 @@ const eliminarVisualizador = async (visId, usuario) => {
       <button 
         onClick={recargarMonitor} 
         disabled={cargandoMonitor}
-        className={`text-xs px-5 py-2 rounded-xl font-semibold transition-all ${cargandoMonitor ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
+        className={`text-lg px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${cargandoMonitor ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white'}`}
       >
-        {cargandoMonitor ? '⌛ CARGANDO...' : '🔄 RECARGAR'}
+        <span className="text-2xl">{cargandoMonitor ? '⌛' : '🔄'}</span>
       </button>
     </div>
     
@@ -1542,9 +1549,9 @@ const eliminarVisualizador = async (visId, usuario) => {
       <button 
         onClick={recargarAdmin} 
         disabled={cargandoAdmin}
-        className={`text-xs px-5 py-2 rounded-xl font-semibold transition-all ${cargandoAdmin ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300'}`}
+        className={`text-lg px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${cargandoAdmin ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white'}`}
       >
-        {cargandoAdmin ? '⌛ CARGANDO...' : '🔄 RECARGAR'}
+        <span className="text-2xl">{cargandoAdmin ? '⌛' : '🔄'}</span>
       </button>
     </div>
     
