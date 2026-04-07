@@ -538,28 +538,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         <div className="flex gap-2 flex-wrap md:order-3">
           {!esVisualizador && (
             <>
-              <input 
-                type="date" 
-                value={fechaSeleccionada} 
-                onChange={(e) => {
-                  setFechaSeleccionada(e.target.value);
-                  cargarEstadisticasGlobales();
-                }} 
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" 
-              />
-              <button 
-                onClick={() => {
-                  cargarCroquis();
-                  cargarEstadisticasGlobales();
-                }} 
-                className="px-4 py-2 rounded-lg text-sm font-bold bg-slate-700 hover:bg-slate-600 transition-all"
-              >
-                🔄 Recargar
-              </button>
-            </>
-          )}
-          {!esVisualizador && (
-            <>
               <button onClick={() => { setModoEdicion(!modoEdicion); setModoMovimiento(false); if (!modoEdicion) setPosicion({ x: 0, y: 0 }); }} className={`px-4 py-2 rounded-lg text-sm font-bold ${modoEdicion && !modoMovimiento ? 'bg-green-600' : 'bg-yellow-600'}`}>
                 {modoEdicion && !modoMovimiento ? '✓ Terminar' : '✎ Editar'}
               </button>
