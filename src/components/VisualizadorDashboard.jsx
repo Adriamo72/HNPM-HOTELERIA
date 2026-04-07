@@ -190,9 +190,9 @@ const VisualizadorDashboard = () => {
                   setCroquisKey(prev => prev + 1);
                 }} 
                 disabled={cargandoCroquis}
-                className="text-lg px-6 py-3 rounded-xl font-bold bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all disabled:opacity-50 flex items-center gap-2"
+                className="text-2xl p-2 rounded-lg font-bold text-white hover:text-slate-300 transition-all disabled:opacity-50"
               >
-                <span className="text-2xl">{cargandoCroquis ? '🔄' : '🔄'}</span>
+                {cargandoCroquis ? '🔄' : '🔄'}
               </button>
             </div>
           </div>
@@ -224,9 +224,9 @@ const VisualizadorDashboard = () => {
             <button 
               onClick={() => cargarDatos()} 
               disabled={cargandoMonitor}
-              className={`text-lg px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${cargandoMonitor ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white'}`}
+              className="text-2xl p-2 rounded-lg font-bold text-white hover:text-slate-300 transition-all disabled:opacity-50"
             >
-              <span className="text-2xl">{cargandoMonitor ? '⌛' : '🔄'}</span>
+              {cargandoMonitor ? '⌛' : '🔄'}
             </button>
           </div>
           
