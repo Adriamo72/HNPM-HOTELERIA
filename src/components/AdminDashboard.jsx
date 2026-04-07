@@ -6,7 +6,7 @@ import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('historial');
+  const [activeTab, setActiveTab] = useState('croquis');
   const [personal, setPersonal] = useState([]);
   const [pisos, setPisos] = useState([]);
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
