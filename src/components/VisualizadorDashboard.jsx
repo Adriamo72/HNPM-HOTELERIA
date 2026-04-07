@@ -48,6 +48,16 @@ const VisualizadorDashboard = () => {
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
       
+      // Seleccionar automáticamente el piso más alto
+      if (resPisos.data && resPisos.data.length > 0) {
+        const pisoMasAlto = resPisos.data.reduce((prev, current) => {
+          const numPrev = parseInt(prev.nombre_piso.replace(/\D/g, '')) || 0;
+          const numCurrent = parseInt(current.nombre_piso.replace(/\D/g, '')) || 0;
+          return numCurrent > numPrev ? current : prev;
+        });
+        setPisoSeleccionado(pisoMasAlto.id);
+      }
+      
       // Cargar movimientos para monitor
       const { data: movs } = await supabase
         .from('movimientos_stock')
