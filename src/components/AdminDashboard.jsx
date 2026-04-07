@@ -3,8 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
 import CroquisPiso from './CroquisPiso';
-import useSpinner from '../hooks/useSpinner';
-import SpinnerOverlay from './SpinnerOverlay';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
