@@ -21,6 +21,12 @@ const AdminDashboard = () => {
   const [cargandoCroquis, setCargandoCroquis] = useState(false);
   const [cargandoMonitor, setCargandoMonitor] = useState(false);
   const [cargandoAdmin, setCargandoAdmin] = useState(false);
+  const [visualizadores, setVisualizadores] = useState([]);
+  const [mostrarModalVisualizador, setMostrarModalVisualizador] = useState(false);
+  const [nuevoVisualizador, setNuevoVisualizador] = useState({ usuario: '', pin: '', confirmarPin: '' });
+  const [visualizadorSeleccionado, setVisualizadorSeleccionado] = useState(null);
+  const [mostrarModalCambioPinVisualizador, setMostrarModalCambioPinVisualizador] = useState(false);
+
   
   // Estados para modales
   const [mostrarModalAdmin, setMostrarModalAdmin] = useState(false);
@@ -73,6 +79,7 @@ const AdminDashboard = () => {
   useEffect(() => {
   cargarDatos('todos');
   cargarAdmins();
+  cargarVisualizadores();
 }, []);
 
   useEffect(() => {
@@ -500,6 +507,153 @@ const recargarAdmin = () => cargarDatos('admin');
       }
     }
   };
+
+  const cargarVisualizadores = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('visualizador_acceso')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    setVisualizadores(data || []);
+  } catch (error) {
+    console.error("Error cargando visualizadores:", error);
+  }
+};
+
+// Función para agregar visualizador
+const agregarVisualizador = async () => {
+  if (!nuevoVisualizador.usuario.trim()) {
+    mostrarSplash("Ingrese un nombre de usuario");
+    return;
+  }
+  
+  if (nuevoVisualizador.pin.length < 4) {
+    mostrarSplash("El PIN debe tener al menos 4 dígitos");
+    return;
+  }
+  
+  if (nuevoVisualizador.pin !== nuevoVisualizador.confirmarPin) {
+    mostrarSplash("Los PINs no coinciden");
+    return;
+  }
+  
+  try {
+    const salt = bcrypt.genSaltSync(10);
+    const pinHash = bcrypt.hashSync(nuevoVisualizador.pin, salt);
+    
+    const { error } = await supabase
+      .from('visualizador_acceso')
+      .insert({
+        usuario: nuevoVisualizador.usuario.toLowerCase().trim(),
+        pin_hash: pinHash,
+        activo: true,
+        created_at: new Date().toISOString()
+      });
+    
+    if (error) {
+      if (error.code === '23505') {
+        mostrarSplash("❌ El usuario ya existe");
+      } else {
+        mostrarSplash("❌ Error al crear visualizador");
+      }
+      return;
+    }
+    
+    mostrarSplash(`✅ Visualizador ${nuevoVisualizador.usuario} creado`);
+    setNuevoVisualizador({ usuario: '', pin: '', confirmarPin: '' });
+    setMostrarModalVisualizador(false);
+    cargarVisualizadores();
+    
+  } catch (error) {
+    console.error("Error:", error);
+    mostrarSplash("❌ Error al crear visualizador");
+  }
+};
+
+// Función para cambiar PIN de visualizador
+const cambiarPinVisualizador = async () => {
+  if (nuevoPin.length < 4) {
+    mostrarSplash("El PIN debe tener al menos 4 dígitos");
+    return;
+  }
+  
+  if (nuevoPin !== confirmarNuevoPin) {
+    mostrarSplash("Los PINs no coinciden");
+    return;
+  }
+  
+  try {
+    const salt = bcrypt.genSaltSync(10);
+    const pinHash = bcrypt.hashSync(nuevoPin, salt);
+    
+    const { error } = await supabase
+      .from('visualizador_acceso')
+      .update({ 
+        pin_hash: pinHash,
+        intentos_fallidos: 0,
+        bloqueado_hasta: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', visualizadorSeleccionado.id);
+    
+    if (error) throw error;
+    
+    mostrarSplash(`✅ PIN cambiado para ${visualizadorSeleccionado.usuario}`);
+    setMostrarModalCambioPinVisualizador(false);
+    setNuevoPin('');
+    setConfirmarNuevoPin('');
+    cargarVisualizadores();
+    
+  } catch (error) {
+    console.error("Error:", error);
+    mostrarSplash("❌ Error al cambiar PIN");
+  }
+};
+
+// Función para cambiar estado del visualizador
+const cambiarEstadoVisualizador = async (visId, estadoActual) => {
+  try {
+    const { error } = await supabase
+      .from('visualizador_acceso')
+      .update({ 
+        activo: !estadoActual,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', visId);
+    
+    if (error) throw error;
+    
+    mostrarSplash(estadoActual ? "✅ Visualizador desactivado" : "✅ Visualizador activado");
+    cargarVisualizadores();
+    
+  } catch (error) {
+    console.error("Error:", error);
+    mostrarSplash("❌ Error al cambiar estado");
+  }
+};
+
+// Función para eliminar visualizador
+const eliminarVisualizador = async (visId, usuario) => {
+  if (window.confirm(`¿Eliminar permanentemente al visualizador "${usuario}"?\n\nEsta acción no se puede deshacer.`)) {
+    try {
+      const { error } = await supabase
+        .from('visualizador_acceso')
+        .delete()
+        .eq('id', visId);
+      
+      if (error) throw error;
+      
+      mostrarSplash(`✅ Visualizador ${usuario} eliminado`);
+      cargarVisualizadores();
+      
+    } catch (error) {
+      console.error("Error:", error);
+      mostrarSplash("❌ Error al eliminar visualizador");
+    }
+  }
+};
 
   // ==================== GENERAR QR PERSONAL ====================
   const generarQRPersonal = async (personal) => {
@@ -1495,6 +1649,89 @@ const recargarAdmin = () => cargarDatos('admin');
           </div>
         </section>
 
+        {/* Gestión de Visualizadores */}
+<section className="bg-slate-900 p-6 rounded-2xl border border-green-800/30 mt-6">
+  <div className="flex justify-between items-center mb-4">
+    <div>
+      <h3 className="text-lg font-semibold text-green-400 uppercase tracking-wider">
+        👁️ Visualizadores (Acceso con PIN)
+      </h3>
+      <p className="text-xs text-slate-500 mt-1">Usuarios con acceso de solo lectura</p>
+    </div>
+    <button
+      onClick={() => setMostrarModalVisualizador(true)}
+      className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
+    >
+      + Nuevo Visualizador
+    </button>
+  </div>
+  
+  <div className="space-y-2 max-h-96 overflow-y-auto">
+    {visualizadores.length > 0 ? (
+      visualizadores.map(vis => (
+        <div key={vis.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 hover:border-green-800/50 transition-all">
+          <div className="flex justify-between items-center flex-wrap gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold text-white uppercase">
+                  {vis.usuario}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                  vis.activo ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
+                }`}>
+                  {vis.activo ? 'ACTIVO' : 'INACTIVO'}
+                </span>
+              </div>
+              <div className="flex gap-3 mt-1 text-[10px] text-slate-500 flex-wrap">
+                <span>🕐 Creado: {new Date(vis.created_at).toLocaleDateString()}</span>
+                {vis.ultimo_acceso && (
+                  <span>📱 Último acceso: {new Date(vis.ultimo_acceso).toLocaleString()}</span>
+                )}
+                {vis.intentos_fallidos > 0 && (
+                  <span className="text-orange-400">⚠️ Intentos fallidos: {vis.intentos_fallidos}</span>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setVisualizadorSeleccionado(vis);
+                  setMostrarModalCambioPinVisualizador(true);
+                }}
+                className="px-3 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg text-xs font-semibold hover:bg-yellow-600 hover:text-white transition-all"
+                title="Cambiar PIN"
+              >
+                🔑 Cambiar PIN
+              </button>
+              <button
+                onClick={() => cambiarEstadoVisualizador(vis.id, vis.activo)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  vis.activo 
+                    ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600 hover:text-white'
+                    : 'bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white'
+                }`}
+              >
+                {vis.activo ? '🔴 Desactivar' : '🟢 Activar'}
+              </button>
+              <button
+                onClick={() => eliminarVisualizador(vis.id, vis.usuario)}
+                className="px-3 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-600 hover:text-white transition-all"
+                title="Eliminar permanentemente"
+              >
+                🗑️ Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      ))
+    ) : (
+      <div className="text-center text-slate-500 text-sm py-8">
+        📭 No hay visualizadores registrados
+      </div>
+    )}
+  </div>
+</section>
+
         {/* Gestión de Personal */}
         <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
           <div className="flex justify-between items-center mb-4">
@@ -1904,6 +2141,135 @@ const recargarAdmin = () => cargarDatos('admin');
           </div>
         </div>
       )}
+
+      {/* Modal para crear nuevo visualizador */}
+{mostrarModalVisualizador && (
+  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-green-800">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl font-black text-green-400">Nuevo Visualizador</h3>
+        <button 
+          onClick={() => setMostrarModalVisualizador(false)}
+          className="text-slate-500 hover:text-white text-2xl"
+        >
+          ×
+        </button>
+      </div>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+            Usuario
+          </label>
+          <input
+            type="text"
+            value={nuevoVisualizador.usuario}
+            onChange={(e) => setNuevoVisualizador({...nuevoVisualizador, usuario: e.target.value})}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="ej: visualizador1, supervisor, etc"
+            autoComplete="off"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+            PIN (mínimo 4 dígitos)
+          </label>
+          <input
+            type="password"
+            value={nuevoVisualizador.pin}
+            onChange={(e) => setNuevoVisualizador({...nuevoVisualizador, pin: e.target.value})}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="••••"
+            maxLength="6"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+            Confirmar PIN
+          </label>
+          <input
+            type="password"
+            value={nuevoVisualizador.confirmarPin}
+            onChange={(e) => setNuevoVisualizador({...nuevoVisualizador, confirmarPin: e.target.value})}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="••••"
+            maxLength="6"
+          />
+        </div>
+        
+        <button
+          onClick={agregarVisualizador}
+          className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-3 rounded-xl transition-all mt-4"
+        >
+          Crear Visualizador
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Modal para cambiar PIN de visualizador */}
+{mostrarModalCambioPinVisualizador && visualizadorSeleccionado && (
+  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-yellow-800">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl font-black text-yellow-400">
+          Cambiar PIN - {visualizadorSeleccionado.usuario}
+        </h3>
+        <button 
+          onClick={() => {
+            setMostrarModalCambioPinVisualizador(false);
+            setNuevoPin('');
+            setConfirmarNuevoPin('');
+          }}
+          className="text-slate-500 hover:text-white text-2xl"
+        >
+          ×
+        </button>
+      </div>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+            Nuevo PIN (mínimo 4 dígitos)
+          </label>
+          <input
+            type="password"
+            value={nuevoPin}
+            onChange={(e) => setNuevoPin(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-yellow-500"
+            placeholder="••••"
+            maxLength="6"
+            autoFocus
+          />
+        </div>
+        
+        <div>
+          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+            Confirmar nuevo PIN
+          </label>
+          <input
+            type="password"
+            value={confirmarNuevoPin}
+            onChange={(e) => setConfirmarNuevoPin(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-yellow-500"
+            placeholder="••••"
+            maxLength="6"
+          />
+        </div>
+        
+        <button
+          onClick={cambiarPinVisualizador}
+          className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-black py-3 rounded-xl transition-all mt-4"
+        >
+          Cambiar PIN
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Modal para nuevo personal */}
       {mostrarModalPersonal && (

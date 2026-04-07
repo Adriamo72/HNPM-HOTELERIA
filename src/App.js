@@ -1,10 +1,10 @@
-// App.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import LoginConQR from './components/LoginConQR';
 import FormularioPiso from './components/FormularioPiso';
 import AdminDashboard from './components/AdminDashboard';
 import RecorridoOcupacion from './components/RecorridoOcupacion';
+import VisualizadorDashboard from './components/VisualizadorDashboard'; // Nuevo componente
 
 function App() {
   const [usuarioLogueado, setUsuarioLogueado] = useState(null);
@@ -23,7 +23,14 @@ function App() {
         if (new Date(sesion.expira) > new Date()) {
           setUsuarioLogueado(sesion.usuario.dni);
           setDatosUsuario(sesion.usuario);
-          setRol(sesion.usuario.rol === 'ADMIN' || sesion.usuario.dni === '22976371' ? 'admin' : 'pañolero');
+          // Determinar rol - AGREGADO ROL VISUALIZADOR
+          if (sesion.usuario.rol === 'ADMIN' || sesion.usuario.dni === '22976371') {
+            setRol('admin');
+          } else if (sesion.usuario.rol === 'visualizador') {
+            setRol('visualizador');
+          } else {
+            setRol('pañolero');
+          }
         } else {
           localStorage.removeItem('sesion_hnpm');
         }
@@ -82,7 +89,14 @@ function App() {
     console.log("✅ Usuario autenticado:", usuario.apellido);
     setUsuarioLogueado(usuario.dni);
     setDatosUsuario(usuario);
-    setRol(usuario.rol === 'ADMIN' || usuario.dni === '22976371' ? 'admin' : 'pañolero');
+    // Determinar rol - AGREGADO ROL VISUALIZADOR
+    if (usuario.rol === 'ADMIN' || usuario.dni === '22976371') {
+      setRol('admin');
+    } else if (usuario.rol === 'visualizador') {
+      setRol('visualizador');
+    } else {
+      setRol('pañolero');
+    }
   };
 
   const cerrarSesion = () => {
@@ -109,10 +123,10 @@ function App() {
     return <LoginConQR onLoginSuccess={manejarLogin} modoAcceso={modoAcceso} />;
   }
 
-  return (
+   return (
     <div className="App bg-slate-950 min-h-screen font-sans text-slate-200">
       <div className="flex flex-col min-h-screen">
-        {/* Header simplificado */}
+        {/* Header - Actualizar para mostrar rol visualizador */}
         <header className="bg-slate-900/90 backdrop-blur-sm border-b border-blue-900/50 p-3 flex justify-between items-center shadow-2xl sticky top-0 z-50">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-gradient-to-r from-blue-600 to-blue-500 rounded-lg flex items-center justify-center">
@@ -159,6 +173,9 @@ function App() {
             {!modoAcceso && rol === 'admin' && (
               <p className="text-xs font-bold text-red-400">ADMIN</p>
             )}
+            {!modoAcceso && rol === 'visualizador' && (
+              <p className="text-xs font-bold text-green-400">VISUALIZADOR</p>
+            )}
           </div>
           
           <div className="flex gap-2 items-center">
@@ -171,10 +188,12 @@ function App() {
           </div>
         </header>
 
-        {/* Main Content */}
+        {/* Main Content - Actualizado para incluir visualizador */}
         <main className="flex-grow">
           {rol === 'admin' ? (
             <AdminDashboard />
+          ) : rol === 'visualizador' ? (
+            <VisualizadorDashboard />
           ) : modoAcceso === 'recorrido' ? (
             <RecorridoOcupacion 
               perfilUsuario={datosUsuario}

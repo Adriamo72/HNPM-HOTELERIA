@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 
-const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
+const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false, fechaConsulta }) => {
   const normalizedPisoId = typeof pisoId === 'string' && pisoId.trim() !== '' && !Number.isNaN(Number(pisoId))
     ? Number(pisoId)
     : pisoId;
@@ -441,16 +441,26 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
     <div className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-700">
       <div className="flex flex-wrap justify-between items-center p-4 border-b border-slate-700 gap-3">
         <div>
-          <h3 className="text-xl font-bold text-blue-400">{pisoNombre}</h3>
-          <p className="text-xs text-slate-500">{modoEdicion ? (modoMovimiento ? '🖱️ Modo Movimiento' : '✎ Modo Edición') : '👁️ Modo Visualización'}</p>
+          <h3 className="text-xl font-bold text-green-400">{pisoNombre}</h3>
+          <p className="text-xs text-slate-500">{esVisualizador ? '👁️ Modo Visualización' : (modoEdicion ? (modoMovimiento ? '🖱️ Modo Movimiento' : '✎ Modo Edición') : '👁️ Modo Visualización')}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <input type="date" value={fechaSeleccionada} onChange={(e) => setFechaSeleccionada(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-          <button onClick={() => { setModoEdicion(!modoEdicion); setModoMovimiento(false); if (!modoEdicion) setPosicion({ x: 0, y: 0 }); }} className={`px-4 py-2 rounded-lg text-sm font-bold ${modoEdicion && !modoMovimiento ? 'bg-green-600' : 'bg-yellow-600'}`}>
-            {modoEdicion && !modoMovimiento ? '✓ Terminar' : '✎ Editar'}
-          </button>
-          {modoEdicion && (<button onClick={() => setModoMovimiento(!modoMovimiento)} className={`px-4 py-2 rounded-lg text-sm font-bold ${modoMovimiento ? 'bg-blue-600' : 'bg-slate-700'}`}>🖱️ {modoMovimiento ? 'ON' : 'OFF'}</button>)}
-          <button onClick={eliminarCroquis} className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600">🗑️ Eliminar</button>
+          <input 
+            type="date" 
+            value={fechaConsulta || fechaSeleccionada} 
+            onChange={(e) => setFechaSeleccionada(e.target.value)} 
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" 
+          />
+          {!esVisualizador && (
+            <>
+              <button onClick={() => { setModoEdicion(!modoEdicion); setModoMovimiento(false); if (!modoEdicion) setPosicion({ x: 0, y: 0 }); }} className={`px-4 py-2 rounded-lg text-sm font-bold ${modoEdicion && !modoMovimiento ? 'bg-green-600' : 'bg-yellow-600'}`}>
+                {modoEdicion && !modoMovimiento ? '✓ Terminar' : '✎ Editar'}
+              </button>
+              {modoEdicion && (<button onClick={() => setModoMovimiento(!modoMovimiento)} className={`px-4 py-2 rounded-lg text-sm font-bold ${modoMovimiento ? 'bg-blue-600' : 'bg-slate-700'}`}>🖱️ {modoMovimiento ? 'ON' : 'OFF'}</button>)}
+              <button onClick={eliminarCroquis} className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600">🗑️ Eliminar</button>
+            </>
+          )}
+          <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg text-sm font-bold bg-slate-700">🔄 Recargar</button>
         </div>
       </div>
 
@@ -565,10 +575,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones }) => {
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div> Reparación</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-500"></div> Otros</span>
           </div>
-          <div className="text-xs text-slate-500">🔍 Zoom: {Math.round(zoom * 100)}% | 🖱️ {modoMovimiento ? 'Arrastra marcadores' : (modoEdicion ? 'Click para posicionar' : 'Solo visualización')}</div>
-          {modoEdicion && <p className="text-yellow-400 text-xs">{modoMovimiento ? '🖱️ Arrastra marcadores' : '✏️ Click en croquis para posicionar'} | Click derecho para editar/eliminar</p>}
+          <div className="text-xs text-slate-500">
+            {esVisualizador ? '🔍 Solo visualización - Click derecho para ver detalles' : `🔍 Zoom: ${Math.round(zoom * 100)}% | 🖱️ ${modoMovimiento ? 'Arrastra marcadores' : (modoEdicion ? 'Click para posicionar' : 'Solo visualización')}`}
+          </div>
         </div>
-        {mensaje && <p className="text-center text-sm mt-2 text-blue-400">{mensaje}</p>}
+        {mensaje && <p className="text-center text-sm mt-2 text-green-400">{mensaje}</p>}
       </div>
     </div>
   );
