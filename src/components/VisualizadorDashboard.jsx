@@ -158,22 +158,6 @@ const VisualizadorDashboard = () => {
               MAPA DE SECTORES
             </h2>
             <div className="flex gap-2">
-              <button 
-                onClick={() => {
-                  cargarDatos();
-                  setCroquisKey(prev => prev + 1);
-                }} 
-                disabled={cargandoCroquis}
-                className="text-xs px-4 py-2 rounded-xl font-semibold bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 transition-all disabled:opacity-50"
-              >
-                {cargandoCroquis ? '🔄 CARGANDO...' : '🔄 RECARGAR'}
-              </button>
-              <input 
-                type="date" 
-                value={fechaSeleccionada}
-                onChange={(e) => setFechaSeleccionada(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
-              />
               <select
                 value={pisoSeleccionado}
                 onChange={(e) => {
@@ -187,6 +171,22 @@ const VisualizadorDashboard = () => {
                   <option key={p.id} value={p.id}>{p.nombre_piso}</option>
                 ))}
               </select>
+              <input 
+                type="date" 
+                value={fechaSeleccionada}
+                onChange={(e) => setFechaSeleccionada(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              />
+              <button 
+                onClick={() => {
+                  cargarDatos();
+                  setCroquisKey(prev => prev + 1);
+                }} 
+                disabled={cargandoCroquis}
+                className="text-xs px-3 py-2 rounded-xl font-semibold bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 transition-all disabled:opacity-50"
+              >
+                {cargandoCroquis ? '🔄' : '🔄'}
+              </button>
             </div>
           </div>
           
