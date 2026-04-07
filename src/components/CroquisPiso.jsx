@@ -511,15 +511,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   return (
     <div className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-700">
       {/* Header con estadísticas HNPM */}
-      <div className="flex flex-wrap justify-between items-center p-4 border-b border-slate-700 gap-3">
-        <div>
+      <div className="flex flex-col md:flex-row justify-center md:justify-between items-center p-4 border-b border-slate-700 gap-3">
+        <div className="md:order-1">
           <h3 className="text-xl font-bold text-blue-400">{pisoNombre}</h3>
           <p className="text-xs text-slate-500">{esVisualizador ? '👁️ Modo Visualización' : (modoEdicion ? (modoMovimiento ? '🖱️ Modo Movimiento' : '✎ Modo Edición') : '👁️ Modo Visualización')}</p>
         </div>
         
         {/* Estadísticas HNPM Globales */}
-        <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
-          <div className="flex gap-6">
+        <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center md:order-2 flex-1 md:flex-none">
+          <div className="flex gap-6 justify-center">
             <div>
               <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL CAMAS HNPM</p>
               <p className="text-2xl font-black text-green-400">{estadisticasGlobales.totalCamas}</p>
@@ -535,7 +535,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           </div>
         </div>
         
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap md:order-3">
           {!esVisualizador && (
             <>
               <input 
