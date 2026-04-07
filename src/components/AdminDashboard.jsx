@@ -1081,7 +1081,7 @@ const recargarAdmin = () => cargarDatos('admin');
       <img src="${qrUrl}" />
       ${textoExtra}
       <p>Dpto. Hotelería - HNPM</p>
-      <div class="info">Escanee este código QR para registrar ropa blanca</div>
+      <div class="info">Escanee este código QR</div>
       <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:14px;background:#3b82f6;color:white;border:none;border-radius:10px;cursor:pointer">🖨️ Imprimir</button>
       <script>setTimeout(()=>{window.close()},30000)</script>
     </div>
@@ -1732,14 +1732,21 @@ const recargarAdmin = () => cargarDatos('admin');
                                     )}
 
                                     {config.tipo === 'OTROS' && (
-                                      <button
-                                        onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)}
-                                        className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
-                                        title="QR para registro de ropa de cama limpia"
-                                      >
-                                        🧺 QR Ropa limpia
-                                      </button>
-                                    )}
+  <button
+    onClick={(e) => { 
+      e.stopPropagation(); 
+      const textoAmpliatorio = config.texto?.trim() || 'Sector especial';
+      descargarQR(
+        `/habitacion/${hab.slug}`, 
+        `${hab.nombre} - ${p.nombre_piso}`,
+        `📝 ${textoAmpliatorio} - Ropa de cama y blancos`
+      ); 
+    }}
+    className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-1.5 py-0.5 rounded-lg text-[8px] font-semibold uppercase hover:bg-slate-600 transition-all"
+  >
+    🧺 Ropa
+  </button>
+)}
 
                                     {config.tipo === 'EN REPARACION' && (
                                       <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">
