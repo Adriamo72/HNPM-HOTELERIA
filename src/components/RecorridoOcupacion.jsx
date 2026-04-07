@@ -1,8 +1,8 @@
-// components/RecorridoOcupacion.jsx (versión actualizada con spinner)
+// components/RecorridoOcupacion.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import useSpinner from '../hooks/useSpinner';
-import SpinnerOverlay from '../components/SpinnerOverlay';
+import SpinnerOverlay from './SpinnerOverlay';
 
 const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const [piso, setPiso] = useState(null);
@@ -10,16 +10,22 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const [ocupaciones, setOcupaciones] = useState({});
   const [guardando, setGuardando] = useState(false);
   const [nombrePiso, setNombrePiso] = useState('');
+  const [cargandoInicial, setCargandoInicial] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(null);
   const { spinner, showLoading, showSuccess, showError, hideSpinner } = useSpinner();
 
   useEffect(() => {
-    if (slugPiso) {
+    if (slugPiso && perfilUsuario) {
       cargarDatos();
+    } else if (slugPiso && !perfilUsuario) {
+      // Esperar a que perfilUsuario esté disponible
+      console.log("Esperando perfil de usuario...");
     }
-  }, [slugPiso]);
+  }, [slugPiso, perfilUsuario]);
 
   const cargarDatos = async () => {
-    showLoading('CARGANDO SECTOR...');
+    setCargandoInicial(true);
+    setErrorCarga(null);
     
     try {
       // 1. Obtener el piso por slug
@@ -29,7 +35,13 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         .eq('slug', slugPiso)
         .single();
       
-      if (pisoError) throw pisoError;
+      if (pisoError) {
+        console.error("Error cargando piso:", pisoError);
+        setErrorCarga("Sector no encontrado");
+        setCargandoInicial(false);
+        return;
+      }
+      
       setPiso(pisoData);
       setNombrePiso(pisoData.nombre_piso);
       
@@ -40,11 +52,16 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         .eq('piso_id', pisoData.id)
         .order('nombre');
       
-      if (habError) throw habError;
+      if (habError) {
+        console.error("Error cargando habitaciones:", habError);
+        setErrorCarga("Error al cargar habitaciones");
+        setCargandoInicial(false);
+        return;
+      }
       
       if (!habitacionesData || habitacionesData.length === 0) {
         setHabitaciones([]);
-        hideSpinner();
+        setCargandoInicial(false);
         return;
       }
       
@@ -56,7 +73,9 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         .in('habitacion_id', habitacionesData.map(h => h.id))
         .eq('fecha', fecha);
       
-      if (ocupError) throw ocupError;
+      if (ocupError) {
+        console.error("Error cargando ocupaciones:", ocupError);
+      }
       
       // 4. Crear mapa de ocupaciones existentes
       const ocupMap = {};
@@ -118,13 +137,12 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       
       setHabitaciones(habitacionesInternacion);
       setOcupaciones(ocupState);
-      
-      hideSpinner();
+      setCargandoInicial(false);
       
     } catch (error) {
       console.error("Error cargando datos:", error);
-      showError('ERROR AL CARGAR EL SECTOR');
-      setTimeout(() => hideSpinner(), 2000);
+      setErrorCarga("Error al cargar los datos");
+      setCargandoInicial(false);
     }
   };
 
@@ -147,7 +165,6 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const guardarTodas = async () => {
     if (habitaciones.length === 0) {
       showError('NO HAY HABITACIONES PARA GUARDAR');
-      setTimeout(() => hideSpinner(), 2000);
       return;
     }
     
@@ -187,14 +204,13 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       
       if (errores === 0) {
         showSuccess(`✅ ${guardados} HABITACIONES GUARDADAS`);
+        // Recargar datos después de guardar
+        setTimeout(() => {
+          cargarDatos();
+        }, 1500);
       } else {
         showError(`⚠️ ${guardados} GUARDADAS, ${errores} ERRORES`);
       }
-      
-      // Recargar datos después de guardar
-      setTimeout(() => {
-        cargarDatos();
-      }, 1500);
       
     } catch (error) {
       console.error("Error guardando:", error);
@@ -209,18 +225,32 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const totalOcupadas = habitaciones.reduce((sum, hab) => sum + (ocupaciones[hab.id]?.camas_ocupadas || 0), 0);
   const porcentaje = totalCamas > 0 ? (totalOcupadas / totalCamas) * 100 : 0;
 
-  // Mostrar spinner mientras carga
+  // Pantalla de carga inicial - SIN SCANNER
+  if (cargandoInicial) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center">
+        <div className="animate-pulse text-center">
+          <div className="w-16 h-16 bg-purple-600 rounded-2xl mx-auto mb-4 animate-bounce shadow-lg shadow-purple-900/40"></div>
+          <p className="text-purple-400 font-black text-sm uppercase tracking-wider">CARGANDO SECTOR...</p>
+          <p className="text-slate-500 text-xs mt-2 font-mono">Verificando habitaciones</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar spinner si está visible (para operaciones como guardar)
   if (spinner.visible) {
     return <SpinnerOverlay mensaje={spinner.mensaje} tipo={spinner.tipo} />;
   }
 
-  if (!piso && !spinner.visible) {
+  // Error de carga
+  if (errorCarga) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
         <div className="bg-red-900/20 rounded-2xl p-8 text-center max-w-md border border-red-800">
           <div className="text-6xl mb-4">❌</div>
-          <h2 className="text-xl font-bold text-white mb-2">Sector no encontrado</h2>
-          <p className="text-slate-400 text-sm">El código QR escaneado no corresponde a un sector válido.</p>
+          <h2 className="text-xl font-bold text-white mb-2">Error</h2>
+          <p className="text-slate-400 text-sm">{errorCarga}</p>
           <button 
             onClick={() => window.location.href = '/'}
             className="mt-6 bg-blue-600 px-6 py-2 rounded-xl text-sm font-bold"
@@ -232,7 +262,8 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     );
   }
 
-  if (habitaciones.length === 0 && !spinner.visible) {
+  // Sin habitaciones de internación
+  if (habitaciones.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
         <div className="bg-slate-900 rounded-2xl p-8 text-center max-w-md border border-slate-800">
@@ -255,6 +286,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     );
   }
 
+  // Pantalla principal del recorrido
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 pb-32">
       {/* Header fijo con nombre del piso */}
