@@ -574,81 +574,131 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         className="relative overflow-auto bg-slate-950"
         style={{ 
           height: 'auto', 
-          maxHeight: '80vh', 
-          cursor: modoMovimiento ? 'grab' : (modoEdicion ? 'crosshair' : 'default'),
+          maxHeight: '80vh',
           minHeight: '400px'
         }}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
       >
-        <div
-          style={{
-            transform: `translate(${posicion.x}px, ${posicion.y}px) scale(${zoom})`,
-            transformOrigin: '0 0',
-            transition: arrastrando ? 'none' : 'transform 0.1s ease-out',
-            width: 'fit-content'
-          }}
-        >
-          <img
-            ref={imageRef}
-            src={croquis.imagen_url}
-            alt={`Croquis ${pisoNombre}`}
-            className="w-auto h-auto"
-            style={{ 
-              maxWidth: '100%',
-              pointerEvents: modoEdicion && !modoMovimiento ? 'auto' : 'none'
-            }}
-            onClick={handleImageClick}
-            draggable={false}
-          />
-          
-          {/* Marcadores de habitaciones */}
-          {habitaciones.map(hab => {
-            const coord = coordenadas[hab.id];
-            if (!coord) return null;
-            
-            const ocup = ocupacion[hab.id];
-            const estilo = getColorPorTipoYOcupacion(hab, ocup);
-            
-            let displayTexto = '';
-            if (!ocup) {
-              displayTexto = '?';
-            } else if (ocup.tipo_habitacion === 'activa') {
-              displayTexto = ocup.camas_ocupadas;
-            } else if (ocup.tipo_habitacion === 'reparacion') {
-              displayTexto = '🔧';
-            } else {
-              displayTexto = '';
-            }
-            
-            return (
-              <div
-                key={hab.id}
-                data-habitacion-id={hab.id}
-                className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
-                style={{
-                  left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
-                  top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                  width: 'min(2.2%, 34px)',
-                  height: 'min(6.5%, 55px)',
-                  transform: 'translate(-50%, -50%)',
-                  minWidth: '32px',
-                  minHeight: '48px',
-                  padding: '2px 0',
-                  ...estilo.style
+        {cargando ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-slate-400">Cargando plano...</div>
+          </div>
+        ) : croquis ? (
+          <>
+            <div
+              style={{
+                transform: `translate(${posicion.x}px, ${posicion.y}px) scale(${zoom})`,
+                transformOrigin: '0 0',
+                transition: arrastrando ? 'none' : 'transform 0.1s ease-out',
+                width: 'fit-content',
+                cursor: modoMovimiento ? 'grab' : (modoEdicion ? 'crosshair' : 'default')
+              }}
+              onWheel={handleWheel}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+            >
+              <img
+                ref={imageRef}
+                src={croquis.imagen_url}
+                alt={`Croquis ${pisoNombre}`}
+                className="w-auto h-auto"
+                style={{ 
+                  maxWidth: '100%',
+                  pointerEvents: modoEdicion && !modoMovimiento ? 'auto' : 'none'
                 }}
-                title={`${estilo.title}${ocup ? '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs' : ''}`}
-                onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
-              >
-                <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
-                <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
-              </div>
-            );
-          })}
-        </div>
+                onClick={handleImageClick}
+                draggable={false}
+              />
+              
+              {/* Marcadores de habitaciones */}
+              {habitaciones.map(hab => {
+                const coord = coordenadas[hab.id];
+                if (!coord) return null;
+                
+                const ocup = ocupacion[hab.id];
+                const estilo = getColorPorTipoYOcupacion(hab, ocup);
+                
+                let displayTexto = '';
+                if (!ocup) {
+                  displayTexto = '?';
+                } else if (ocup.tipo_habitacion === 'activa') {
+                  displayTexto = ocup.camas_ocupadas;
+                } else if (ocup.tipo_habitacion === 'reparacion') {
+                  displayTexto = '🔧';
+                } else {
+                  displayTexto = '';
+                }
+                
+                return (
+                  <div
+                    key={hab.id}
+                    data-habitacion-id={hab.id}
+                    className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
+                    style={{
+                      left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
+                      top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
+                      width: 'min(2.2%, 34px)',
+                      height: 'min(6.5%, 55px)',
+                      transform: 'translate(-50%, -50%)',
+                      minWidth: '32px',
+                      minHeight: '48px',
+                      padding: '2px 0',
+                      ...estilo.style
+                    }}
+                    title={`${estilo.title}${ocup ? '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs' : ''}`}
+                    onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
+                  >
+                    <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
+                    <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          /* Layout alternativo cuando no hay croquis */
+          <div className="p-8">
+            <div className="text-center mb-6">
+              <h3 className="text-xl font-semibold text-slate-300 mb-2">Habitaciones - {pisoNombre}</h3>
+              <p className="text-sm text-slate-500">No hay plano disponible. Las habitaciones se muestran en lista.</p>
+              {!esVisualizador && (
+                <p className="text-xs text-slate-400 mt-2">Para crear un plano, active el modo edición y suba una imagen.</p>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {habitaciones.map(hab => {
+                const ocup = ocupacion[hab.id];
+                const estilo = getColorPorTipoYOcupacion(hab, ocup);
+                
+                let displayTexto = '';
+                if (!ocup) {
+                  displayTexto = '?';
+                } else if (ocup.tipo_habitacion === 'activa') {
+                  displayTexto = ocup.camas_ocupadas;
+                } else if (ocup.tipo_habitacion === 'reparacion') {
+                  displayTexto = '🔧';
+                } else {
+                  displayTexto = '';
+                }
+                
+                return (
+                  <div
+                    key={hab.id}
+                    className={`rounded-lg border-2 ${estilo.bg} ${estilo.text} p-4 flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 cursor-pointer ${estilo.blink ? 'animate-pulse' : ''}`}
+                    style={estilo.style}
+                    title={`${estilo.title}${ocup ? '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs' : ''}`}
+                    onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
+                  >
+                    <span className="text-lg font-bold mb-1">{hab.nombre}</span>
+                    <span className="text-2xl font-black">{displayTexto}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="p-3 border-t border-slate-700">
