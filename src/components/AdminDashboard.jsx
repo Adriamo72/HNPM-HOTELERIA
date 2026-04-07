@@ -193,11 +193,11 @@ const AdminDashboard = () => {
 
       if (error) {
         console.error('Error guardando estado de habitación:', error);
-        mostrarSplash('❌ Error al guardar estado');
+        mostrarSplash('Error al guardar estado');
         return;
       }
 
-      mostrarSplash('✅ Estado guardado');
+      mostrarSplash('Estado guardado correctamente');
       setHabitacionesAbiertas(prev => ({
         ...prev,
         [habId]: false
@@ -355,10 +355,10 @@ const cargarDatos = async (tipo = 'todos') => {
       await cargarAdmins();
     }
     
-    mostrarSplash("✅ DATOS ACTUALIZADOS");
+    mostrarSplash("Datos actualizados correctamente");
   } catch (error) {
     console.error(error);
-    mostrarSplash("❌ ERROR AL SINCRONIZAR");
+    mostrarSplash("Error al sincronizar datos");
   } finally {
     if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(false);
     if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(false);
@@ -417,14 +417,14 @@ const recargarAdmin = () => cargarDatos('admin');
       
       if (error) {
         if (error.code === '23505') {
-          mostrarSplash("❌ El usuario ya existe");
+          mostrarSplash("Usuario ya existe");
         } else {
           mostrarSplash("❌ Error al crear administrador");
         }
         return;
       }
       
-      mostrarSplash(`✅ Administrador ${nuevoAdmin.usuario} creado`);
+      mostrarSplash(`Administrador ${nuevoAdmin.usuario} creado correctamente`);
       setNuevoAdmin({ usuario: '', pin: '', confirmarPin: '' });
       setMostrarModalAdmin(false);
       cargarAdmins();
@@ -447,7 +447,7 @@ const recargarAdmin = () => cargarDatos('admin');
       
       if (error) throw error;
       
-      mostrarSplash(estadoActual ? "✅ Administrador desactivado" : "✅ Administrador activado");
+      mostrarSplash(estadoActual ? "Administrador desactivado" : "Administrador activado");
       cargarAdmins();
       
     } catch (error) {
@@ -483,7 +483,7 @@ const recargarAdmin = () => cargarDatos('admin');
       
       if (error) throw error;
       
-      mostrarSplash(`✅ PIN cambiado para ${adminSeleccionado.usuario}`);
+      mostrarSplash(`PIN actualizado para ${adminSeleccionado.usuario}`);
       setMostrarModalCambioPin(false);
       setNuevoPin('');
       setConfirmarNuevoPin('');
@@ -505,7 +505,7 @@ const recargarAdmin = () => cargarDatos('admin');
         
         if (error) throw error;
         
-        mostrarSplash(`✅ Administrador ${usuario} eliminado`);
+        mostrarSplash(`Administrador ${usuario} eliminado correctamente`);
         cargarAdmins();
         
       } catch (error) {
@@ -1110,7 +1110,7 @@ const eliminarVisualizador = async (visId, usuario) => {
         
         if (delError) throw delError;
         
-        mostrarSplash("🔄 RECALCULANDO STOCK...");
+        mostrarSplash("Recalculando stock...");
         await recalcularStockPiso(movimiento.piso_id);
         mostrarSplash("✅ Registro eliminado y stock actualizado");
         cargarDatos();
@@ -2376,7 +2376,7 @@ const eliminarVisualizador = async (visId, usuario) => {
       
       {/* Notificaciones flotantes */}
       {notificacion.visible && (
-        <div className="fixed bottom-6 right-6 bg-blue-600 text-white px-5 py-2.5 rounded-xl shadow-2xl font-semibold uppercase text-sm z-[100] border border-blue-400 animate-in slide-in-from-bottom-5">
+        <div className="fixed bottom-6 right-6 bg-slate-800 text-slate-200 px-4 py-3 rounded-lg shadow-lg font-medium text-sm z-[100] border border-slate-600">
           {notificacion.mensaje}
         </div>
       )}

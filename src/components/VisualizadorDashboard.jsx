@@ -98,10 +98,10 @@ const VisualizadorDashboard = () => {
       setStockUso(stockUsoMap);
       setStockLavadero(stockLavaderoMap);
       
-      mostrarSplash("✅ DATOS ACTUALIZADOS");
+      mostrarSplash("Datos actualizados correctamente");
     } catch (error) {
       console.error(error);
-      mostrarSplash("❌ ERROR AL SINCRONIZAR");
+      mostrarSplash("Error al sincronizar datos");
     } finally {
       setCargandoCroquis(false);
       setCargandoMonitor(false);
@@ -345,7 +345,7 @@ const VisualizadorDashboard = () => {
 
       {/* Notificación flotante */}
       {notificacion.visible && (
-        <div className="fixed bottom-6 right-6 bg-green-600 text-white px-5 py-2.5 rounded-xl shadow-2xl font-semibold uppercase text-sm z-[100] border border-green-400 animate-in slide-in-from-bottom-5">
+        <div className="fixed bottom-6 right-6 bg-slate-800 text-slate-200 px-4 py-3 rounded-lg shadow-lg font-medium text-sm z-[100] border border-slate-600">
           {notificacion.mensaje}
         </div>
       )}
