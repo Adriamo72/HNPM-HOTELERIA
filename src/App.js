@@ -40,19 +40,12 @@ function App() {
     const path = window.location.pathname;
     console.log("📍 Path actual:", path);
     
-    // Ruta para RECORRIDO DE OCUPACIÓN (NUEVO - por piso)
+    // Ruta para RECORRIDO DE OCUPACIÓN (por piso)
     if (path.includes('/recorrido/')) {
       const slug = path.split('/recorrido/')[1];
       setModoAcceso('recorrido');
       setSlugCompleto(slug);
-      console.log("📌 Modo RECORRIDO OCUPACIÓN (por piso):", slug);
-    } 
-    // Ruta para ocupación (antiguo - por habitación) - Se mantiene por compatibilidad
-    else if (path.includes('/ocupacion/')) {
-      const slug = path.split('/ocupacion/')[1];
-      setModoAcceso('ocupacion');
-      setSlugCompleto(slug);
-      console.log("📌 Modo OCUPACION (por habitación - legacy):", slug);
+      console.log("📌 Modo RECORRIDO OCUPACIÓN:", slug);
     } 
     // Ruta para ropa blanca - piso
     else if (path.includes('/piso/')) {
@@ -77,7 +70,6 @@ function App() {
     } 
     // Ruta para autenticación (login con QR personal)
     else if (path.includes('/auth/')) {
-      // Esto lo maneja LoginConQR, no necesitamos hacer nada aquí
       console.log("📌 Ruta de autenticación detectada");
     }
     else {
@@ -120,7 +112,7 @@ function App() {
   return (
     <div className="App bg-slate-950 min-h-screen font-sans text-slate-200">
       <div className="flex flex-col min-h-screen">
-        {/* Header */}
+        {/* Header simplificado */}
         <header className="bg-slate-900/90 backdrop-blur-sm border-b border-blue-900/50 p-3 flex justify-between items-center shadow-2xl sticky top-0 z-50">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-gradient-to-r from-blue-600 to-blue-500 rounded-lg flex items-center justify-center">
@@ -138,7 +130,7 @@ function App() {
             </div>
           </div>
           
-          {/* Mostrar el sector actual si estamos en un modo específico */}
+          {/* Mostrar el sector actual */}
           <div className="text-center">
             {modoAcceso === 'recorrido' && (
               <>
@@ -187,12 +179,6 @@ function App() {
             <RecorridoOcupacion 
               perfilUsuario={datosUsuario}
               slugPiso={slugCompleto}
-            />
-          ) : modoAcceso === 'ocupacion' ? (
-            // Legacy: modo antiguo de ocupación por habitación (se mantiene por compatibilidad)
-            <RegistroOcupacionQR 
-              perfilUsuario={datosUsuario}
-              onRegistroCompleto={() => {}}
             />
           ) : (
             <FormularioPiso 

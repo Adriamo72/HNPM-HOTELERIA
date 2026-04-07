@@ -17,8 +17,6 @@ const AdminDashboard = () => {
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   
-  const { spinner, showLoading, showSuccess, showError, hideSpinner } = useSpinner();
-  
   // Estados para modales
   const [mostrarModalAdmin, setMostrarModalAdmin] = useState(false);
   const [mostrarModalCambioPin, setMostrarModalCambioPin] = useState(false);
@@ -816,10 +814,6 @@ const AdminDashboard = () => {
       return next;
     });
   }, [habitacionesEspeciales]);
-
-  if (spinner.visible) {
-    return <SpinnerOverlay mensaje={spinner.mensaje} tipo={spinner.tipo} />;
-  }
 
   return (
     <div className="p-6 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
