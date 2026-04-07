@@ -16,6 +16,7 @@ const AdminDashboard = () => {
   const [stockLavadero, setStockLavadero] = useState({});
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
+  const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   
   // Estados para modales
   const [mostrarModalAdmin, setMostrarModalAdmin] = useState(false);
@@ -41,23 +42,25 @@ const AdminDashboard = () => {
   const [habitacionStatus, setHabitacionStatus] = useState({});
   const [habitacionesAbiertas, setHabitacionesAbiertas] = useState({});
   const [croquisKey, setCroquisKey] = useState(0);
-  const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   
   const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
   const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STOCK_CRITICO = 5;
 
+  const mostrarSplash = (mensaje) => {
+    setNotificacion({ visible: true, mensaje });
+    setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
+  };
+
   const formatearResumenHabitacion = (config) => {
     if (config.tipo === 'INTERNACION') {
       const camas = Number(config.camas) || 1;
       return `INTERNACIÓN (${camas} cama${camas === 1 ? '' : 's'})`;
     }
-
     if (config.tipo === 'EN REPARACION') {
       return 'EN REPARACIÓN';
     }
-
     const texto = config.texto ? config.texto.trim() : '';
     return `OTROS (${texto})`;
   };
@@ -65,11 +68,6 @@ const AdminDashboard = () => {
   const truncarTexto = (texto, largo = 28) => {
     if (!texto) return texto;
     return texto.length > largo ? `${texto.slice(0, largo - 1)}…` : texto;
-  };
-
-  const mostrarSplash = (mensaje) => {
-    setNotificacion({ visible: true, mensaje });
-    setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
   };
 
   const actualizarHabitacionStatus = (habId, field, value) => {
@@ -125,7 +123,7 @@ const AdminDashboard = () => {
     const config = habitacionStatus[habId];
     if (!config) return;
 
-    showLoading('GUARDANDO CONFIGURACIÓN...');
+    mostrarSplash('GUARDANDO CONFIGURACIÓN...');
     const fecha = new Date().toISOString().split('T')[0];
 
     try {
@@ -164,7 +162,7 @@ const AdminDashboard = () => {
 
       if (error) throw error;
 
-      showSuccess('CONFIGURACIÓN GUARDADA');
+      mostrarSplash('✅ CONFIGURACIÓN GUARDADA');
       setHabitacionesAbiertas(prev => ({
         ...prev,
         [habId]: false
@@ -174,7 +172,7 @@ const AdminDashboard = () => {
       if (habitacion) await cargarEstadoHabitaciones([habitacion]);
     } catch (error) {
       console.error('Error guardando estado de habitación:', error);
-      showError('ERROR AL GUARDAR');
+      mostrarSplash('❌ ERROR AL GUARDAR');
     }
   };
 
@@ -237,7 +235,7 @@ const AdminDashboard = () => {
 
   const cargarDatos = async () => {
     setSincronizando(true);
-    showLoading('SINCRONIZANDO DATOS...');
+    mostrarSplash('🔄 SINCRONIZANDO...');
     
     try {
       const resPers = await supabase.from('personal').select('*').order('apellido');
@@ -299,11 +297,11 @@ const AdminDashboard = () => {
       
       await cargarEstadoHabitaciones(resHabs.data || []);
       
-      showSuccess('DATOS SINCRONIZADOS');
+      mostrarSplash('✅ DATOS SINCRONIZADOS');
       
     } catch (error) {
       console.error(error);
-      showError('ERROR AL SINCRONIZAR');
+      mostrarSplash('❌ ERROR AL SINCRONIZAR');
     } finally {
       setSincronizando(false);
     }
@@ -325,21 +323,21 @@ const AdminDashboard = () => {
 
   const agregarAdmin = async () => {
     if (!nuevoAdmin.usuario.trim()) {
-      showError('INGRESE UN USUARIO');
+      mostrarSplash('❌ INGRESE UN USUARIO');
       return;
     }
     
     if (nuevoAdmin.pin.length < 4) {
-      showError('EL PIN DEBE TENER 4 DÍGITOS');
+      mostrarSplash('❌ EL PIN DEBE TENER 4 DÍGITOS');
       return;
     }
     
     if (nuevoAdmin.pin !== nuevoAdmin.confirmarPin) {
-      showError('LOS PINS NO COINCIDEN');
+      mostrarSplash('❌ LOS PINS NO COINCIDEN');
       return;
     }
     
-    showLoading('CREANDO ADMINISTRADOR...');
+    mostrarSplash('🔄 CREANDO ADMINISTRADOR...');
     
     try {
       const salt = bcrypt.genSaltSync(10);
@@ -356,21 +354,21 @@ const AdminDashboard = () => {
       
       if (error) {
         if (error.code === '23505') {
-          showError('EL USUARIO YA EXISTE');
+          mostrarSplash('❌ EL USUARIO YA EXISTE');
         } else {
-          showError('ERROR AL CREAR ADMINISTRADOR');
+          mostrarSplash('❌ ERROR AL CREAR ADMINISTRADOR');
         }
         return;
       }
       
-      showSuccess(`ADMIN ${nuevoAdmin.usuario} CREADO`);
+      mostrarSplash(`✅ ADMIN ${nuevoAdmin.usuario} CREADO`);
       setNuevoAdmin({ usuario: '', pin: '', confirmarPin: '' });
       setMostrarModalAdmin(false);
       cargarAdmins();
       
     } catch (error) {
       console.error("Error:", error);
-      showError('ERROR AL CREAR ADMINISTRADOR');
+      mostrarSplash('❌ ERROR AL CREAR ADMINISTRADOR');
     }
   };
 
@@ -386,27 +384,27 @@ const AdminDashboard = () => {
       
       if (error) throw error;
       
-      showSuccess(estadoActual ? "ADMINISTRADOR DESACTIVADO" : "ADMINISTRADOR ACTIVADO");
+      mostrarSplash(estadoActual ? "✅ ADMINISTRADOR DESACTIVADO" : "✅ ADMINISTRADOR ACTIVADO");
       cargarAdmins();
       
     } catch (error) {
       console.error("Error:", error);
-      showError("ERROR AL CAMBIAR ESTADO");
+      mostrarSplash("❌ ERROR AL CAMBIAR ESTADO");
     }
   };
 
   const cambiarPinAdmin = async () => {
     if (nuevoPin.length < 4) {
-      showError("EL PIN DEBE TENER 4 DÍGITOS");
+      mostrarSplash("❌ EL PIN DEBE TENER 4 DÍGITOS");
       return;
     }
     
     if (nuevoPin !== confirmarNuevoPin) {
-      showError("LOS PINS NO COINCIDEN");
+      mostrarSplash("❌ LOS PINS NO COINCIDEN");
       return;
     }
     
-    showLoading("CAMBIANDO PIN...");
+    mostrarSplash("🔄 CAMBIANDO PIN...");
     
     try {
       const salt = bcrypt.genSaltSync(10);
@@ -424,7 +422,7 @@ const AdminDashboard = () => {
       
       if (error) throw error;
       
-      showSuccess(`PIN CAMBIADO PARA ${adminSeleccionado.usuario}`);
+      mostrarSplash(`✅ PIN CAMBIADO PARA ${adminSeleccionado.usuario}`);
       setMostrarModalCambioPin(false);
       setNuevoPin('');
       setConfirmarNuevoPin('');
@@ -432,13 +430,13 @@ const AdminDashboard = () => {
       
     } catch (error) {
       console.error("Error:", error);
-      showError("ERROR AL CAMBIAR PIN");
+      mostrarSplash("❌ ERROR AL CAMBIAR PIN");
     }
   };
 
   const eliminarAdmin = async (adminId, usuario) => {
     if (window.confirm(`¿Eliminar permanentemente al administrador "${usuario}"?\n\nEsta acción no se puede deshacer.`)) {
-      showLoading("ELIMINANDO ADMINISTRADOR...");
+      mostrarSplash("🔄 ELIMINANDO ADMINISTRADOR...");
       
       try {
         const { error } = await supabase
@@ -448,18 +446,18 @@ const AdminDashboard = () => {
         
         if (error) throw error;
         
-        showSuccess(`ADMINISTRADOR ${usuario} ELIMINADO`);
+        mostrarSplash(`✅ ADMINISTRADOR ${usuario} ELIMINADO`);
         cargarAdmins();
         
       } catch (error) {
         console.error("Error:", error);
-        showError("ERROR AL ELIMINAR ADMINISTRADOR");
+        mostrarSplash("❌ ERROR AL ELIMINAR ADMINISTRADOR");
       }
     }
   };
 
   const generarQRPersonal = async (personal) => {
-    showLoading('GENERANDO CREDENCIAL...');
+    mostrarSplash('🔄 GENERANDO CREDENCIAL...');
     
     try {
       const token = crypto.randomUUID ? crypto.randomUUID() : 
@@ -493,7 +491,7 @@ const AdminDashboard = () => {
       const win = window.open('', '_blank', 'width=600,height=700,menubar=no,toolbar=no,location=no');
       
       if (!win) {
-        showError('PERMITIR POPUPS PARA ESTE SITIO');
+        mostrarSplash('❌ PERMITIR POPUPS PARA ESTE SITIO');
         return;
       }
       
@@ -606,18 +604,18 @@ const AdminDashboard = () => {
       `);
       win.document.close();
       
-      showSuccess(`CREDENCIAL DE ${personal.apellido} GENERADA`);
+      mostrarSplash(`✅ CREDENCIAL DE ${personal.apellido} GENERADA`);
       
     } catch (error) {
       console.error("Error generando QR:", error);
-      showError('ERROR AL GENERAR CREDENCIAL');
+      mostrarSplash('❌ ERROR AL GENERAR CREDENCIAL');
     }
   };
 
   const eliminarMovimiento = async (id) => {
     if (!window.confirm("⚠️ ¿ELIMINAR REGISTRO?\n\nEl stock se recalculará automáticamente después de eliminar.")) return;
     
-    showLoading('ELIMINANDO REGISTRO...');
+    mostrarSplash('🔄 ELIMINANDO REGISTRO...');
     
     try {
       const { data: movimiento, error: getError } = await supabase
@@ -636,18 +634,18 @@ const AdminDashboard = () => {
       if (delError) throw delError;
       
       await recalcularStockPiso(movimiento.piso_id);
-      showSuccess('REGISTRO ELIMINADO');
+      mostrarSplash('✅ REGISTRO ELIMINADO');
       cargarDatos();
       
     } catch (error) {
       console.error("Error:", error);
-      showError('ERROR AL ELIMINAR');
+      mostrarSplash('❌ ERROR AL ELIMINAR');
     }
   };
 
   const eliminarPiso = async (pisoId, pisoNombre) => {
     if (window.confirm(`⚠️ ¿ELIMINAR COMPLETAMENTE el piso "${pisoNombre}"?\n\nSe eliminarán todos los registros asociados.\n\nEsta acción NO SE PUEDE DESHACER.`)) {
-      showLoading('ELIMINANDO SECTOR...');
+      mostrarSplash('🔄 ELIMINANDO SECTOR...');
       
       try {
         await supabase.from('movimientos_stock').delete().eq('piso_id', pisoId);
@@ -655,11 +653,11 @@ const AdminDashboard = () => {
         await supabase.from('habitaciones_especiales').delete().eq('piso_id', pisoId);
         await supabase.from('pisos').delete().eq('id', pisoId);
         
-        showSuccess(`SECTOR "${pisoNombre}" ELIMINADO`);
+        mostrarSplash(`✅ SECTOR "${pisoNombre}" ELIMINADO`);
         cargarDatos();
       } catch (error) {
         console.error("Error:", error);
-        showError('ERROR AL ELIMINAR SECTOR');
+        mostrarSplash('❌ ERROR AL ELIMINAR SECTOR');
       }
     }
   };
@@ -667,35 +665,35 @@ const AdminDashboard = () => {
   const agregarPersonal = async (e) => {
     e.preventDefault();
     if (!nuevoMiembro.dni || !nuevoMiembro.nombre || !nuevoMiembro.apellido) {
-      showError('COMPLETE TODOS LOS CAMPOS');
+      mostrarSplash('❌ COMPLETE TODOS LOS CAMPOS');
       return;
     }
     
-    showLoading('REGISTRANDO PERSONAL...');
+    mostrarSplash('🔄 REGISTRANDO PERSONAL...');
     
     const { error } = await supabase.from('personal').insert([nuevoMiembro]);
     
     if (!error) {
       setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
-      showSuccess('PERSONAL REGISTRADO');
+      mostrarSplash('✅ PERSONAL REGISTRADO');
       setMostrarModalPersonal(false);
       cargarDatos();
     } else {
-      showError('ERROR AL REGISTRAR PERSONAL');
+      mostrarSplash('❌ ERROR AL REGISTRAR PERSONAL');
     }
   };
 
   const eliminarPersonal = async (dni, nombre) => {
     if (window.confirm(`¿Eliminar al personal "${nombre}"?`)) {
-      showLoading('ELIMINANDO PERSONAL...');
+      mostrarSplash('🔄 ELIMINANDO PERSONAL...');
       
       const { error } = await supabase.from('personal').delete().eq('dni', dni);
       
       if (!error) { 
-        showSuccess('PERSONAL ELIMINADO'); 
+        mostrarSplash('✅ PERSONAL ELIMINADO'); 
         cargarDatos(); 
       } else {
-        showError('ERROR AL ELIMINAR PERSONAL');
+        mostrarSplash('❌ ERROR AL ELIMINAR PERSONAL');
       }
     }
   };
@@ -703,48 +701,48 @@ const AdminDashboard = () => {
   const agregarPiso = async (e) => {
     e.preventDefault();
     if (!nuevoPiso.nombre_piso.trim()) {
-      showError('INGRESE UN NOMBRE PARA EL SECTOR');
+      mostrarSplash('❌ INGRESE UN NOMBRE PARA EL SECTOR');
       return;
     }
     
-    showLoading('CREANDO SECTOR...');
+    mostrarSplash('🔄 CREANDO SECTOR...');
     const slug = nuevoPiso.nombre_piso.toLowerCase().replace(/ /g, '-');
     const { error } = await supabase.from('pisos').insert([{ nombre_piso: nuevoPiso.nombre_piso.trim(), slug }]);
     
     if (!error) {
       setNuevoPiso({ nombre_piso: '' });
-      showSuccess('SECTOR CREADO');
+      mostrarSplash('✅ SECTOR CREADO');
       setMostrarModalPiso(false);
       cargarDatos();
     } else {
-      showError('ERROR AL CREAR SECTOR');
+      mostrarSplash('❌ ERROR AL CREAR SECTOR');
     }
   };
 
   const agregarHabitacion = async (pisoId, pisoSlug) => {
     const nombre = prompt("Nombre de la Habitación (Ej: Medico Interno):");
     if(nombre && nombre.trim()) {
-      showLoading('CREANDO HABITACIÓN...');
+      mostrarSplash('🔄 CREANDO HABITACIÓN...');
       const slugH = `${pisoSlug}-${nombre.toLowerCase().replace(/ /g, '-')}`;
       const { error } = await supabase.from('habitaciones_especiales').insert([{ piso_id: pisoId, nombre: nombre.trim(), slug: slugH }]);
       if(!error) { 
-        showSuccess('HABITACIÓN CREADA'); 
+        mostrarSplash('✅ HABITACIÓN CREADA'); 
         cargarDatos(); 
       } else {
-        showError('ERROR AL CREAR HABITACIÓN');
+        mostrarSplash('❌ ERROR AL CREAR HABITACIÓN');
       }
     }
   };
 
   const eliminarHabitacion = async (id, nombre) => {
     if(window.confirm(`¿Eliminar habitación "${nombre}"?`)) { 
-      showLoading('ELIMINANDO HABITACIÓN...');
+      mostrarSplash('🔄 ELIMINANDO HABITACIÓN...');
       const { error } = await supabase.from('habitaciones_especiales').delete().eq('id', id); 
       if(!error) { 
-        showSuccess('HABITACIÓN ELIMINADA'); 
+        mostrarSplash('✅ HABITACIÓN ELIMINADA'); 
         cargarDatos(); 
       } else {
-        showError('ERROR AL ELIMINAR HABITACIÓN');
+        mostrarSplash('❌ ERROR AL ELIMINAR HABITACIÓN');
       }
     }
   };
@@ -771,12 +769,12 @@ const AdminDashboard = () => {
 
   const toggleAuditoria = async () => {
     const nuevoEstado = !auditoriaHabilitada;
-    showLoading(nuevoEstado ? 'ACTIVANDO AUDITORÍA...' : 'DESACTIVANDO AUDITORÍA...');
+    mostrarSplash(nuevoEstado ? '🔄 ACTIVANDO AUDITORÍA...' : '🔄 DESACTIVANDO AUDITORÍA...');
     
     await supabase.from('configuracion_sistema').upsert({ clave: 'MODO_AUDITORIA', valor: nuevoEstado.toString() });
     setAuditoriaHabilitada(nuevoEstado);
     
-    showSuccess(nuevoEstado ? 'AUDITORÍA ACTIVADA' : 'AUDITORÍA CERRADA');
+    mostrarSplash(nuevoEstado ? '🔴 AUDITORÍA ACTIVADA' : '🟢 AUDITORÍA CERRADA');
   };
 
   const calcularTotalGlobal = () => {
@@ -791,6 +789,7 @@ const AdminDashboard = () => {
   };
 
   const totalGlobal = calcularTotalGlobal();
+  
   const formatearFechaGuardia = (fechaISO) => {
     const fecha = new Date(fechaISO);
     const opciones = { weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
@@ -843,9 +842,7 @@ const AdminDashboard = () => {
       {activeTab === 'croquis' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
-              HOTELERIA
-            </h2>
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">HOTELERIA</h2>
             <select
               value={pisoSeleccionado}
               onChange={(e) => {
@@ -1093,23 +1090,15 @@ const AdminDashboard = () => {
                     <div className="flex justify-between items-center flex-wrap gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold text-white uppercase">
-                            {admin.usuario}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                            admin.activo ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
-                          }`}>
+                          <span className="text-lg font-bold text-white uppercase">{admin.usuario}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${admin.activo ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
                             {admin.activo ? 'ACTIVO' : 'INACTIVO'}
                           </span>
                         </div>
                         <div className="flex gap-3 mt-1 text-[10px] text-slate-500 flex-wrap">
                           <span>🕐 Creado: {new Date(admin.created_at).toLocaleDateString()}</span>
-                          {admin.ultimo_acceso && (
-                            <span>📱 Último acceso: {new Date(admin.ultimo_acceso).toLocaleString()}</span>
-                          )}
-                          {admin.intentos_fallidos > 0 && (
-                            <span className="text-orange-400">⚠️ Intentos fallidos: {admin.intentos_fallidos}</span>
-                          )}
+                          {admin.ultimo_acceso && <span>📱 Último acceso: {new Date(admin.ultimo_acceso).toLocaleString()}</span>}
+                          {admin.intentos_fallidos > 0 && <span className="text-orange-400">⚠️ Intentos fallidos: {admin.intentos_fallidos}</span>}
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -1119,24 +1108,18 @@ const AdminDashboard = () => {
                             setMostrarModalCambioPin(true);
                           }}
                           className="px-3 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg text-xs font-semibold hover:bg-yellow-600 hover:text-white transition-all"
-                          title="Cambiar PIN"
                         >
                           🔑 Cambiar PIN
                         </button>
                         <button
                           onClick={() => cambiarEstadoAdmin(admin.id, admin.activo)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            admin.activo 
-                              ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600 hover:text-white'
-                              : 'bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white'
-                          }`}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${admin.activo ? 'bg-orange-600/20 text-orange-400 hover:bg-orange-600 hover:text-white' : 'bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white'}`}
                         >
                           {admin.activo ? '🔴 Desactivar' : '🟢 Activar'}
                         </button>
                         <button
                           onClick={() => eliminarAdmin(admin.id, admin.usuario)}
                           className="px-3 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-600 hover:text-white transition-all"
-                          title="Eliminar permanentemente"
                         >
                           🗑️ Eliminar
                         </button>
@@ -1145,9 +1128,7 @@ const AdminDashboard = () => {
                   </div>
                 ))
               ) : (
-                <div className="text-center text-slate-500 text-sm py-8">
-                  📭 No hay administradores registrados
-                </div>
+                <div className="text-center text-slate-500 text-sm py-8">📭 No hay administradores registrados</div>
               )}
             </div>
           </section>
@@ -1176,19 +1157,8 @@ const AdminDashboard = () => {
                       <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{p.rol}]</span>
                     </span>
                     <div className="flex gap-2">
-                      <button 
-                        onClick={() => generarQRPersonal(p)}
-                        className="bg-green-600/20 text-green-400 text-xs font-semibold uppercase hover:bg-green-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
-                        title="Generar credencial QR"
-                      >
-                        📱 QR
-                      </button>
-                      <button 
-                        onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} 
-                        className="bg-red-600/20 text-red-400 text-xs font-semibold uppercase hover:bg-red-600 hover:text-white transition-all px-3 py-1.5 rounded-lg"
-                      >
-                        Eliminar
-                      </button>
+                      <button onClick={() => generarQRPersonal(p)} className="bg-green-600/20 text-green-400 text-xs font-semibold uppercase hover:bg-green-600 hover:text-white transition-all px-3 py-1.5 rounded-lg">📱 QR</button>
+                      <button onClick={() => eliminarPersonal(p.dni, `${p.jerarquia} ${p.apellido}`)} className="bg-red-600/20 text-red-400 text-xs font-semibold uppercase hover:bg-red-600 hover:text-white transition-all px-3 py-1.5 rounded-lg">Eliminar</button>
                     </div>
                   </div>
                 ))
@@ -1205,12 +1175,7 @@ const AdminDashboard = () => {
                 <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">🏥 Sectores y QRs</h3>
                 <p className="text-xs text-slate-500 mt-1">Pisos, habitaciones y códigos QR</p>
               </div>
-              <button
-                onClick={() => setMostrarModalPiso(true)}
-                className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
-              >
-                + Nuevo Sector
-              </button>
+              <button onClick={() => setMostrarModalPiso(true)} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all">+ Nuevo Sector</button>
             </div>
             
             <div className="grid grid-cols-1 gap-5">
@@ -1220,73 +1185,29 @@ const AdminDashboard = () => {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                       <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{p.nombre_piso}</span>
                       <div className="flex flex-wrap gap-2">
-                        <button 
-                          onClick={() => descargarQR(`/recorrido/${p.slug}`, `RECORRIDO OCUPACIÓN - ${p.nombre_piso}`)} 
-                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-purple-500 border border-purple-900/30 hover:bg-purple-900/30 transition-all"
-                        >
-                          🏥 QR Recorrido
-                        </button>
-                        <button 
-                          onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} 
-                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
-                        >
-                          🗄️ QR Pañol
-                        </button>
-                        <button 
-                          onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} 
-                          className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
-                        >
-                          🧺 QR Lavadero
-                        </button>
-                        <button 
-                          onClick={() => eliminarPiso(p.id, p.nombre_piso)} 
-                          className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
-                          title="Eliminar sector y todos sus registros"
-                        >
-                          🗑️ Eliminar
-                        </button>
+                        <button onClick={() => descargarQR(`/recorrido/${p.slug}`, `RECORRIDO OCUPACIÓN - ${p.nombre_piso}`)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-purple-500 border border-purple-900/30 hover:bg-purple-900/30 transition-all">🏥 QR Recorrido</button>
+                        <button onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all">🗄️ QR Pañol</button>
+                        <button onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all">🧺 QR Lavadero</button>
+                        <button onClick={() => eliminarPiso(p.id, p.nombre_piso)} className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all">🗑️ Eliminar</button>
                       </div>
                     </div>
                     
-                    {/* Habitaciones */}
                     <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
-                        <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
-                          🏠 Habitaciones ({habitacionesEspeciales.filter(h => h.piso_id === p.id).length})
-                        </p>
-                        <button 
-                          onClick={() => agregarHabitacion(p.id, p.slug)} 
-                          className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all"
-                        >
-                          + Agregar Habitación
-                        </button>
+                        <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">🏠 Habitaciones ({habitacionesEspeciales.filter(h => h.piso_id === p.id).length})</p>
+                        <button onClick={() => agregarHabitacion(p.id, p.slug)} className="bg-blue-600/20 text-blue-400 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase border border-blue-600/30 hover:bg-blue-600 hover:text-white transition-all">+ Agregar Habitación</button>
                       </div>
                       
                       <div className="flex flex-wrap gap-2">
                         {habitacionesEspeciales.filter(h => h.piso_id === p.id).length > 0 ? (
                           habitacionesEspeciales.filter(h => h.piso_id === p.id).map(hab => {
                             const config = habitacionStatus[hab.id] || { tipo: 'OTROS', camas: '1', texto: '' };
-                            const statusBg = config.tipo === 'INTERNACION'
-                              ? 'bg-emerald-900/30 border-emerald-600/40'
-                              : config.tipo === 'EN REPARACION'
-                                ? 'bg-amber-900/30 border-amber-600/40'
-                                : 'bg-slate-800/70 border-slate-700';
-                            const statusText = config.tipo === 'INTERNACION'
-                              ? 'text-emerald-300'
-                              : config.tipo === 'EN REPARACION'
-                                ? 'text-amber-300'
-                                : 'text-slate-300';
+                            const statusBg = config.tipo === 'INTERNACION' ? 'bg-emerald-900/30 border-emerald-600/40' : config.tipo === 'EN REPARACION' ? 'bg-amber-900/30 border-amber-600/40' : 'bg-slate-800/70 border-slate-700';
+                            const statusText = config.tipo === 'INTERNACION' ? 'text-emerald-300' : config.tipo === 'EN REPARACION' ? 'text-amber-300' : 'text-slate-300';
 
                             return (
                               <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] max-w-[320px] w-full sm:w-[320px] ${statusBg}`}>
-                                <details
-                                  className="group"
-                                  open={!!habitacionesAbiertas[hab.id]}
-                                  onToggle={(e) => setHabitacionesAbiertas(prev => ({
-                                    ...prev,
-                                    [hab.id]: e.target.open
-                                  }))}
-                                >
+                                <details className="group" open={!!habitacionesAbiertas[hab.id]} onToggle={(e) => setHabitacionesAbiertas(prev => ({ ...prev, [hab.id]: e.target.open }))}>
                                   <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
                                     <div className="flex flex-col gap-1">
                                       <div className="flex items-center gap-2">
@@ -1297,96 +1218,37 @@ const AdminDashboard = () => {
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({
-                                          ...prev,
-                                          [hab.id]: !prev[hab.id]
-                                        })); }}
-                                        className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all"
-                                        title="Ver configuración"
-                                      >
-                                        ⚙️
-                                      </button>
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }}
-                                        className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
-                                        title="Eliminar habitación"
-                                      >
-                                        ×
-                                      </button>
+                                      <button onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({ ...prev, [hab.id]: !prev[hab.id] })); }} className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all">⚙️</button>
+                                      <button onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }} className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">×</button>
                                     </div>
                                   </summary>
-
                                   <div className="mt-3 space-y-3 text-sm">
                                     <div className="grid gap-2 sm:grid-cols-[1.4fr_0.9fr]">
-                                      <select
-                                        value={config.tipo}
-                                        onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
-                                      >
+                                      <select value={config.tipo} onChange={(e) => actualizarHabitacionStatus(hab.id, 'tipo', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500">
                                         <option value="INTERNACION">INTERNACIÓN</option>
                                         <option value="EN REPARACION">EN REPARACIÓN</option>
                                         <option value="OTROS">OTROS</option>
                                       </select>
-                                      <button
-                                        onClick={() => guardarEstadoHabitacion(hab.id)}
-                                        className="w-full bg-slate-700 text-slate-100 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] hover:bg-slate-600 transition-all"
-                                      >
-                                        💾 Guardar
-                                      </button>
+                                      <button onClick={() => guardarEstadoHabitacion(hab.id)} className="w-full bg-slate-700 text-slate-100 rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] hover:bg-slate-600 transition-all">💾 Guardar</button>
                                     </div>
-
                                     {config.tipo === 'INTERNACION' && (
                                       <div className="grid gap-2 sm:grid-cols-2">
-                                        <input
-                                          type="number"
-                                          min="1"
-                                          value={config.camas}
-                                          onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
-                                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
-                                          placeholder="Camas totales"
-                                        />
-                                        <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">
-                                          {config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}
-                                        </div>
+                                        <input type="number" min="1" value={config.camas} onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Camas totales" />
+                                        <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">{config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}</div>
                                       </div>
                                     )}
-
                                     {config.tipo === 'OTROS' && (
-                                      <input
-                                        type="text"
-                                        value={config.texto}
-                                        onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)}
-                                        placeholder="Oficina, guardia, médico interno..."
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
-                                      />
+                                      <input type="text" value={config.texto} onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)} placeholder="Oficina, guardia, médico interno..." className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500" />
                                     )}
-
                                     <div className="flex flex-wrap gap-2 items-center">
                                       {config.tipo === 'INTERNACION' && (
-                                        <button
-                                          onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)}
-                                          className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-emerald-600/20 transition-all"
-                                          title="QR para registro de ocupación de pacientes"
-                                        >
-                                          🏥 QR Ocupación
-                                        </button>
+                                        <button onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)} className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-emerald-600/20 transition-all">🏥 QR Ocupación</button>
                                       )}
-
                                       {config.tipo === 'OTROS' && (
-                                        <button
-                                          onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)}
-                                          className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all"
-                                          title="QR para registro de ropa de cama limpia"
-                                        >
-                                          🧺 QR Ropa limpia
-                                        </button>
+                                        <button onClick={() => descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`)} className="inline-flex items-center gap-2 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-slate-700 transition-all">🧺 QR Ropa limpia</button>
                                       )}
-
                                       {config.tipo === 'EN REPARACION' && (
-                                        <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">
-                                          🔧 En reparación
-                                        </span>
+                                        <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">🔧 En reparación</span>
                                       )}
                                     </div>
                                   </div>
@@ -1415,63 +1277,22 @@ const AdminDashboard = () => {
           <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-purple-800">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-black text-purple-400">Nuevo Administrador</h3>
-              <button 
-                onClick={() => setMostrarModalAdmin(false)}
-                className="text-slate-500 hover:text-white text-2xl"
-              >
-                ×
-              </button>
+              <button onClick={() => setMostrarModalAdmin(false)} className="text-slate-500 hover:text-white text-2xl">×</button>
             </div>
-            
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                  Usuario
-                </label>
-                <input
-                  type="text"
-                  value={nuevoAdmin.usuario}
-                  onChange={(e) => setNuevoAdmin({...nuevoAdmin, usuario: e.target.value})}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="ej: admin, juan, etc"
-                  autoComplete="off"
-                />
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Usuario</label>
+                <input type="text" value={nuevoAdmin.usuario} onChange={(e) => setNuevoAdmin({...nuevoAdmin, usuario: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-purple-500" placeholder="ej: admin, juan, etc" autoComplete="off" />
               </div>
-              
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                  PIN (mínimo 4 dígitos)
-                </label>
-                <input
-                  type="password"
-                  value={nuevoAdmin.pin}
-                  onChange={(e) => setNuevoAdmin({...nuevoAdmin, pin: e.target.value})}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="••••"
-                  maxLength="6"
-                />
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">PIN (mínimo 4 dígitos)</label>
+                <input type="password" value={nuevoAdmin.pin} onChange={(e) => setNuevoAdmin({...nuevoAdmin, pin: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-purple-500" placeholder="••••" maxLength="6" />
               </div>
-              
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                  Confirmar PIN
-                </label>
-                <input
-                  type="password"
-                  value={nuevoAdmin.confirmarPin}
-                  onChange={(e) => setNuevoAdmin({...nuevoAdmin, confirmarPin: e.target.value})}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="••••"
-                  maxLength="6"
-                />
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Confirmar PIN</label>
+                <input type="password" value={nuevoAdmin.confirmarPin} onChange={(e) => setNuevoAdmin({...nuevoAdmin, confirmarPin: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-purple-500" placeholder="••••" maxLength="6" />
               </div>
-              
-              <button
-                onClick={agregarAdmin}
-                className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-xl transition-all mt-4"
-              >
-                Crear Administrador
-              </button>
+              <button onClick={agregarAdmin} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-xl transition-all mt-4">Crear Administrador</button>
             </div>
           </div>
         </div>
@@ -1482,57 +1303,19 @@ const AdminDashboard = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-yellow-800">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-black text-yellow-400">
-                Cambiar PIN - {adminSeleccionado.usuario}
-              </h3>
-              <button 
-                onClick={() => {
-                  setMostrarModalCambioPin(false);
-                  setNuevoPin('');
-                  setConfirmarNuevoPin('');
-                }}
-                className="text-slate-500 hover:text-white text-2xl"
-              >
-                ×
-              </button>
+              <h3 className="text-xl font-black text-yellow-400">Cambiar PIN - {adminSeleccionado.usuario}</h3>
+              <button onClick={() => { setMostrarModalCambioPin(false); setNuevoPin(''); setConfirmarNuevoPin(''); }} className="text-slate-500 hover:text-white text-2xl">×</button>
             </div>
-            
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                  Nuevo PIN (mínimo 4 dígitos)
-                </label>
-                <input
-                  type="password"
-                  value={nuevoPin}
-                  onChange={(e) => setNuevoPin(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-yellow-500"
-                  placeholder="••••"
-                  maxLength="6"
-                  autoFocus
-                />
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Nuevo PIN (mínimo 4 dígitos)</label>
+                <input type="password" value={nuevoPin} onChange={(e) => setNuevoPin(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-yellow-500" placeholder="••••" maxLength="6" autoFocus />
               </div>
-              
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                  Confirmar nuevo PIN
-                </label>
-                <input
-                  type="password"
-                  value={confirmarNuevoPin}
-                  onChange={(e) => setConfirmarNuevoPin(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-yellow-500"
-                  placeholder="••••"
-                  maxLength="6"
-                />
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Confirmar nuevo PIN</label>
+                <input type="password" value={confirmarNuevoPin} onChange={(e) => setConfirmarNuevoPin(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-center text-2xl tracking-widest outline-none focus:ring-2 focus:ring-yellow-500" placeholder="••••" maxLength="6" />
               </div>
-              
-              <button
-                onClick={cambiarPinAdmin}
-                className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-black py-3 rounded-xl transition-all mt-4"
-              >
-                Cambiar PIN
-              </button>
+              <button onClick={cambiarPinAdmin} className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-black py-3 rounded-xl transition-all mt-4">Cambiar PIN</button>
             </div>
           </div>
         </div>
@@ -1544,58 +1327,19 @@ const AdminDashboard = () => {
           <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-blue-800">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-black text-blue-400">Nuevo Personal</h3>
-              <button 
-                onClick={() => setMostrarModalPersonal(false)}
-                className="text-slate-500 hover:text-white text-2xl"
-              >
-                ×
-              </button>
+              <button onClick={() => setMostrarModalPersonal(false)} className="text-slate-500 hover:text-white text-2xl">×</button>
             </div>
-            
             <form onSubmit={agregarPersonal} className="space-y-3">
-              <input 
-                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Jerarquía (Ej: Enfermero)" 
-                value={nuevoMiembro.jerarquia} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, jerarquia: e.target.value})} 
-                required 
-              />
-              <input 
-                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Nombre" 
-                value={nuevoMiembro.nombre} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, nombre: e.target.value})} 
-                required 
-              />
-              <input 
-                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Apellido" 
-                value={nuevoMiembro.apellido} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, apellido: e.target.value})} 
-                required 
-              />
-              <input 
-                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-mono focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="DNI" 
-                value={nuevoMiembro.dni} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, dni: e.target.value})} 
-                required 
-              />
-              <select 
-                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-semibold text-blue-400 uppercase focus:ring-2 focus:ring-blue-500 outline-none" 
-                value={nuevoMiembro.rol} 
-                onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}
-              >
+              <input className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Jerarquía (Ej: Enfermero)" value={nuevoMiembro.jerarquia} onChange={e => setNuevoMiembro({...nuevoMiembro, jerarquia: e.target.value})} required />
+              <input className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Nombre" value={nuevoMiembro.nombre} onChange={e => setNuevoMiembro({...nuevoMiembro, nombre: e.target.value})} required />
+              <input className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Apellido" value={nuevoMiembro.apellido} onChange={e => setNuevoMiembro({...nuevoMiembro, apellido: e.target.value})} required />
+              <input className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-mono focus:ring-2 focus:ring-blue-500 outline-none" placeholder="DNI" value={nuevoMiembro.dni} onChange={e => setNuevoMiembro({...nuevoMiembro, dni: e.target.value})} required />
+              <select className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base font-semibold text-blue-400 uppercase focus:ring-2 focus:ring-blue-500 outline-none" value={nuevoMiembro.rol} onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}>
                 <option value="pañolero">🧺 Pañolero / Operador</option>
                 <option value="enfermero">🩺 Encargado de Piso</option>
                 <option value="ADMIN">⚙️ Administrador</option>
               </select>
-              <button 
-                type="submit" 
-                className="w-full bg-blue-600 p-3 rounded-xl font-semibold uppercase text-sm hover:bg-blue-500 transition-all"
-              >
-                Registrar Personal
-              </button>
+              <button type="submit" className="w-full bg-blue-600 p-3 rounded-xl font-semibold uppercase text-sm hover:bg-blue-500 transition-all">Registrar Personal</button>
             </form>
           </div>
         </div>
@@ -1607,28 +1351,11 @@ const AdminDashboard = () => {
           <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-blue-800">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-black text-blue-400">Nuevo Sector</h3>
-              <button 
-                onClick={() => setMostrarModalPiso(false)}
-                className="text-slate-500 hover:text-white text-2xl"
-              >
-                ×
-              </button>
+              <button onClick={() => setMostrarModalPiso(false)} className="text-slate-500 hover:text-white text-2xl">×</button>
             </div>
-            
             <form onSubmit={agregarPiso} className="space-y-4">
-              <input 
-                className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Nombre del sector (Ej: Piso 1, Terapia, Guardia...)" 
-                value={nuevoPiso.nombre_piso} 
-                onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} 
-                required 
-              />
-              <button 
-                type="submit" 
-                className="w-full bg-blue-600 p-3 rounded-xl font-semibold uppercase text-sm hover:bg-blue-500 transition-all"
-              >
-                Crear Sector
-              </button>
+              <input className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Nombre del sector (Ej: Piso 1, Terapia, Guardia...)" value={nuevoPiso.nombre_piso} onChange={e => setNuevoPiso({...nuevoPiso, nombre_piso: e.target.value})} required />
+              <button type="submit" className="w-full bg-blue-600 p-3 rounded-xl font-semibold uppercase text-sm hover:bg-blue-500 transition-all">Crear Sector</button>
             </form>
           </div>
         </div>
