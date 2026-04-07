@@ -401,7 +401,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
               GUARDANDO OCUPACIÓN...
             </span>
           ) : (
-            '✅ GUARDAR OCUPACIÓN'
+            'GUARDAR OCUPACIÓN'
           )}
         </button>
       </div>
