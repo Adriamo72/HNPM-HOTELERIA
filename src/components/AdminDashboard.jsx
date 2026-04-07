@@ -1058,25 +1058,36 @@ const recargarAdmin = () => cargarDatos('admin');
   };
 
   // ==================== GENERAR QR ====================
-  const descargarQR = (path, titulo) => {
-    const urlApp = `${window.location.origin}${path}`; 
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
-    const win = window.open('', '_blank');
-    win.document.write(`<html><head><title>${titulo}</title><style>
-      body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}
-      h1{text-transform:uppercase;font-size:24px;margin-bottom:10px;font-weight:900}
-      img{width:300px}
-      p{margin-top:15px;font-size:14px;font-weight:bold;color:#444}
-      @media print { button { display: none; } }
-    </style></head><body>
-      <h1>${titulo}</h1>
+  const descargarQR = (path, titulo, textoAdicional = '') => {
+  const urlApp = `${window.location.origin}${path}`; 
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
+  const win = window.open('', '_blank');
+  
+  const textoExtra = textoAdicional ? `<p style="margin-top:10px;font-size:12px;color:#666;max-width:300px;background:#f0f0f0;padding:8px;border-radius:8px;">${textoAdicional}</p>` : '';
+  
+  win.document.write(`<html><head><title>${titulo}</title><style>
+    body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;background:#f5f5f5}
+    .container{background:white;padding:30px;border-radius:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1)}
+    h1{text-transform:uppercase;font-size:20px;margin-bottom:10px;font-weight:900;color:#1e293b}
+    h2{font-size:16px;color:#475569;margin-bottom:20px}
+    img{width:280px;margin:10px auto;border:1px solid #e2e8f0;border-radius:10px;padding:10px}
+    p{margin-top:15px;font-size:14px;font-weight:bold;color:#3b82f6}
+    .info{font-size:11px;color:#94a3b8;margin-top:10px}
+    @media print { button { display: none; } }
+  </style></head><body>
+    <div class="container">
+      <h1>${titulo.split(' - ')[0]}</h1>
+      <h2>${titulo.split(' - ')[1] || ''}</h2>
       <img src="${qrUrl}" />
+      ${textoExtra}
       <p>Dpto. Hotelería - HNPM</p>
-      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:16px">🖨️ Imprimir</button>
+      <div class="info">Escanee este código QR para registrar ropa blanca</div>
+      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;font-size:14px;background:#3b82f6;color:white;border:none;border-radius:10px;cursor:pointer">🖨️ Imprimir</button>
       <script>setTimeout(()=>{window.close()},30000)</script>
-    </body></html>`);
-    win.document.close();
-  };
+    </div>
+  </body></html>`);
+  win.document.close();
+};
 
   // ==================== TOGGLE AUDITORÍA ====================
   const toggleAuditoria = async () => {
@@ -1623,13 +1634,21 @@ const recargarAdmin = () => cargarDatos('admin');
                                     <div className="flex items-center gap-2">
   <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
   {config.tipo === 'OTROS' && (
-    <button
-      onClick={(e) => { e.stopPropagation(); descargarQR(`/habitacion/${hab.slug}`, `${hab.nombre} - ${p.nombre_piso} (Ropa blanca)`); }}
-      className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-1.5 py-0.5 rounded-lg text-[8px] font-semibold uppercase hover:bg-slate-600 transition-all"
-    >
-      🧺 Ropa
-    </button>
-  )}
+  <button
+    onClick={(e) => { 
+      e.stopPropagation(); 
+      const textoAmpliatorio = config.texto?.trim() || 'Sector especial';
+      descargarQR(
+        `/habitacion/${hab.slug}`, 
+        `${hab.nombre} - ${p.nombre_piso}`,
+        `📝 ${textoAmpliatorio} - Ropa de cama y blancos`
+      ); 
+    }}
+    className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-1.5 py-0.5 rounded-lg text-[8px] font-semibold uppercase hover:bg-slate-600 transition-all"
+  >
+    🧺 Ropa
+  </button>
+)}
 </div>
                                     <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate block mt-1`}>
                                       {truncarTexto(formatearResumenHabitacion(config), 28)}
