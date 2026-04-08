@@ -139,6 +139,17 @@ const VisualizadorDashboard = () => {
     return fecha.toLocaleDateString('es-AR', opciones);
   };
 
+  // Función para refrescar desde cualquier pestaña
+  const refrescarDatos = async () => {
+    if (activeTab === 'croquis') {
+      setCargandoCroquis(true);
+      await cargarDatos();
+      setCroquisKey(prev => prev + 1);
+    } else if (activeTab === 'monitor') {
+      await cargarDatos();
+    }
+  };
+
   return (
     <div className="p-6 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
       {/* Banner de solo lectura */}
@@ -161,16 +172,16 @@ const VisualizadorDashboard = () => {
           Pisos
         </button>
         <button 
-          onClick={() => setActiveTab('recorridos')} 
-          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'recorridos' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          Recorridos
-        </button>
-        <button 
           onClick={() => setActiveTab('monitor')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'monitor' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Monitor de Stock
+        </button>
+        <button 
+          onClick={() => setActiveTab('recorridos')} 
+          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'recorridos' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Recorridos
         </button>
       </div>
 
@@ -201,6 +212,7 @@ const VisualizadorDashboard = () => {
                 onChange={(e) => setFechaSeleccionada(e.target.value)}
                 className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
+              {/* Botón actualizar estilo RECORRIDOS */}
               <button 
                 onClick={refrescarDatos}
                 disabled={cargandoCroquis}
@@ -233,26 +245,12 @@ const VisualizadorDashboard = () => {
         </div>
       )}
 
-       {/* Panel Recorridos - Solo lectura */}
-      {activeTab === 'recorridos' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
-              REGISTRO DE RECORRIDOS
-            </h2>
-            <p className="text-xs text-slate-500">
-              Historial de recorridos de ocupación
-            </p>
-          </div>
-          <RecorridosList />
-        </div>
-      )}
-
       {/* Panel MONITOR - Solo lectura */}
       {activeTab === 'monitor' && (
         <div className="space-y-8">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Monitor de Stock</h2>
+            {/* Botón actualizar estilo RECORRIDOS */}
             <button 
               onClick={refrescarDatos}
               disabled={cargandoMonitor}
@@ -363,7 +361,6 @@ const VisualizadorDashboard = () => {
                             {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
                             {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
                             <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
-                            {/* Sin botón de eliminar para visualizadores */}
                           </div>
                         </div>
                       ))
@@ -375,6 +372,21 @@ const VisualizadorDashboard = () => {
               ))}
             </>
           )}
+        </div>
+      )}
+
+      {/* Panel RECORRIDOS */}
+      {activeTab === 'recorridos' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
+              REGISTRO DE RECORRIDOS
+            </h2>
+            <p className="text-xs text-slate-500">
+              Historial de recorridos de ocupación
+            </p>
+          </div>
+          <RecorridosList />
         </div>
       )}
 
