@@ -172,16 +172,16 @@ const VisualizadorDashboard = () => {
           Pisos
         </button>
         <button 
-          onClick={() => setActiveTab('monitor')} 
-          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'monitor' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          Monitor de Stock
-        </button>
-        <button 
           onClick={() => setActiveTab('recorridos')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'recorridos' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Recorridos
+        </button>
+        <button 
+          onClick={() => setActiveTab('monitor')} 
+          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'monitor' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Monitor de Stock
         </button>
       </div>
 
@@ -242,6 +242,21 @@ const VisualizadorDashboard = () => {
               <p className="text-slate-400">Selecciona un piso para ver su plano</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Panel RECORRIDOS */}
+      {activeTab === 'recorridos' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
+              REGISTRO DE RECORRIDOS
+            </h2>
+            <p className="text-xs text-slate-500">
+              Historial de recorridos de ocupación
+            </p>
+          </div>
+          <RecorridosList />
         </div>
       )}
 
@@ -372,21 +387,6 @@ const VisualizadorDashboard = () => {
               ))}
             </>
           )}
-        </div>
-      )}
-
-      {/* Panel RECORRIDOS */}
-      {activeTab === 'recorridos' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
-              REGISTRO DE RECORRIDOS
-            </h2>
-            <p className="text-xs text-slate-500">
-              Historial de recorridos de ocupación
-            </p>
-          </div>
-          <RecorridosList />
         </div>
       )}
 
