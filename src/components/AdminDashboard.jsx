@@ -175,7 +175,7 @@ const AdminDashboard = () => {
     let informacionAmpliatoria = null;
     
     if (config.tipo === 'INTERNACION') {
-      totalCamas = Number(config.camas) || 1;
+      totalCamas = Number(config.camas) || 0;
       camasOcupadas = Number(config.camas_ocupadas) || 0;
       observaciones = null;
       informacionAmpliatoria = config.informacion_ampliatoria || null;  // NUEVO
@@ -2040,12 +2040,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                                             type="number"
                                             min="0"
                                             value={config.camas}
-                                            onChange={(e) => {
-                                              const valor = e.target.value;
-                                              if (valor === '' || parseInt(valor) >= 0) {
-                                                actualizarHabitacionStatus(hab.id, 'camas', valor);
-                                              }
-                                            }}
+                                            onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
                                             className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
                                             placeholder="Camas totales"
                                           />
