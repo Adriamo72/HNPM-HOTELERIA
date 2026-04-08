@@ -410,13 +410,27 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' }
         };
       case 'activa':
-        const camasDisponibles = (ocup.total_camas || 1) - (ocup.camas_ocupadas || 0);
-        const parpadeo = camasDisponibles > 0;
+        const totalCamas = ocup.total_camas || 0;
+        const camasOcupadas = ocup.camas_ocupadas || 0;
+        const camasDisponibles = totalCamas - camasOcupadas;
+        const parpadeo = camasDisponibles > 0 && totalCamas > 0;
+        
+        // Si total camas es 0, mostrar estado especial
+        if (totalCamas === 0) {
+          return {
+            bg: 'border-gray-400',
+            text: 'text-white',
+            blink: false,
+            title: 'Habitación sin camas asignadas',
+            style: { backgroundColor: 'rgba(100, 100, 100, 0.8)' }
+          };
+        }
+        
         return {
           bg: 'border-green-400',
           text: 'text-white',
           blink: parpadeo,
-          title: `${ocup.camas_ocupadas}/${ocup.total_camas} camas ocupadas, ${camasDisponibles} disponibles`,
+          title: `${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles`,
           style: { backgroundColor: 'rgba(32, 205, 10, 0.9)' }
         };
       default:
@@ -667,7 +681,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             if (!ocup) {
               displayTexto = '?';
             } else if (ocup.tipo_habitacion === 'activa') {
-              displayTexto = ocup.camas_ocupadas;
+              const totalCamas = ocup.total_camas || 0;
+              if (totalCamas === 0) {
+                displayTexto = '🚫';  // Icono de sin camas
+              } else {
+                displayTexto = ocup.camas_ocupadas;
+              }
             } else if (ocup.tipo_habitacion === 'reparacion') {
               displayTexto = '🔧';
             } else {
