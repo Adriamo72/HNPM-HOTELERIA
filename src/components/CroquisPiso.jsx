@@ -390,53 +390,73 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
 
   // ==================== Obtener color según tipo y ocupación ====================
   const getColorPorTipoYOcupacion = (habitacion, ocup) => {
-    if (!ocup) return { bg: 'border-gray-400', text: 'text-white', blink: false, title: 'Sin registrar', style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } };
-    
-    switch (ocup.tipo_habitacion) {
-      case 'reparacion':
-        return {
-          bg: 'border-yellow-400',
-          text: 'text-black',
-          blink: false,
-          title: 'En reparación',
-          style: { backgroundColor: 'rgba(255, 248, 24, 0.95)' }
-        };
-      case 'otros':
-        return {
-          bg: 'border-gray-400',
-          text: 'text-white',
-          blink: false,
-          title: ocup.observaciones || 'Otros',
-          style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' }
-        };
-      case 'activa':
-        const totalCamas = ocup.total_camas || 0;
-        const camasOcupadas = ocup.camas_ocupadas || 0;
-        const camasDisponibles = totalCamas - camasOcupadas;
-        const parpadeo = camasDisponibles > 0 && totalCamas > 0;
-        
-        // Si total camas es 0, mostrar estado especial
-        if (totalCamas === 0) {
-          return {
-            bg: 'border-gray-400',
-            text: 'text-white',
-            blink: false,
-            title: 'Habitación sin camas asignadas',
-            style: { backgroundColor: 'rgba(100, 100, 100, 0.8)' }
-          };
-        }
-        
-        return {
-          bg: 'border-green-400',
-          text: 'text-white',
-          blink: parpadeo,
-          title: `${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles`,
-          style: { backgroundColor: 'rgba(32, 205, 10, 0.9)' }
-        };
-      default:
-        return { bg: 'border-gray-400', text: 'text-white', blink: false, title: 'Sin estado', style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } };
-    }
-  };
+  if (!ocup) {
+    return { 
+      bg: 'border-gray-400', 
+      text: 'text-white', 
+      blink: false, 
+      title: 'Sin registrar', 
+      style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } 
+    };
+  }
+  
+  switch (ocup.tipo_habitacion) {
+    case 'reparacion':
+      return {
+        bg: 'border-yellow-400',
+        text: 'text-black',
+        blink: false,
+        title: '🔧 EN REPARACIÓN',
+        style: { backgroundColor: 'rgba(255, 248, 24, 0.95)' }
+      };
+    case 'otros':
+      return {
+        bg: 'border-gray-400',
+        text: 'text-white',
+        blink: false,
+        title: ocup.observaciones || 'Otros',
+        style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' }
+      };
+    case 'activa':
+      const totalCamas = ocup.total_camas || 0;
+      const camasOcupadas = ocup.camas_ocupadas || 0;
+      const camasDisponibles = totalCamas - camasOcupadas;
+      const parpadeo = camasDisponibles > 0 && totalCamas > 0;
+      
+      // Formatear fecha de actualización
+      const fechaActualizacion = ocup.actualizado_en || ocup.created_at;
+      const fechaObj = new Date(fechaActualizacion);
+      const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
+      const horaFormateada = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+      
+      // Obtener información ampliatoria (ej: "HOSPITAL D DIA - AMBULATORIOS")
+      const infoAmpliatoria = ocup.informacion_ampliatoria || '';
+      
+      // Construir el tooltip según si tiene camas o no
+      let titleText = '';
+      if (totalCamas === 0) {
+        titleText = `${infoAmpliatoria ? infoAmpliatoria + '\n' : ''} Sin camas asignadas\n ${fechaFormateada} ${horaFormateada} hs`;
+      } else {
+        titleText = `${infoAmpliatoria ? infoAmpliatoria + '\n' : ''} ${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles\n ${fechaFormateada} ${horaFormateada} hs`;
+      }
+      
+      return {
+        bg: 'border-green-400',
+        text: 'text-white',
+        blink: parpadeo,
+        title: titleText,
+        style: { backgroundColor: 'rgba(32, 205, 10, 0.9)' }
+      };
+    default:
+      return { 
+        bg: 'border-gray-400', 
+        text: 'text-white', 
+        blink: false, 
+        title: 'Sin estado', 
+        style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } 
+      };
+  }
+};
 
   // ==================== Manejo de zoom ====================
   const handleWheel = (e) => {
@@ -683,7 +703,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             } else if (ocup.tipo_habitacion === 'activa') {
               const totalCamas = ocup.total_camas || 0;
               if (totalCamas === 0) {
-                displayTexto = '🚫';  // Icono de sin camas
+                displayTexto = '🚫';
               } else {
                 displayTexto = ocup.camas_ocupadas;
               }
