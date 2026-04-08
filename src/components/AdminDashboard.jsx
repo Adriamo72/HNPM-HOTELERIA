@@ -2038,9 +2038,14 @@ const eliminarVisualizador = async (visId, usuario) => {
                                         <div className="grid gap-2 sm:grid-cols-2">
                                           <input
                                             type="number"
-                                            min="1"
+                                            min="0"
                                             value={config.camas}
-                                            onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
+                                            onChange={(e) => {
+                                              const valor = e.target.value;
+                                              if (valor === '' || parseInt(valor) >= 0) {
+                                                actualizarHabitacionStatus(hab.id, 'camas', valor);
+                                              }
+                                            }}
                                             className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
                                             placeholder="Camas totales"
                                           />
