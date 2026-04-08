@@ -1389,13 +1389,16 @@ const eliminarVisualizador = async (visId, usuario) => {
   <div className="space-y-8">
     <div className="flex justify-between items-center">
       <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Control de Activos</h2>
-      <button 
-        onClick={recargarMonitor} 
-        disabled={cargandoMonitor}
-        className="text-2xl p-2 rounded-lg font-bold text-white hover:text-slate-300 transition-all disabled:opacity-50"
-      >
-        {cargandoMonitor ? '⌛' : '🔄'}
-      </button>
+      <button
+          onClick={recargarMonitor}
+          disabled={cargandoMonitor}
+          className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Actualizar
+        </button>
     </div>
     
     {cargandoMonitor ? (
@@ -1579,13 +1582,16 @@ const eliminarVisualizador = async (visId, usuario) => {
   <div className="space-y-6">
     <div className="flex justify-between items-center mb-4">
       <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Administración</h2>
-      <button 
-        onClick={recargarAdmin} 
-        disabled={cargandoAdmin}
-        className="text-2xl p-2 rounded-lg font-bold text-white hover:text-slate-300 transition-all disabled:opacity-50"
-      >
-        {cargandoAdmin ? '⌛' : '🔄'}
-      </button>
+      <button
+          onClick={recargarAdmin}
+          disabled={cargandoAdmin}
+          className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Actualizar
+        </button>
     </div>
     
     {cargandoAdmin ? (
