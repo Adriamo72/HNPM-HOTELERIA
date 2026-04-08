@@ -118,59 +118,94 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   };
 
   const guardarTodas = async () => {
-    if (habitaciones.length === 0) {
-      mostrarNotificacion("No hay habitaciones para guardar", 'error');
-      return;
-    }
-    
-    setGuardando(true);
-    mostrarNotificacion("Guardando ocupación...", 'loading');
-    
-    const fecha = new Date().toISOString().split('T')[0];
-    let guardados = 0;
-    let errores = 0;
-    
-    try {
-      for (const hab of habitaciones) {
-        const ocupActual = ocupaciones[hab.id];
-        
-        const payload = {
-          habitacion_id: hab.id,
-          fecha: fecha,
-          tipo_habitacion: 'activa',
-          total_camas: hab.total_camas,
-          camas_ocupadas: ocupActual?.camas_ocupadas || 0,
-          observaciones: null,
-          actualizado_por: perfilUsuario?.dni,
-          actualizado_en: new Date().toISOString()
-        };
-        
-        const { error } = await supabase
-          .from('ocupacion_habitaciones')
-          .upsert(payload, { onConflict: 'habitacion_id,fecha' });
-        
-        if (error) {
-          errores++;
-        } else {
-          guardados++;
-        }
-      }
+  if (habitaciones.length === 0) {
+    mostrarNotificacion("No hay habitaciones para guardar", 'error');
+    return;
+  }
+  
+  setGuardando(true);
+  mostrarNotificacion("Guardando ocupación...", 'loading');
+  
+  const fecha = new Date().toISOString().split('T')[0];
+  let guardados = 0;
+  let errores = 0;
+  
+  try {
+    for (const hab of habitaciones) {
+      const ocupActual = ocupaciones[hab.id];
       
-      if (errores === 0) {
-        mostrarNotificacion(`${guardados} habitaciones guardadas correctamente`, 'success');
-        // Recargar datos para actualizar la vista
-        setTimeout(() => cargarDatos(), 1000);
+      const payload = {
+        habitacion_id: hab.id,
+        fecha: fecha,
+        tipo_habitacion: 'activa',
+        total_camas: hab.total_camas,
+        camas_ocupadas: ocupActual?.camas_ocupadas || 0,
+        observaciones: null,
+        actualizado_por: perfilUsuario?.dni,
+        actualizado_en: new Date().toISOString()
+      };
+      
+      const { error } = await supabase
+        .from('ocupacion_habitaciones')
+        .upsert(payload, { onConflict: 'habitacion_id,fecha' });
+      
+      if (error) {
+        errores++;
       } else {
-        mostrarNotificacion(`⚠️ ${guardados} guardadas, ${errores} errores`, 'error');
+        guardados++;
       }
-      
-    } catch (err) {
-      console.error("Error guardando:", err);
-      mostrarNotificacion("Error al guardar la ocupación", 'error');
-    } finally {
-      setGuardando(false);
     }
+    
+    // Guardar el log del recorrido
+    await guardarLogRecorrido();
+    
+    if (errores === 0) {
+      mostrarNotificacion(`${guardados} habitaciones guardadas correctamente`, 'success');
+      setTimeout(() => cargarDatos(), 1000);
+    } else {
+      mostrarNotificacion(`⚠️ ${guardados} guardadas, ${errores} errores`, 'error');
+    }
+    
+  } catch (err) {
+    console.error("Error guardando:", err);
+    mostrarNotificacion("Error al guardar la ocupación", 'error');
+  } finally {
+    setGuardando(false);
+  }
+};
+
+  const guardarLogRecorrido = async () => {
+  if (!piso) return;
+  
+  const totalCamasPiso = totalCamas;
+  const totalOcupadasPiso = totalOcupadas;
+  const camasLibres = totalCamasPiso - totalOcupadasPiso;
+  
+  const logData = {
+    piso_id: piso.id,
+    dni_responsable: perfilUsuario.dni,
+    jerarquia_hist: perfilUsuario.jerarquia,
+    apellido_hist: perfilUsuario.apellido,
+    nombre_hist: perfilUsuario.nombre,
+    camas_ocupadas: totalOcupadasPiso,
+    camas_libres: camasLibres,
+    fecha_registro: new Date().toISOString()
   };
+  
+  try {
+    const { error } = await supabase
+      .from('log_recorridos')
+      .insert([logData]);
+    
+    if (error) {
+      console.error("Error guardando log de recorrido:", error);
+    } else {
+      console.log("✅ Log de recorrido guardado");
+    }
+  } catch (err) {
+    console.error("Error:", err);
+  }
+};
 
   const mostrarNotificacion = (mensaje, tipo) => {
     if (tipo === 'success') {
