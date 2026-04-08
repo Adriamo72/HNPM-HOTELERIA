@@ -30,8 +30,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const imageRef = useRef(null);
   const containerRef = useRef(null);
 
-  // RESETEAR COMPLETO cuando cambia el pisoId
+  // ==================== RESETEAR COMPLETO cuando cambia el pisoId ====================
   useEffect(() => {
+    console.log(`🔄 Resetear croquis para pisoId: ${normalizedPisoId}`);
+    
+    // Resetear todos los estados
     setCroquis(null);
     setCoordenadas({});
     setOcupacion({});
@@ -43,30 +46,46 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setModoMovimiento(false);
     setEstadisticas({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
     
-    if (normalizedPisoId !== '' && normalizedPisoId !== null && normalizedPisoId !== undefined) {
+    // Validar que tengamos un piso válido
+    if (normalizedPisoId !== '' && normalizedPisoId !== null && normalizedPisoId !== undefined && normalizedPisoId !== 0) {
+      console.log(`✅ Cargando croquis para piso ${normalizedPisoId}`);
       cargarCroquis();
       cargarEstadisticasGlobales();
+    } else {
+      console.warn(`⚠️ Piso inválido: ${normalizedPisoId}`);
+      setCargando(false);
     }
   }, [normalizedPisoId]);
 
-  // Cargar ocupación cuando cambia fecha o cuando se cargan las habitaciones
+  // ==================== Cargar ocupación cuando cambia fecha ====================
   useEffect(() => {
     if (habitaciones.length > 0 && pisoId && croquis) {
       cargarOcupacion();
     }
   }, [fechaSeleccionada, habitaciones, croquis]);
 
-  // Calcular estadísticas cuando cambia ocupación
+  // ==================== Calcular estadísticas cuando cambia ocupación ====================
   useEffect(() => {
     if (habitaciones.length > 0) {
       calcularEstadisticas();
     }
   }, [ocupacion, habitaciones]);
 
-  // Cargar estadísticas globales de todo el hospital
+  // ==================== Sincronizar habitaciones cuando cambian externamente ====================
+  useEffect(() => {
+    if (habitaciones && habitaciones.length > 0 && croquis) {
+      console.log(`📋 Sincronizando ${habitaciones.length} habitaciones para piso ${pisoId}`);
+      calcularEstadisticas();
+      
+      // Verificar cuántas habitaciones tienen coordenadas
+      const conCoordenadas = habitaciones.filter(hab => coordenadas[hab.id]).length;
+      console.log(`📍 Habitaciones con coordenadas: ${conCoordenadas}/${habitaciones.length}`);
+    }
+  }, [habitaciones, croquis]);
+
+  // ==================== Cargar estadísticas globales ====================
   const cargarEstadisticasGlobales = async () => {
     try {
-      // Obtener todas las habitaciones especiales
       const { data: todasHabitaciones, error: habError } = await supabase
         .from('habitaciones_especiales')
         .select('id, piso_id, nombre');
@@ -78,7 +97,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         return;
       }
       
-      // Obtener ocupación para la fecha seleccionada
       const fecha = fechaSeleccionada;
       const hoy = new Date().toISOString().split('T')[0];
       
@@ -97,7 +115,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       
       if (occError) throw occError;
       
-      // Procesar ocupaciones (tomar la más reciente por habitación)
       const ocupMap = {};
       (ocupaciones || []).forEach(occ => {
         if (!ocupMap[occ.habitacion_id]) {
@@ -105,7 +122,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         }
       });
       
-      // Calcular totales
       let totalCamasGlobal = 0;
       let camasOcupadasGlobal = 0;
       
@@ -130,7 +146,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
-  // Calcular estadísticas del piso actual
+  // ==================== Calcular estadísticas del piso ====================
   const calcularEstadisticas = () => {
     let totalCamas = 0;
     let camasOcupadas = 0;
@@ -147,6 +163,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setEstadisticas({ totalCamas, camasOcupadas, porcentaje });
   };
 
+  // ==================== Cargar ocupación ====================
   const cargarOcupacion = async () => {
     if (!habitaciones.length || !pisoId) return;
     
@@ -183,12 +200,19 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Cargar croquis ====================
   const cargarCroquis = async () => {
-    if (normalizedPisoId === '' || normalizedPisoId === null || normalizedPisoId === undefined) return;
+    if (normalizedPisoId === '' || normalizedPisoId === null || normalizedPisoId === undefined || normalizedPisoId === 0) {
+      console.warn('cargarCroquis: pisoId inválido');
+      setCargando(false);
+      return;
+    }
     
+    console.log(`📥 Cargando croquis para piso ${normalizedPisoId}`);
     setCargando(true);
+    
     try {
-      const { data: croquisData } = await supabase
+      const { data: croquisData, error: croqError } = await supabase
         .from('croquis_pisos')
         .select('*')
         .eq('piso_id', normalizedPisoId)
@@ -196,20 +220,34 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         .order('version', { ascending: false })
         .maybeSingle();
 
+      if (croqError) {
+        console.error('Error en consulta croquis:', croqError);
+        setCroquis(null);
+        setCargando(false);
+        return;
+      }
+
       if (croquisData) {
+        console.log(`✅ Croquis encontrado: ${croquisData.id}`);
         setCroquis(croquisData);
         
-        const { data: coords } = await supabase
+        const { data: coords, error: coordError } = await supabase
           .from('habitacion_coordenadas')
           .select('*')
           .eq('croquis_id', croquisData.id);
+        
+        if (coordError) {
+          console.error('Error cargando coordenadas:', coordError);
+        }
         
         const coordsMap = {};
         coords?.forEach(c => {
           coordsMap[c.habitacion_id] = { x: c.x, y: c.y, ancho: c.ancho, alto: c.alto };
         });
         setCoordenadas(coordsMap);
+        console.log(`📍 ${Object.keys(coordsMap).length} coordenadas cargadas`);
       } else {
+        console.log(`📭 No hay croquis para piso ${normalizedPisoId}`);
         setCroquis(null);
       }
     } catch (error) {
@@ -220,6 +258,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Guardar coordenada ====================
   const guardarCoordenada = async (habitacionId, x, y) => {
     if (!croquis) return;
     
@@ -245,6 +284,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Subir croquis ====================
   const subirCroquis = async (file) => {
     if (!file) return;
     
@@ -287,6 +327,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Eliminar croquis ====================
   const eliminarCroquis = async () => {
     if (!croquis) return;
     
@@ -315,6 +356,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Click para posicionar habitación ====================
   const handleImageClick = async (e) => {
     if (!modoEdicion || modoMovimiento || arrastrando || !croquis) return;
     
@@ -346,6 +388,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Obtener color según tipo y ocupación ====================
   const getColorPorTipoYOcupacion = (habitacion, ocup) => {
     if (!ocup) return { bg: 'border-gray-400', text: 'text-white', blink: false, title: 'Sin registrar', style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } };
     
@@ -381,6 +424,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Manejo de zoom ====================
   const handleWheel = (e) => {
     if (!modoEdicion) return;
     e.preventDefault();
@@ -388,6 +432,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setZoom(prev => Math.min(Math.max(prev + delta, 0.5), 3));
   };
 
+  // ==================== Manejo de arrastre ====================
   const handleMouseDown = (e) => {
     if (!modoEdicion || modoMovimiento) return;
     
@@ -441,6 +486,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setHabitacionArrastrada(null);
   };
 
+  // ==================== Editar habitación ====================
   const editarHabitacion = async (habitacionId, nombreActual) => {
     const nuevoNombre = prompt(`Editar habitación\n\nActual: ${nombreActual}\n\nIngresa el nuevo número:`, nombreActual);
     if (nuevoNombre && nuevoNombre !== nombreActual) {
@@ -456,6 +502,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Eliminar posición de habitación ====================
   const eliminarHabitacionPos = async (habitacionId, nombre) => {
     if (window.confirm(`¿Eliminar la posición de "${nombre}"?`)) {
       try {
@@ -470,6 +517,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Context menu (click derecho) ====================
   const handleContextMenu = (e, habId, nombre) => {
     e.preventDefault();
     if (!modoEdicion) return;
@@ -478,6 +526,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     else if (opcion === '2') eliminarHabitacionPos(habId, nombre);
   };
 
+  // ==================== RENDER ====================
   if (cargando) {
     return (
       <div className="bg-slate-800 rounded-xl p-12 text-center">
@@ -578,127 +627,78 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           minHeight: '400px'
         }}
       >
-        {cargando ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-slate-400">Cargando plano...</div>
-          </div>
-        ) : croquis ? (
-          <>
-            <div
-              style={{
-                transform: `translate(${posicion.x}px, ${posicion.y}px) scale(${zoom})`,
-                transformOrigin: '0 0',
-                transition: arrastrando ? 'none' : 'transform 0.1s ease-out',
-                width: 'fit-content',
-                cursor: modoMovimiento ? 'grab' : (modoEdicion ? 'crosshair' : 'default')
-              }}
-              onWheel={handleWheel}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-            >
-              <img
-                ref={imageRef}
-                src={croquis.imagen_url}
-                alt={`Croquis ${pisoNombre}`}
-                className="w-auto h-auto"
-                style={{ 
-                  maxWidth: '100%',
-                  pointerEvents: modoEdicion && !modoMovimiento ? 'auto' : 'none'
-                }}
-                onClick={handleImageClick}
-                draggable={false}
-              />
-              
-              {/* Marcadores de habitaciones */}
-              {habitaciones.map(hab => {
-                const coord = coordenadas[hab.id];
-                if (!coord) return null;
-                
-                const ocup = ocupacion[hab.id];
-                const estilo = getColorPorTipoYOcupacion(hab, ocup);
-                
-                let displayTexto = '';
-                if (!ocup) {
-                  displayTexto = '?';
-                } else if (ocup.tipo_habitacion === 'activa') {
-                  displayTexto = ocup.camas_ocupadas;
-                } else if (ocup.tipo_habitacion === 'reparacion') {
-                  displayTexto = '🔧';
-                } else {
-                  displayTexto = '';
-                }
-                
-                return (
-                  <div
-                    key={hab.id}
-                    data-habitacion-id={hab.id}
-                    className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
-                    style={{
-                      left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
-                      top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                      width: 'min(2.2%, 34px)',
-                      height: 'min(6.5%, 55px)',
-                      transform: 'translate(-50%, -50%)',
-                      minWidth: '32px',
-                      minHeight: '48px',
-                      padding: '2px 0',
-                      ...estilo.style
-                    }}
-                    title={`${estilo.title}${ocup ? '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs' : ''}`}
-                    onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
-                  >
-                    <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
-                    <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          /* Layout alternativo cuando no hay croquis */
-          <div className="p-8">
-            <div className="text-center mb-6">
-              <h3 className="text-xl font-semibold text-slate-300 mb-2">Habitaciones - {pisoNombre}</h3>
-              <p className="text-sm text-slate-500">No hay plano disponible. Las habitaciones se muestran en lista.</p>
-              {!esVisualizador && (
-                <p className="text-xs text-slate-400 mt-2">Para crear un plano, active el modo edición y suba una imagen.</p>
-              )}
-            </div>
+        <div
+          style={{
+            transform: `translate(${posicion.x}px, ${posicion.y}px) scale(${zoom})`,
+            transformOrigin: '0 0',
+            transition: arrastrando ? 'none' : 'transform 0.1s ease-out',
+            width: 'fit-content',
+            cursor: modoMovimiento ? 'grab' : (modoEdicion ? 'crosshair' : 'default')
+          }}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          <img
+            ref={imageRef}
+            src={croquis.imagen_url}
+            alt={`Croquis ${pisoNombre}`}
+            className="w-auto h-auto"
+            style={{ 
+              maxWidth: '100%',
+              pointerEvents: modoEdicion && !modoMovimiento ? 'auto' : 'none'
+            }}
+            onClick={handleImageClick}
+            draggable={false}
+          />
+          
+          {/* Marcadores de habitaciones */}
+          {habitaciones.map(hab => {
+            const coord = coordenadas[hab.id];
+            // Si no hay coordenadas, no mostrar el marcador
+            if (!coord) return null;
             
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {habitaciones.map(hab => {
-                const ocup = ocupacion[hab.id];
-                const estilo = getColorPorTipoYOcupacion(hab, ocup);
-                
-                let displayTexto = '';
-                if (!ocup) {
-                  displayTexto = '?';
-                } else if (ocup.tipo_habitacion === 'activa') {
-                  displayTexto = ocup.camas_ocupadas;
-                } else if (ocup.tipo_habitacion === 'reparacion') {
-                  displayTexto = '🔧';
-                } else {
-                  displayTexto = '';
-                }
-                
-                return (
-                  <div
-                    key={hab.id}
-                    className={`rounded-lg border-2 ${estilo.bg} ${estilo.text} p-4 flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 cursor-pointer ${estilo.blink ? 'animate-pulse' : ''}`}
-                    style={estilo.style}
-                    title={`${estilo.title}${ocup ? '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs' : ''}`}
-                    onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
-                  >
-                    <span className="text-lg font-bold mb-1">{hab.nombre}</span>
-                    <span className="text-2xl font-black">{displayTexto}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+            const ocup = ocupacion[hab.id];
+            const estilo = getColorPorTipoYOcupacion(hab, ocup);
+            
+            let displayTexto = '';
+            if (!ocup) {
+              displayTexto = '?';
+            } else if (ocup.tipo_habitacion === 'activa') {
+              displayTexto = ocup.camas_ocupadas;
+            } else if (ocup.tipo_habitacion === 'reparacion') {
+              displayTexto = '🔧';
+            } else {
+              displayTexto = '';
+            }
+            
+            return (
+              <div
+                key={hab.id}
+                data-habitacion-id={hab.id}
+                className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
+                style={{
+                  left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
+                  top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
+                  width: 'min(2.2%, 34px)',
+                  height: 'min(6.5%, 55px)',
+                  transform: 'translate(-50%, -50%)',
+                  minWidth: '32px',
+                  minHeight: '48px',
+                  padding: '2px 0',
+                  ...estilo.style
+                }}
+                title={`${estilo.title}${ocup ? '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs' : ''}`}
+                onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
+              >
+                <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
+                <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="p-3 border-t border-slate-700">
