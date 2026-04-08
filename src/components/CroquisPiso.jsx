@@ -716,27 +716,25 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             
             return (
               <div
-                key={hab.id}
-                data-habitacion-id={hab.id}
-                className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
-                style={{
-                  left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
-                  top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                  width: 'min(2.2%, 34px)',
-                  height: 'min(6.5%, 55px)',
-                  transform: 'translate(-50%, -50%)',
-                  minWidth: '32px',
-                  minHeight: '48px',
-                  padding: '2px 0',
-                  ...estilo.style
-                }}
-                title={`${estilo.title}${ocup ? 
-                '\nActualización: ' + new Date(ocup.actualizado_en || ocup.created_at).toLocaleDateString('es-AR') +
-                (ocup.informacion_ampliatoria ? `\n📋 ${ocup.informacion_ampliatoria}` : '') : ''}`}
-              >
-                <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
-                <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
-              </div>
+              key={hab.id}
+              data-habitacion-id={hab.id}
+              className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
+              style={{
+                left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
+                top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
+                width: 'min(2.2%, 34px)',
+                height: 'min(6.5%, 55px)',
+                transform: 'translate(-50%, -50%)',
+                minWidth: '32px',
+                minHeight: '48px',
+                padding: '2px 0',
+                ...estilo.style
+              }}
+              title={estilo.title}  // ← SOLO esto, ya tiene todo
+            >
+              <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
+              <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
+            </div>
             );
           })}
         </div>
