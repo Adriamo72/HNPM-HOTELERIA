@@ -394,9 +394,34 @@ const cargarDatos = async (tipo = 'todos') => {
   };
 
   // Funciones de recarga por pestaña
+// Funciones de recarga por pestaña
 const recargarCroquis = () => cargarDatos('croquis');
 const recargarMonitor = () => cargarDatos('monitor');
-const recargarAdmin = () => cargarDatos('admin');
+const recargarAdmin = async () => {
+  setCargandoAdmin(true);
+  try {
+    // Recargar pisos y habitaciones
+    const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
+    const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
+    
+    setPisos(resPisos.data || []);
+    setHabitacionesEspeciales(resHabs.data || []);
+    
+    // Recargar admins y visualizadores
+    await cargarAdmins();
+    await cargarVisualizadores();
+    
+    // Recargar estado de habitaciones
+    await cargarEstadoHabitaciones(resHabs.data || []);
+    
+    mostrarSplash("✅ Datos actualizados");
+  } catch (error) {
+    console.error(error);
+    mostrarSplash("❌ Error al actualizar");
+  } finally {
+    setCargandoAdmin(false);
+  }
+};
 
   const agregarAdmin = async () => {
     if (!nuevoAdmin.usuario.trim()) {
