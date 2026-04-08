@@ -234,10 +234,10 @@ const AdminDashboard = () => {
       ...prev,
       [habId]: {
         ...config,
-        camas: config.tipo === 'INTERNACION' ? config.camas : '1',
+        camas: config.tipo === 'INTERNACION' ? totalCamas.toString() : '1',
         texto: config.tipo === 'OTROS' ? config.texto : '',
-        camas_ocupadas: config.tipo === 'INTERNACION' ? (config.camas_ocupadas || 0) : 0,
-        informacion_ampliatoria: config.tipo === 'INTERNACION' ? config.informacion_ampliatoria : ''
+        camas_ocupadas: config.tipo === 'INTERNACION' ? camasOcupadas.toString() : '0',
+        informacion_ampliatoria: config.tipo === 'INTERNACION' ? (informacionAmpliatoria || '') : ''
       }
     }));
     
