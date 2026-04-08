@@ -14,6 +14,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [modoMovimiento, setModoMovimiento] = useState(false);
   const [ocupacion, setOcupacion] = useState({});
   const [cargando, setCargando] = useState(true);
+  const [cargandoCoordenadas, setCargandoCoordenadas] = useState(true);
   const [mensaje, setMensaje] = useState('');
   const [fechaSeleccionada, setFechaSeleccionada] = useState(fechaConsulta || new Date().toISOString().split('T')[0]);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
@@ -26,6 +27,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [arrastrando, setArrastrando] = useState(false);
   const [puntoInicio, setPuntoInicio] = useState({ x: 0, y: 0 });
   const [habitacionArrastrada, setHabitacionArrastrada] = useState(null);
+  
+  // Estado para forzar re-render de marcadores
+  const [marcadoresKey, setMarcadoresKey] = useState(0);
   
   const imageRef = useRef(null);
   const containerRef = useRef(null);
@@ -40,11 +44,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setOcupacion({});
     setUltimaActualizacion(null);
     setCargando(true);
+    setCargandoCoordenadas(true);
     setZoom(1);
     setPosicion({ x: 0, y: 0 });
     setModoEdicion(false);
     setModoMovimiento(false);
     setEstadisticas({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
+    setMarcadoresKey(prev => prev + 1);
     
     // Validar que tengamos un piso válido
     if (normalizedPisoId !== '' && normalizedPisoId !== null && normalizedPisoId !== undefined && normalizedPisoId !== 0) {
@@ -54,6 +60,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     } else {
       console.warn(`⚠️ Piso inválido: ${normalizedPisoId}`);
       setCargando(false);
+      setCargandoCoordenadas(false);
     }
   }, [normalizedPisoId]);
 
@@ -82,6 +89,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       console.log(`📍 Habitaciones con coordenadas: ${conCoordenadas}/${habitaciones.length}`);
     }
   }, [habitaciones, croquis]);
+
+  // ==================== Forzar re-render cuando coordenadas estén listas ====================
+  useEffect(() => {
+    if (!cargando && !cargandoCoordenadas && croquis && habitaciones.length > 0) {
+      console.log('✅ Todo listo - coordenadas:', Object.keys(coordenadas).length);
+      // Forzar re-render de los marcadores
+      setMarcadoresKey(prev => prev + 1);
+    }
+  }, [cargando, cargandoCoordenadas, croquis, habitaciones]);
 
   // ==================== Cargar estadísticas globales ====================
   const cargarEstadisticasGlobales = async () => {
@@ -205,11 +221,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     if (normalizedPisoId === '' || normalizedPisoId === null || normalizedPisoId === undefined || normalizedPisoId === 0) {
       console.warn('cargarCroquis: pisoId inválido');
       setCargando(false);
+      setCargandoCoordenadas(false);
       return;
     }
     
     console.log(`📥 Cargando croquis para piso ${normalizedPisoId}`);
     setCargando(true);
+    setCargandoCoordenadas(true);
     
     try {
       const { data: croquisData, error: croqError } = await supabase
@@ -224,6 +242,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         console.error('Error en consulta croquis:', croqError);
         setCroquis(null);
         setCargando(false);
+        setCargandoCoordenadas(false);
         return;
       }
 
@@ -246,15 +265,19 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         });
         setCoordenadas(coordsMap);
         console.log(`📍 ${Object.keys(coordsMap).length} coordenadas cargadas`);
+        // Forzar re-render de marcadores
+        setMarcadoresKey(prev => prev + 1);
       } else {
         console.log(`📭 No hay croquis para piso ${normalizedPisoId}`);
         setCroquis(null);
+        setCoordenadas({});
       }
     } catch (error) {
       console.error("Error cargando croquis:", error);
       setCroquis(null);
     } finally {
       setCargando(false);
+      setCargandoCoordenadas(false);
     }
   };
 
@@ -277,6 +300,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       if (error) throw error;
       
       setCoordenadas(prev => ({ ...prev, [habitacionId]: { x, y, ancho: 40, alto: 40 } }));
+      setMarcadoresKey(prev => prev + 1);
       
     } catch (error) {
       console.error("Error guardando coordenada:", error);
@@ -390,74 +414,71 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
 
   // ==================== Obtener color según tipo y ocupación ====================
   const getColorPorTipoYOcupacion = (habitacion, ocup) => {
-  if (!ocup) {
-    return { 
-      bg: 'border-gray-400', 
-      text: 'text-white', 
-      blink: false, 
-      title: 'Sin registrar', 
-      style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } 
-    };
-  }
-  
-  switch (ocup.tipo_habitacion) {
-    case 'reparacion':
-      return {
-        bg: 'border-yellow-400',
-        text: 'text-black',
-        blink: false,
-        title: '🔧 EN REPARACIÓN',
-        style: { backgroundColor: 'rgba(255, 248, 24, 0.95)' }
-      };
-    case 'otros':
-      return {
-        bg: 'border-gray-400',
-        text: 'text-white',
-        blink: false,
-        title: ocup.observaciones || 'Otros',
-        style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' }
-      };
-    case 'activa':
-      const totalCamas = ocup.total_camas || 0;
-      const camasOcupadas = ocup.camas_ocupadas || 0;
-      const camasDisponibles = totalCamas - camasOcupadas;
-      const parpadeo = camasDisponibles > 0 && totalCamas > 0;
-      
-      // Formatear fecha de actualización
-      const fechaActualizacion = ocup.actualizado_en || ocup.created_at;
-      const fechaObj = new Date(fechaActualizacion);
-      const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
-      const horaFormateada = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
-      
-      // Obtener información ampliatoria (si no tiene, mostrar "Sin especialidad")
-      const infoAmpliatoria = ocup.informacion_ampliatoria || 'Sin especialidad';
-      
-      // Construir el tooltip - SIEMPRE con la info
-      let titleText = '';
-      if (totalCamas === 0) {
-        titleText = `${infoAmpliatoria}\nSin camas asignadas\n${fechaFormateada} ${horaFormateada} hs`;
-      } else {
-        titleText = `${infoAmpliatoria}\n${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles\n${fechaFormateada} ${horaFormateada} hs`;
-      }
-      
-      return {
-        bg: 'border-green-400',
-        text: 'text-white',
-        blink: parpadeo,
-        title: titleText,
-        style: { backgroundColor: 'rgba(32, 205, 10, 0.9)' }
-      };
-
-    default:
+    if (!ocup) {
       return { 
         bg: 'border-gray-400', 
         text: 'text-white', 
         blink: false, 
-        title: 'Sin estado', 
+        title: 'Sin registrar', 
         style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } 
       };
-  }
-};
+    }
+    
+    switch (ocup.tipo_habitacion) {
+      case 'reparacion':
+        return {
+          bg: 'border-yellow-400',
+          text: 'text-black',
+          blink: false,
+          title: '🔧 EN REPARACIÓN',
+          style: { backgroundColor: 'rgba(255, 248, 24, 0.95)' }
+        };
+      case 'otros':
+        return {
+          bg: 'border-gray-400',
+          text: 'text-white',
+          blink: false,
+          title: ocup.observaciones || 'Otros',
+          style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' }
+        };
+      case 'activa':
+        const totalCamas = ocup.total_camas || 0;
+        const camasOcupadas = ocup.camas_ocupadas || 0;
+        const camasDisponibles = totalCamas - camasOcupadas;
+        const parpadeo = camasDisponibles > 0 && totalCamas > 0;
+        
+        const fechaActualizacion = ocup.actualizado_en || ocup.created_at;
+        const fechaObj = new Date(fechaActualizacion);
+        const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
+        const horaFormateada = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+        
+        const infoAmpliatoria = ocup.informacion_ampliatoria || 'Sin especialidad';
+        
+        let titleText = '';
+        if (totalCamas === 0) {
+          titleText = `${infoAmpliatoria}\n🚫 Sin camas asignadas\n📅 ${fechaFormateada} ${horaFormateada} hs`;
+        } else {
+          titleText = `${infoAmpliatoria}\n🛏️ ${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles\n📅 ${fechaFormateada} ${horaFormateada} hs`;
+        }
+        
+        return {
+          bg: 'border-green-400',
+          text: 'text-white',
+          blink: parpadeo,
+          title: titleText,
+          style: { backgroundColor: 'rgba(32, 205, 10, 0.9)' }
+        };
+
+      default:
+        return { 
+          bg: 'border-gray-400', 
+          text: 'text-white', 
+          blink: false, 
+          title: 'Sin estado', 
+          style: { backgroundColor: 'rgba(61, 65, 72, 0.8)' } 
+        };
+    }
+  };
 
   // ==================== Manejo de zoom ====================
   const handleWheel = (e) => {
@@ -545,6 +566,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         setCoordenadas(prev => { const nuevas = { ...prev }; delete nuevas[habitacionId]; return nuevas; });
         setMensaje(`✅ Posición de ${nombre} eliminada`);
         setTimeout(() => setMensaje(''), 1500);
+        setMarcadoresKey(prev => prev + 1);
       } catch (error) {
         setMensaje("❌ Error al eliminar");
         setTimeout(() => setMensaje(''), 2000);
@@ -689,54 +711,55 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             draggable={false}
           />
           
-          {/* Marcadores de habitaciones */}
-          {habitaciones.map(hab => {
-            const coord = coordenadas[hab.id];
-            // Si no hay coordenadas, no mostrar el marcador
-            if (!coord) return null;
-            
-            const ocup = ocupacion[hab.id];
-            const estilo = getColorPorTipoYOcupacion(hab, ocup);
-            
-            let displayTexto = '';
-            if (!ocup) {
-              displayTexto = '?';
-            } else if (ocup.tipo_habitacion === 'activa') {
-              const totalCamas = ocup.total_camas || 0;
-              if (totalCamas === 0) {
-                displayTexto = '🚫';
+          {/* Marcadores de habitaciones - con key para forzar re-render */}
+          <React.Fragment key={marcadoresKey}>
+            {habitaciones.map(hab => {
+              const coord = coordenadas[hab.id];
+              if (!coord) return null;
+              
+              const ocup = ocupacion[hab.id];
+              const estilo = getColorPorTipoYOcupacion(hab, ocup);
+              
+              let displayTexto = '';
+              if (!ocup) {
+                displayTexto = '?';
+              } else if (ocup.tipo_habitacion === 'activa') {
+                const totalCamas = ocup.total_camas || 0;
+                if (totalCamas === 0) {
+                  displayTexto = '🚫';
+                } else {
+                  displayTexto = ocup.camas_ocupadas;
+                }
+              } else if (ocup.tipo_habitacion === 'reparacion') {
+                displayTexto = '🔧';
               } else {
-                displayTexto = ocup.camas_ocupadas;
+                displayTexto = '';
               }
-            } else if (ocup.tipo_habitacion === 'reparacion') {
-              displayTexto = '🔧';
-            } else {
-              displayTexto = '';
-            }
-            
-            return (
-              <div
-              key={hab.id}
-              data-habitacion-id={hab.id}
-              className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
-              style={{
-                left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
-                top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                width: 'min(2.2%, 34px)',
-                height: 'min(6.5%, 55px)',
-                transform: 'translate(-50%, -50%)',
-                minWidth: '32px',
-                minHeight: '48px',
-                padding: '2px 0',
-                ...estilo.style
-              }}
-              title={estilo.title}  // ← SOLO esto, ya tiene todo
-            >
-              <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
-              <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
-            </div>
-            );
-          })}
+              
+              return (
+                <div
+                  key={hab.id}
+                  data-habitacion-id={hab.id}
+                  className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
+                  style={{
+                    left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
+                    top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
+                    width: 'min(2.2%, 34px)',
+                    height: 'min(6.5%, 55px)',
+                    transform: 'translate(-50%, -50%)',
+                    minWidth: '32px',
+                    minHeight: '48px',
+                    padding: '2px 0',
+                    ...estilo.style
+                  }}
+                  title={estilo.title}
+                >
+                  <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
+                  <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
+                </div>
+              );
+            })}
+          </React.Fragment>
         </div>
       </div>
 
