@@ -139,7 +139,7 @@ const AdminDashboard = () => {
       const estado = estadoPorHabitacion[hab.id];
       next[hab.id] = {
         tipo: estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS',
-        camas: estado?.total_camas?.toString() || '1',
+        camas: estado?.total_camas?.toString() || '0',
         texto: estado?.observaciones || '',
         camas_ocupadas: estado?.camas_ocupadas || 0,
         informacion_ampliatoria: estado?.informacion_ampliatoria || ''  // NUEVO CAMPO
