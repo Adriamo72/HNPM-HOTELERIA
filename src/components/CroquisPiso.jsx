@@ -429,15 +429,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
       const horaFormateada = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
       
-      // Obtener información ampliatoria (ej: "HOSPITAL D DIA - AMBULATORIOS")
-      const infoAmpliatoria = ocup.informacion_ampliatoria || '';
+      // Obtener información ampliatoria (si no tiene, mostrar "Sin especialidad")
+      const infoAmpliatoria = ocup.informacion_ampliatoria || 'Sin especialidad';
       
-      // Construir el tooltip según si tiene camas o no
+      // Construir el tooltip - SIEMPRE con la info
       let titleText = '';
       if (totalCamas === 0) {
-        titleText = `${infoAmpliatoria ? infoAmpliatoria + '\n' : ''} Sin camas asignadas\n ${fechaFormateada} ${horaFormateada} hs`;
+        titleText = `${infoAmpliatoria}\n🚫 Sin camas asignadas\n📅 ${fechaFormateada} ${horaFormateada} hs`;
       } else {
-        titleText = `${infoAmpliatoria ? infoAmpliatoria + '\n' : ''} ${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles\n ${fechaFormateada} ${horaFormateada} hs`;
+        titleText = `${infoAmpliatoria}\n🛏️ ${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles\n📅 ${fechaFormateada} ${horaFormateada} hs`;
       }
       
       return {
@@ -447,6 +447,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         title: titleText,
         style: { backgroundColor: 'rgba(32, 205, 10, 0.9)' }
       };
+
     default:
       return { 
         bg: 'border-gray-400', 

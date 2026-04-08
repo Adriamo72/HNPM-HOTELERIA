@@ -58,8 +58,11 @@ const AdminDashboard = () => {
 
   const formatearResumenHabitacion = (config) => {
   if (config.tipo === 'INTERNACION') {
-    const camas = Number(config.camas) || 1;
+    const camas = Number(config.camas) || 0;
     const info = config.informacion_ampliatoria ? ` · ${config.informacion_ampliatoria}` : '';
+    if (camas === 0) {
+      return `INTERNACIÓN (SIN CAMAS${info})`;
+    }
     return `INTERNACIÓN (${camas} cama${camas === 1 ? '' : 's'}${info})`;
   }
 
