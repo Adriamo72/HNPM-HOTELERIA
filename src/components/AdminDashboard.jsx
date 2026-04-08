@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
 import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
+import RecorridosList from './RecorridosList';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
@@ -1302,6 +1303,12 @@ const eliminarVisualizador = async (visId, usuario) => {
           Hotelería
         </button>
         <button 
+          onClick={() => setActiveTab('recorridos')} 
+          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'recorridos' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Recorridos
+        </button>
+        <button 
           onClick={() => setActiveTab('historial')} 
           className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
@@ -1359,6 +1366,21 @@ const eliminarVisualizador = async (visId, usuario) => {
               <p className="text-slate-400">Selecciona un piso para ver su plano</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Panel RECORRIDOS */}
+      {activeTab === 'recorridos' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
+              REGISTRO DE RECORRIDOS
+            </h2>
+            <p className="text-xs text-slate-500">
+              Historial de recorridos de ocupación
+            </p>
+          </div>
+          <RecorridosList />
         </div>
       )}
 
