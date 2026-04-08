@@ -202,14 +202,14 @@ const VisualizadorDashboard = () => {
                 className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
               <button 
-                onClick={() => {
-                  cargarDatos();
-                  setCroquisKey(prev => prev + 1);
-                }} 
+                onClick={refrescarDatos}
                 disabled={cargandoCroquis}
-                className="text-2xl p-2 rounded-lg font-bold text-white hover:text-slate-300 transition-all disabled:opacity-50"
+                className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-800"
               >
-                {cargandoCroquis ? '🔄' : '🔄'}
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {cargandoCroquis ? 'Actualizando...' : 'Actualizar'}
               </button>
             </div>
           </div>
@@ -254,11 +254,14 @@ const VisualizadorDashboard = () => {
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Monitor de Stock</h2>
             <button 
-              onClick={() => cargarDatos()} 
+              onClick={refrescarDatos}
               disabled={cargandoMonitor}
-              className="text-2xl p-2 rounded-lg font-bold text-white hover:text-slate-300 transition-all disabled:opacity-50"
+              className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-800"
             >
-              {cargandoMonitor ? '⌛' : '🔄'}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {cargandoMonitor ? 'Actualizando...' : 'Actualizar'}
             </button>
           </div>
           
