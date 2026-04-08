@@ -1387,9 +1387,25 @@ const eliminarVisualizador = async (visId, usuario) => {
             <div className="flex gap-2">
               <select
                 value={pisoSeleccionado}
-                onChange={(e) => {
-                  setPisoSeleccionado(e.target.value);
+                onChange={async (e) => {
+                  const nuevoPisoId = e.target.value;
+                  setCargandoCroquis(true);
+                  setPisoSeleccionado(nuevoPisoId);
+                  
+                  // Forzar recarga de habitaciones para ese piso
+                  const { data: nuevasHabitaciones } = await supabase
+                    .from('habitaciones_especiales')
+                    .select('*')
+                    .eq('piso_id', nuevoPisoId)
+                    .order('nombre');
+                  
+                  setHabitacionesEspeciales(prev => {
+                    const otras = prev.filter(h => h.piso_id !== nuevoPisoId);
+                    return [...otras, ...(nuevasHabitaciones || [])];
+                  });
+                  
                   setCroquisKey(prev => prev + 1);
+                  setCargandoCroquis(false);
                 }}
                 className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
               >
