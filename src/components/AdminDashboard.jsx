@@ -57,18 +57,19 @@ const AdminDashboard = () => {
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
 
   const formatearResumenHabitacion = (config) => {
-    if (config.tipo === 'INTERNACION') {
-      const camas = Number(config.camas) || 1;
-      return `INTERNACIÓN (${camas} cama${camas === 1 ? '' : 's'})`;
-    }
+  if (config.tipo === 'INTERNACION') {
+    const camas = Number(config.camas) || 1;
+    const info = config.informacion_ampliatoria ? ` · ${config.informacion_ampliatoria}` : '';
+    return `INTERNACIÓN (${camas} cama${camas === 1 ? '' : 's'}${info})`;
+  }
 
-    if (config.tipo === 'EN REPARACION') {
-      return 'EN REPARACIÓN';
-    }
+  if (config.tipo === 'EN REPARACION') {
+    return '🔧 EN REPARACIÓN';
+  }
 
-    const texto = config.texto ? config.texto.trim() : '';
-    return `OTROS (${texto})`;
-  };
+  const texto = config.texto ? config.texto.trim() : '';
+  return `📌 OTROS (${texto})`;
+};
 
   const truncarTexto = (texto, largo = 28) => {
     if (!texto) return texto;
@@ -114,111 +115,138 @@ const AdminDashboard = () => {
   };
 
   const cargarEstadoHabitaciones = async (habitaciones = []) => {
-    if (!habitaciones.length) return;
+  if (!habitaciones.length) return;
 
-    try {
-      const { data, error } = await supabase
-        .from('ocupacion_habitaciones')
-        .select('*')
-        .in('habitacion_id', habitaciones.map(h => h.id))
-        .order('actualizado_en', { ascending: false })
-        .order('fecha', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('ocupacion_habitaciones')
+      .select('*')
+      .in('habitacion_id', habitaciones.map(h => h.id))
+      .order('actualizado_en', { ascending: false })
+      .order('fecha', { ascending: false });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      const estadoPorHabitacion = {};
-      (data || []).forEach(e => {
-        if (!estadoPorHabitacion[e.habitacion_id]) {
-          estadoPorHabitacion[e.habitacion_id] = e;
-        }
-      });
+    const estadoPorHabitacion = {};
+    (data || []).forEach(e => {
+      if (!estadoPorHabitacion[e.habitacion_id]) {
+        estadoPorHabitacion[e.habitacion_id] = e;
+      }
+    });
 
-      const next = {};
-      habitaciones.forEach(hab => {
-        const estado = estadoPorHabitacion[hab.id];
-        next[hab.id] = {
-          tipo: estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS',
-          camas: estado?.total_camas?.toString() || '1',
-          texto: estado?.observaciones || '',
-          camas_ocupadas: estado?.camas_ocupadas || 0
-        };
-      });
-      setHabitacionStatus(prev => ({
-        ...prev,
-        ...next
-      }));
-    } catch (error) {
-      console.error('Error cargando estado de habitaciones:', error);
-    }
-  };
+    const next = {};
+    habitaciones.forEach(hab => {
+      const estado = estadoPorHabitacion[hab.id];
+      next[hab.id] = {
+        tipo: estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS',
+        camas: estado?.total_camas?.toString() || '1',
+        texto: estado?.observaciones || '',
+        camas_ocupadas: estado?.camas_ocupadas || 0,
+        informacion_ampliatoria: estado?.informacion_ampliatoria || ''  // NUEVO CAMPO
+      };
+    });
+    setHabitacionStatus(prev => ({
+      ...prev,
+      ...next
+    }));
+  } catch (error) {
+    console.error('Error cargando estado de habitaciones:', error);
+  }
+};
 
   const guardarEstadoHabitacion = async (habId) => {
-    const config = habitacionStatus[habId];
-    if (!config) return;
+  const config = habitacionStatus[habId];
+  if (!config) return;
 
-    const fecha = new Date().toISOString().split('T')[0];
+  const fecha = new Date().toISOString().split('T')[0];
 
-    try {
-      const { data: existing, error: fetchError } = await supabase
-        .from('ocupacion_habitaciones')
-        .select('id')
-        .eq('habitacion_id', habId)
-        .eq('fecha', fecha)
-        .maybeSingle();
-      if (fetchError) throw fetchError;
+  try {
+    const { data: existing, error: fetchError } = await supabase
+      .from('ocupacion_habitaciones')
+      .select('id')
+      .eq('habitacion_id', habId)
+      .eq('fecha', fecha)
+      .maybeSingle();
+    if (fetchError) throw fetchError;
 
-      const payload = {
-        habitacion_id: habId,
-        fecha,
-        tipo_habitacion: TIPO_MAP_DB[config.tipo] || 'otros',
-        total_camas: config.tipo === 'INTERNACION' ? Number(config.camas) || 1 : 1,
-        camas_ocupadas: config.tipo === 'INTERNACION' ? (config.camas_ocupadas || 0) : 0,
-        observaciones: config.tipo === 'OTROS' ? (config.texto || null) : null,
-        actualizado_por: null,
-        actualizado_en: new Date().toISOString()
-      };
-
-      let error;
-      if (existing?.id) {
-        const { error: updateError } = await supabase
-          .from('ocupacion_habitaciones')
-          .update(payload)
-          .eq('id', existing.id);
-        error = updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from('ocupacion_habitaciones')
-          .insert(payload);
-        error = insertError;
-      }
-
-      if (error) {
-        console.error('Error guardando estado de habitación:', error);
-        mostrarSplash('Error al guardar estado');
-        return;
-      }
-
-      mostrarSplash('Estado guardado correctamente');
-      setHabitacionesAbiertas(prev => ({
-        ...prev,
-        [habId]: false
-      }));
-      const habitacion = habitacionesEspeciales.find(h => h.id === habId);
-      setHabitacionStatus(prev => ({
-        ...prev,
-        [habId]: {
-          ...config,
-          camas: config.tipo === 'INTERNACION' ? config.camas : '1',
-          texto: config.tipo === 'OTROS' ? config.texto : '',
-          camas_ocupadas: config.tipo === 'INTERNACION' ? (config.camas_ocupadas || 0) : 0
-        }
-      }));
-      if (habitacion) await cargarEstadoHabitaciones([habitacion]);
-    } catch (error) {
-      console.error('Error guardando estado de habitación:', error);
-      mostrarSplash('❌ Error al guardar estado');
+    let totalCamas = 1;
+    let camasOcupadas = 0;
+    let observaciones = null;
+    let informacionAmpliatoria = null;
+    
+    if (config.tipo === 'INTERNACION') {
+      totalCamas = Number(config.camas) || 1;
+      camasOcupadas = Number(config.camas_ocupadas) || 0;
+      observaciones = null;
+      informacionAmpliatoria = config.informacion_ampliatoria || null;  // NUEVO
+    } else if (config.tipo === 'EN REPARACION') {
+      totalCamas = 1;
+      camasOcupadas = 0;
+      observaciones = null;
+      informacionAmpliatoria = null;
+    } else if (config.tipo === 'OTROS') {
+      totalCamas = 1;
+      camasOcupadas = 0;
+      observaciones = config.texto || null;
+      informacionAmpliatoria = null;
     }
-  };
+
+    const payload = {
+      habitacion_id: habId,
+      fecha,
+      tipo_habitacion: TIPO_MAP_DB[config.tipo] || 'otros',
+      total_camas: totalCamas,
+      camas_ocupadas: camasOcupadas,
+      observaciones: observaciones,
+      informacion_ampliatoria: informacionAmpliatoria,  // NUEVO
+      actualizado_por: null,
+      actualizado_en: new Date().toISOString()
+    };
+
+    let error;
+    if (existing?.id) {
+      const { error: updateError } = await supabase
+        .from('ocupacion_habitaciones')
+        .update(payload)
+        .eq('id', existing.id);
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('ocupacion_habitaciones')
+        .insert(payload);
+      error = insertError;
+    }
+
+    if (error) {
+      console.error('Error guardando estado de habitación:', error);
+      mostrarSplash('Error al guardar estado');
+      return;
+    }
+
+    mostrarSplash('✅ Estado guardado correctamente');
+    setHabitacionesAbiertas(prev => ({
+      ...prev,
+      [habId]: false
+    }));
+    
+    const habitacion = habitacionesEspeciales.find(h => h.id === habId);
+    setHabitacionStatus(prev => ({
+      ...prev,
+      [habId]: {
+        ...config,
+        camas: config.tipo === 'INTERNACION' ? config.camas : '1',
+        texto: config.tipo === 'OTROS' ? config.texto : '',
+        camas_ocupadas: config.tipo === 'INTERNACION' ? (config.camas_ocupadas || 0) : 0,
+        informacion_ampliatoria: config.tipo === 'INTERNACION' ? config.informacion_ampliatoria : ''
+      }
+    }));
+    
+    if (habitacion) await cargarEstadoHabitaciones([habitacion]);
+  } catch (error) {
+    console.error('Error guardando estado de habitación:', error);
+    mostrarSplash('❌ Error al guardar estado');
+  }
+};
 
   const mostrarSplash = (mensaje) => {
     setNotificacion({ visible: true, mensaje });
@@ -1943,24 +1971,24 @@ const eliminarVisualizador = async (visId, usuario) => {
                                 <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2">
-  <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
-  {config.tipo === 'OTROS' && (
-  <button
-    onClick={(e) => { 
-      e.stopPropagation(); 
-      const textoAmpliatorio = config.texto?.trim() || 'Sector especial';
-      descargarQR(
-        `/habitacion/${hab.slug}`, 
-        `${hab.nombre} - ${p.nombre_piso}`,
-        `📝 ${textoAmpliatorio} - Ropa de cama y blancos`
-      ); 
-    }}
-    className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-1.5 py-0.5 rounded-lg text-[8px] font-semibold uppercase hover:bg-slate-600 transition-all"
-  >
-    🧺 Ropa
-  </button>
-)}
-</div>
+                                        <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
+                                        {config.tipo === 'OTROS' && (
+                                        <button
+                                          onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            const textoAmpliatorio = config.texto?.trim() || 'Sector especial';
+                                            descargarQR(
+                                              `/habitacion/${hab.slug}`, 
+                                              `${hab.nombre} - ${p.nombre_piso}`,
+                                              `📝 ${textoAmpliatorio} - Ropa de cama y blancos`
+                                            ); 
+                                          }}
+                                          className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-1.5 py-0.5 rounded-lg text-[8px] font-semibold uppercase hover:bg-slate-600 transition-all"
+                                        >
+                                          🧺 Ropa
+                                        </button>
+                                      )}
+                                      </div>
                                     <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate block mt-1`}>
                                       {truncarTexto(formatearResumenHabitacion(config), 28)}
                                     </span>
@@ -2006,20 +2034,33 @@ const eliminarVisualizador = async (visId, usuario) => {
                                   </div>
 
                                   {config.tipo === 'INTERNACION' && (
-                                    <div className="grid gap-2 sm:grid-cols-2">
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        value={config.camas}
-                                        onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
-                                        placeholder="Camas totales"
-                                      />
-                                      <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">
-                                        {config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}
-                                      </div>
-                                    </div>
-                                  )}
+                                      <>
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            value={config.camas}
+                                            onChange={(e) => actualizarHabitacionStatus(hab.id, 'camas', e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                            placeholder="Camas totales"
+                                          />
+                                          <div className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs uppercase tracking-[0.1em]">
+                                            {config.camas_ocupadas ? `Ocupadas: ${config.camas_ocupadas}` : 'Sin ocupación registrada'}
+                                          </div>
+                                        </div>
+                                        
+                                        {/* NUEVO TEXTBOX - Información ampliatoria */}
+                                        <div>
+                                          <input
+                                            type="text"
+                                            value={config.informacion_ampliatoria || ''}
+                                            onChange={(e) => actualizarHabitacionStatus(hab.id, 'informacion_ampliatoria', e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 mt-2"
+                                            placeholder="Especialidad / Servicio (Ej: Pediatría, Clínica I, UTI)"
+                                          />
+                                        </div>
+                                      </>
+                                    )}
 
                                   {config.tipo === 'OTROS' && (
                                     <input
