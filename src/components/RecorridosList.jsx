@@ -1,13 +1,42 @@
+// components/RecorridosList.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
 const RecorridosList = () => {
   const [recorridos, setRecorridos] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [filtroFecha, setFiltroFecha] = useState(new Date().toISOString().split('T')[0]);
+  // Inicializar con la fecha actual en zona horaria local
+  const [filtroFecha, setFiltroFecha] = useState(() => {
+    const hoy = new Date();
+    return hoy.toISOString().split('T')[0];
+  });
   const [filtroPiso, setFiltroPiso] = useState('');
   const [pisos, setPisos] = useState([]);
   const [estadisticas, setEstadisticas] = useState({});
+
+  // Función para normalizar fechas a la zona horaria local
+  const getFechaLocal = (fecha) => {
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+    const day = String(fecha.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Función para convertir una fecha YYYY-MM-DD a rango UTC correcto
+  const getRangoFechasLocal = (fechaStr) => {
+    // Crear fecha en zona horaria local (Argentina UTC-3)
+    const [year, month, day] = fechaStr.split('-').map(Number);
+    
+    // Fecha inicio: 00:00:00 en hora local
+    const startDate = new Date(year, month - 1, day, 0, 0, 0);
+    // Fecha fin: 23:59:59 en hora local
+    const endDate = new Date(year, month - 1, day, 23, 59, 59);
+    
+    return {
+      start: startDate.toISOString(),
+      end: endDate.toISOString()
+    };
+  };
 
   useEffect(() => {
     cargarPisos();
@@ -29,6 +58,8 @@ const RecorridosList = () => {
   const cargarRecorridos = async () => {
     setCargando(true);
     
+    console.log('📅 Fecha seleccionada (local):', filtroFecha);
+    
     let query = supabase
       .from('log_recorridos')
       .select(`
@@ -38,15 +69,13 @@ const RecorridosList = () => {
       .order('fecha_registro', { ascending: false });
     
     if (filtroFecha) {
-      // Filtrar por fecha (ignorando hora)
-      const startOfDay = new Date(filtroFecha);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(filtroFecha);
-      endOfDay.setHours(23, 59, 59, 999);
+      // Usar el rango correcto según zona horaria local
+      const { start, end } = getRangoFechasLocal(filtroFecha);
+      console.log('📅 Rango UTC:', { start, end });
       
       query = query
-        .gte('fecha_registro', startOfDay.toISOString())
-        .lte('fecha_registro', endOfDay.toISOString());
+        .gte('fecha_registro', start)
+        .lte('fecha_registro', end);
     }
     
     if (filtroPiso) {
@@ -55,9 +84,13 @@ const RecorridosList = () => {
     
     const { data, error } = await query.limit(200);
     
+    console.log('📊 Resultados:', data?.length || 0, 'registros');
+    
     if (!error && data) {
       setRecorridos(data);
       calcularEstadisticas(data);
+    } else if (error) {
+      console.error('Error cargando recorridos:', error);
     }
     
     setCargando(false);
@@ -82,6 +115,7 @@ const RecorridosList = () => {
 
   const formatearFechaHora = (fechaISO) => {
     const fecha = new Date(fechaISO);
+    // Mostrar en hora local de Argentina
     return {
       fecha: fecha.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }),
       hora: fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
@@ -114,6 +148,9 @@ const RecorridosList = () => {
               onChange={(e) => setFiltroFecha(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
             />
+            <p className="text-[10px] text-slate-500 mt-1">
+              ⚠️ Mostrando registros del día seleccionado (hora Argentina)
+            </p>
           </div>
           <div>
             <label className="text-xs text-slate-500 uppercase font-bold block mb-2">Filtrar por sector</label>
@@ -178,6 +215,9 @@ const RecorridosList = () => {
                 <tr>
                   <td colSpan="6" className="p-8 text-center text-slate-500">
                     📭 No hay recorridos registrados en esta fecha
+                    <p className="text-xs mt-2 text-slate-600">
+                      Sugerencia: Verifica que los recorridos se estén registrando correctamente al guardar estados de habitaciones.
+                    </p>
                   </td>
                 </tr>
               ) : (
@@ -237,7 +277,7 @@ const RecorridosList = () => {
       </div>
 
       {/* Botón refresh */}
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
         <button
           onClick={cargarRecorridos}
           disabled={cargando}
@@ -248,6 +288,12 @@ const RecorridosList = () => {
           </svg>
           Actualizar
         </button>
+        
+        {recorridos.length > 0 && (
+          <p className="text-[10px] text-slate-500">
+            Mostrando {recorridos.length} recorrido{recorridos.length !== 1 ? 's' : ''}
+          </p>
+        )}
       </div>
     </div>
   );
