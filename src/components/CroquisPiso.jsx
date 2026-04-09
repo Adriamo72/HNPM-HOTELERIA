@@ -16,7 +16,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [cargando, setCargando] = useState(true);
   const [cargandoCoordenadas, setCargandoCoordenadas] = useState(true);
   const [mensaje, setMensaje] = useState('');
-  const [fechaSeleccionada] = useState(fechaConsulta || new Date().toISOString().split('T')[0]);
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(fechaConsulta || new Date().toISOString().split('T')[0]);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
   const [estadisticas, setEstadisticas] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
   const [estadisticasGlobales, setEstadisticasGlobales] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
@@ -30,30 +30,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   
   // Estado para forzar re-render de marcadores
   const [marcadoresKey, setMarcadoresKey] = useState(0);
-  
-  // Estado para tooltip táctil
-  const [tooltipVisible, setTooltipVisible] = useState(null);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-  
-  // Detectar si es móvil
-  const [isMobile, setIsMobile] = useState(false);
+  const [tooltipHabitacion, setTooltipHabitacion] = useState(null);
   
   const imageRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Detectar tamaño de pantalla
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
   // ==================== RESETEAR COMPLETO cuando cambia el pisoId ====================
   useEffect(() => {
     console.log(`🔄 Resetear croquis para pisoId: ${normalizedPisoId}`);
+    
     // Resetear todos los estados
     setCroquis(null);
     setCoordenadas({});
@@ -67,6 +52,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setModoMovimiento(false);
     setEstadisticas({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
     setMarcadoresKey(prev => prev + 1);
+    
     // Validar que tengamos un piso válido
     if (normalizedPisoId !== '' && normalizedPisoId !== null && normalizedPisoId !== undefined && normalizedPisoId !== 0) {
       console.log(`✅ Cargando croquis para piso ${normalizedPisoId}`);
@@ -77,32 +63,33 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       setCargando(false);
       setCargandoCoordenadas(false);
     }
-  }, [normalizedPisoId, cargarCroquis, cargarEstadisticasGlobales]);
+  }, [normalizedPisoId]);
 
   // ==================== Cargar ocupación cuando cambia fecha ====================
   useEffect(() => {
     if (habitaciones.length > 0 && pisoId && croquis) {
       cargarOcupacion();
     }
-  }, [fechaSeleccionada, habitaciones, croquis, cargarOcupacion]);
+  }, [fechaSeleccionada, habitaciones, croquis]);
 
   // ==================== Calcular estadísticas cuando cambia ocupación ====================
   useEffect(() => {
     if (habitaciones.length > 0) {
       calcularEstadisticas();
     }
-  }, [ocupacion, habitaciones, calcularEstadisticas]);
+  }, [ocupacion, habitaciones]);
 
   // ==================== Sincronizar habitaciones cuando cambian externamente ====================
   useEffect(() => {
     if (habitaciones && habitaciones.length > 0 && croquis) {
       console.log(`📋 Sincronizando ${habitaciones.length} habitaciones para piso ${pisoId}`);
       calcularEstadisticas();
+      
       // Verificar cuántas habitaciones tienen coordenadas
       const conCoordenadas = habitaciones.filter(hab => coordenadas[hab.id]).length;
       console.log(`📍 Habitaciones con coordenadas: ${conCoordenadas}/${habitaciones.length}`);
     }
-  }, [habitaciones, croquis, calcularEstadisticas, coordenadas, pisoId]);
+  }, [habitaciones, croquis]);
 
   // ==================== Forzar re-render cuando coordenadas estén listas ====================
   useEffect(() => {
@@ -111,7 +98,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       // Forzar re-render de los marcadores
       setMarcadoresKey(prev => prev + 1);
     }
-  }, [cargando, cargandoCoordenadas, croquis, habitaciones, coordenadas]);
+  }, [cargando, cargandoCoordenadas, croquis, habitaciones]);
 
   // ==================== Cargar estadísticas globales ====================
   const cargarEstadisticasGlobales = async () => {
@@ -426,22 +413,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
-  // ==================== Manejo de tooltip táctil ====================
-  const handleTouchStart = (e, hab, ocup, estilo) => {
-    e.stopPropagation();
-    if (modoEdicion) return;
-    
-    const touch = e.touches[0];
-    setTooltipPosition({ x: touch.clientX, y: touch.clientY - 60 });
-    setTooltipVisible(estilo.title);
-    
-    setTimeout(() => setTooltipVisible(null), 4000);
-  };
-
-  const handleCloseTooltip = () => {
-    setTooltipVisible(null);
-  };
-
   // ==================== Obtener color según tipo y ocupación ====================
   const getColorPorTipoYOcupacion = (habitacion, ocup) => {
     if (!ocup) {
@@ -604,6 +575,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Tooltip táctil (móvil) ====================
+  const handleMarkerClick = (e, hab, ocup, estilo) => {
+    e.stopPropagation();
+    if (modoEdicion) return;
+    setTooltipHabitacion(prev => prev?.hab.id === hab.id ? null : { hab, ocup, estilo });
+  };
+
   // ==================== Context menu (click derecho) ====================
   const handleContextMenu = (e, habId, nombre) => {
     e.preventDefault();
@@ -710,9 +688,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         className="relative overflow-auto bg-slate-950"
         style={{ 
           height: 'auto', 
-          maxHeight: isMobile ? '70vh' : '80vh',
-          minHeight: isMobile ? '300px' : '400px',
-          WebkitOverflowScrolling: 'touch'
+          maxHeight: '80vh',
+          minHeight: '400px'
         }}
       >
         <div
@@ -742,28 +719,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             draggable={false}
           />
           
-          {/* Tooltip táctil para móvil */}
-          {tooltipVisible && isMobile && (
-            <div 
-              className="fixed z-50 bg-slate-900 text-white text-xs rounded-lg p-2 shadow-xl border border-slate-600 max-w-[220px]"
-              style={{ 
-                left: `${tooltipPosition.x}px`, 
-                top: `${tooltipPosition.y}px`,
-                transform: 'translateX(-50%)'
-              }}
-            >
-              <button 
-                onClick={handleCloseTooltip}
-                className="absolute top-0 right-1 text-slate-400 text-lg hover:text-white"
-              >
-                ×
-              </button>
-              <div className="whitespace-pre-line text-center mt-1">
-                {tooltipVisible}
-              </div>
-            </div>
-          )}
-          
           {/* Marcadores de habitaciones - con key para forzar re-render */}
           <React.Fragment key={marcadoresKey}>
             {habitaciones.map(hab => {
@@ -789,14 +744,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 displayTexto = '';
               }
               
-              // Tamaños responsive
-              const markerWidth = isMobile ? 'min(4%, 50px)' : 'min(2.2%, 34px)';
-              const markerHeight = isMobile ? 'min(10%, 70px)' : 'min(6.5%, 55px)';
-              const minWidth = isMobile ? '45px' : '32px';
-              const minHeight = isMobile ? '60px' : '48px';
-              const fontSizeNumber = isMobile ? 'clamp(11px, 3vw, 16px)' : 'clamp(9px, 1.8vw, 14px)';
-              const fontSizeCount = isMobile ? 'clamp(14px, 3.5vw, 18px)' : 'clamp(12px, 2.2vw, 18px)';
-              
               return (
                 <div
                   key={hab.id}
@@ -805,25 +752,19 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                   style={{
                     left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                     top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                    width: markerWidth,
-                    height: markerHeight,
+                    width: 'min(2.2%, 34px)',
+                    height: 'min(6.5%, 55px)',
                     transform: 'translate(-50%, -50%)',
-                    minWidth: minWidth,
-                    minHeight: minHeight,
-                    padding: '2px 0',
+                    minWidth: '18px',
+                    minHeight: '28px',
+                    padding: '1px 0',
                     ...estilo.style
                   }}
-                  title={!isMobile ? estilo.title : ''}
-                  onTouchStart={(e) => isMobile && handleTouchStart(e, hab, ocup, estilo)}
-                  onClick={(e) => {
-                    if (isMobile && !modoEdicion) {
-                      handleTouchStart(e, hab, ocup, estilo);
-                    }
-                  }}
-                  onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
+                  title={estilo.title}
+                  onClick={(e) => handleMarkerClick(e, hab, ocup, estilo)}
                 >
-                  <span className="font-bold" style={{ fontSize: fontSizeNumber }}>{hab.nombre}</span>
-                  <span className="font-black leading-none" style={{ fontSize: fontSizeCount }}>{displayTexto}</span>
+                  <span className="text-[clamp(7px,1.5vw,12px)] font-bold leading-none truncate w-full text-center px-0.5">{hab.nombre}</span>
+                  <span className="text-[clamp(10px,2vw,16px)] font-black leading-none">{displayTexto}</span>
                 </div>
               );
             })}
@@ -843,13 +784,37 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             {esVisualizador ? '🔍 Solo visualización - Click derecho para ver detalles' : `🔍 Zoom: ${Math.round(zoom * 100)}% | 🖱️ ${modoMovimiento ? 'Arrastra marcadores' : (modoEdicion ? 'Click para posicionar' : 'Solo visualización')}`}
           </div>
         </div>
-        {isMobile && !esVisualizador && (
-          <p className="text-center text-xs text-blue-400 mt-2">
-            💡 Toca una habitación para ver los detalles
-          </p>
-        )}
         {mensaje && <p className="text-center text-sm mt-2 text-blue-400">{mensaje}</p>}
       </div>
+
+      {/* Tooltip táctil para móvil */}
+      {tooltipHabitacion && (
+        <div
+          className="fixed inset-0 z-50 flex items-end"
+          onClick={() => setTooltipHabitacion(null)}
+        >
+          <div
+            className="w-full bg-slate-800 border-t border-slate-600 rounded-t-2xl p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider">Habitación</p>
+                <h4 className="text-white font-bold text-lg">{tooltipHabitacion.hab.nombre}</h4>
+              </div>
+              <button
+                onClick={() => setTooltipHabitacion(null)}
+                className="w-8 h-8 bg-slate-700 rounded-full text-slate-300 text-xl font-bold flex items-center justify-center"
+              >
+                ×
+              </button>
+            </div>
+            <p className="text-sm text-slate-300 whitespace-pre-line leading-relaxed">
+              {tooltipHabitacion.estilo.title}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
