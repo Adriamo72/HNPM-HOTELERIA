@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient';
 import LoginConQR from './components/LoginConQR';
 import FormularioPiso from './components/FormularioPiso';
 import AdminDashboard from './components/AdminDashboard';

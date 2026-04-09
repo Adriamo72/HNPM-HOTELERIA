@@ -16,7 +16,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [cargando, setCargando] = useState(true);
   const [cargandoCoordenadas, setCargandoCoordenadas] = useState(true);
   const [mensaje, setMensaje] = useState('');
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(fechaConsulta || new Date().toISOString().split('T')[0]);
+  const [fechaSeleccionada] = useState(fechaConsulta || new Date().toISOString().split('T')[0]);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
   const [estadisticas, setEstadisticas] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
   const [estadisticasGlobales, setEstadisticasGlobales] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
@@ -54,7 +54,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   // ==================== RESETEAR COMPLETO cuando cambia el pisoId ====================
   useEffect(() => {
     console.log(`🔄 Resetear croquis para pisoId: ${normalizedPisoId}`);
-    
     // Resetear todos los estados
     setCroquis(null);
     setCoordenadas({});
@@ -68,7 +67,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setModoMovimiento(false);
     setEstadisticas({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
     setMarcadoresKey(prev => prev + 1);
-    
     // Validar que tengamos un piso válido
     if (normalizedPisoId !== '' && normalizedPisoId !== null && normalizedPisoId !== undefined && normalizedPisoId !== 0) {
       console.log(`✅ Cargando croquis para piso ${normalizedPisoId}`);
@@ -79,33 +77,32 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       setCargando(false);
       setCargandoCoordenadas(false);
     }
-  }, [normalizedPisoId]);
+  }, [normalizedPisoId, cargarCroquis, cargarEstadisticasGlobales]);
 
   // ==================== Cargar ocupación cuando cambia fecha ====================
   useEffect(() => {
     if (habitaciones.length > 0 && pisoId && croquis) {
       cargarOcupacion();
     }
-  }, [fechaSeleccionada, habitaciones, croquis]);
+  }, [fechaSeleccionada, habitaciones, croquis, cargarOcupacion]);
 
   // ==================== Calcular estadísticas cuando cambia ocupación ====================
   useEffect(() => {
     if (habitaciones.length > 0) {
       calcularEstadisticas();
     }
-  }, [ocupacion, habitaciones]);
+  }, [ocupacion, habitaciones, calcularEstadisticas]);
 
   // ==================== Sincronizar habitaciones cuando cambian externamente ====================
   useEffect(() => {
     if (habitaciones && habitaciones.length > 0 && croquis) {
       console.log(`📋 Sincronizando ${habitaciones.length} habitaciones para piso ${pisoId}`);
       calcularEstadisticas();
-      
       // Verificar cuántas habitaciones tienen coordenadas
       const conCoordenadas = habitaciones.filter(hab => coordenadas[hab.id]).length;
       console.log(`📍 Habitaciones con coordenadas: ${conCoordenadas}/${habitaciones.length}`);
     }
-  }, [habitaciones, croquis]);
+  }, [habitaciones, croquis, calcularEstadisticas, coordenadas, pisoId]);
 
   // ==================== Forzar re-render cuando coordenadas estén listas ====================
   useEffect(() => {
@@ -114,7 +111,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       // Forzar re-render de los marcadores
       setMarcadoresKey(prev => prev + 1);
     }
-  }, [cargando, cargandoCoordenadas, croquis, habitaciones]);
+  }, [cargando, cargandoCoordenadas, croquis, habitaciones, coordenadas]);
 
   // ==================== Cargar estadísticas globales ====================
   const cargarEstadisticasGlobales = async () => {

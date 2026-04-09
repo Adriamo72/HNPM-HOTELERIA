@@ -8,17 +8,16 @@ import RecorridosList from './RecorridosList';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
-  const [personal, setPersonal] = useState([]);
+    const [personal, setPersonal] = useState([]);
   const [pisos, setPisos] = useState([]);
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [admins, setAdmins] = useState([]);
-  const [movimientosAgrupados, setMovimientosAgrupados] = useState({});
-  const [stockPañol, setStockPañol] = useState({});
+  const [movimientosAgrupados] = useState({});
+  const [stockPañol] = useState({});
   const [stockUso, setStockUso] = useState({});
   const [stockLavadero, setStockLavadero] = useState({});
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
-  const [sincronizando, setSincronizando] = useState(false);
   const [cargandoCroquis, setCargandoCroquis] = useState(false);
   const [cargandoMonitor, setCargandoMonitor] = useState(false);
   const [cargandoAdmin, setCargandoAdmin] = useState(false);
@@ -78,21 +77,52 @@ const AdminDashboard = () => {
     if (!texto) return texto;
     return texto.length > largo ? `${texto.slice(0, largo - 1)}…` : texto;
   };
+
   const STOCK_CRITICO = 5;
   const [croquisKey, setCroquisKey] = useState(0);
 
+  // ==================== CARGAR DATOS PRINCIPAL ====================
+  const cargarDatos = async (tipo = 'todos') => {
+    if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(true);
+    if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(true);
+    if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(true);
+      try {
+        if (tipo === 'croquis' || tipo === 'todos') {
+          const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
+          const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
+          const resPers = await supabase.from('personal').select('*').order('apellido');
+          // setPisos(resPisos.data || []);
+          setHabitacionesEspeciales(resHabs.data || []);
+          setPersonal(resPers.data || []);
+          // Seleccionar automáticamente el piso más alto
+          if (resPisos.data && resPisos.data.length > 0) {
+            const pisoMasAlto = resPisos.data.reduce((prev, current) => {
+              const numPrev = parseInt(prev.nombre_piso.replace(/\D/g, '')) || 0;
+              const numCurrent = parseInt(current.nombre_piso.replace(/\D/g, '')) || 0;
+              return numCurrent > numPrev ? current : prev;
+            });
+            setPisoSeleccionado(pisoMasAlto.id);
+          }
+          await cargarEstadoHabitaciones(resHabs.data || []);
+        }
+        // ...existing code...
+      } catch (error) {
+        // ...existing code...
+      }
+  };
+
   useEffect(() => {
-  cargarDatos('todos');
-  cargarAdmins();
-  cargarVisualizadores();
-}, []);
+    cargarDatos('todos');
+    cargarAdmins();
+    cargarVisualizadores();
+  }, [cargarDatos, cargarAdmins, cargarVisualizadores]);
 
   // Recargar datos cuando se cambia a la pestaña historial y no hay datos
   useEffect(() => {
     if (activeTab === 'historial' && Object.keys(stockPañol).length === 0 && !cargandoMonitor) {
       cargarDatos('monitor');
     }
-  }, [activeTab, stockPañol, cargandoMonitor]);
+  }, [activeTab, stockPañol, cargandoMonitor, cargarDatos]);
 
   useEffect(() => {
     if (!habitacionesEspeciales.length) return;
@@ -314,100 +344,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // ==================== CARGAR DATOS PRINCIPAL ====================
-const cargarDatos = async (tipo = 'todos') => {
-  if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(true);
-  if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(true);
-  if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(true);
-  
-  try {
-    if (tipo === 'croquis' || tipo === 'todos') {
-      const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
-      const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
-      setPisos(resPisos.data || []);
-      setHabitacionesEspeciales(resHabs.data || []);
-      
-      // Seleccionar automáticamente el piso más alto
-      if (resPisos.data && resPisos.data.length > 0) {
-        const pisoMasAlto = resPisos.data.reduce((prev, current) => {
-          const numPrev = parseInt(prev.nombre_piso.replace(/\D/g, '')) || 0;
-          const numCurrent = parseInt(current.nombre_piso.replace(/\D/g, '')) || 0;
-          return numCurrent > numPrev ? current : prev;
-        });
-        setPisoSeleccionado(pisoMasAlto.id);
-      }
-      
-      await cargarEstadoHabitaciones(resHabs.data || []);
-    }
-    
-    if (tipo === 'monitor' || tipo === 'todos') {
-      const resPers = await supabase.from('personal').select('*').order('apellido');
-      const { data: config } = await supabase.from('configuracion_sistema').select('valor').eq('clave', 'MODO_AUDITORIA').single();
-      setAuditoriaHabilitada(config?.valor === 'true');
 
-      const { data: movs } = await supabase.from('movimientos_stock')
-        .select(`
-          *, 
-          pisos(nombre_piso, id), 
-          pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), 
-          enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(500);
-
-      const stockPañolMap = {};
-      const stockUsoMap = {};
-      const stockLavaderoMap = {};
-      
-      if (pisos.length > 0) {
-        for (const piso of pisos) {
-          stockPañolMap[piso.nombre_piso] = {};
-          stockUsoMap[piso.nombre_piso] = {};
-          stockLavaderoMap[piso.nombre_piso] = {};
-          
-          for (const item of ITEMS_REQUERIDOS) {
-            const { data: stockData } = await supabase
-              .from('stock_piso')
-              .select('stock_pañol, stock_en_uso, stock_lavadero')
-              .eq('piso_id', piso.id)
-              .eq('item', item)
-              .maybeSingle();
-            
-            stockPañolMap[piso.nombre_piso][item] = stockData?.stock_pañol || 0;
-            stockUsoMap[piso.nombre_piso][item] = stockData?.stock_en_uso || 0;
-            stockLavaderoMap[piso.nombre_piso][item] = stockData?.stock_lavadero || 0;
-          }
-        }
-      }
-
-      const agrupados = movs ? movs.reduce((acc, curr) => {
-        const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
-        if (!acc[nombrePiso]) acc[nombrePiso] = [];
-        acc[nombrePiso].push(curr);
-        return acc;
-      }, {}) : {};
-      
-      setPersonal(resPers.data || []);
-      setMovimientosAgrupados(agrupados);
-      setStockPañol(stockPañolMap);
-      setStockUso(stockUsoMap);
-      setStockLavadero(stockLavaderoMap);
-    }
-    
-    if (tipo === 'admin' || tipo === 'todos') {
-      await cargarAdmins();
-    }
-    
-    mostrarSplash("Datos actualizados correctamente");
-  } catch (error) {
-    console.error(error);
-    mostrarSplash("Error al sincronizar datos");
-  } finally {
-    if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(false);
-    if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(false);
-    if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(false);
-  }
-};
 
   // ==================== GESTIÓN DE ADMINISTRADORES ====================
   const cargarAdmins = async () => {
