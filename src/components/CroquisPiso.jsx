@@ -63,6 +63,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       setCargando(false);
       setCargandoCoordenadas(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [normalizedPisoId]);
 
   // ==================== Cargar ocupación cuando cambia fecha ====================
