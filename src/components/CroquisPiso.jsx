@@ -16,7 +16,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [cargando, setCargando] = useState(true);
   const [cargandoCoordenadas, setCargandoCoordenadas] = useState(true);
   const [mensaje, setMensaje] = useState('');
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(fechaConsulta || new Date().toISOString().split('T')[0]);
+  const [fechaSeleccionada] = useState(fechaConsulta || new Date().toISOString().split('T')[0]);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
   const [estadisticas, setEstadisticas] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
   const [estadisticasGlobales, setEstadisticasGlobales] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
@@ -70,6 +70,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     if (habitaciones.length > 0 && pisoId && croquis) {
       cargarOcupacion();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fechaSeleccionada, habitaciones, croquis]);
 
   // ==================== Calcular estadísticas cuando cambia ocupación ====================
@@ -77,6 +78,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     if (habitaciones.length > 0) {
       calcularEstadisticas();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ocupacion, habitaciones]);
 
   // ==================== Sincronizar habitaciones cuando cambian externamente ====================
@@ -89,6 +91,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       const conCoordenadas = habitaciones.filter(hab => coordenadas[hab.id]).length;
       console.log(`📍 Habitaciones con coordenadas: ${conCoordenadas}/${habitaciones.length}`);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [habitaciones, croquis]);
 
   // ==================== Forzar re-render cuando coordenadas estén listas ====================
@@ -98,6 +101,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       // Forzar re-render de los marcadores
       setMarcadoresKey(prev => prev + 1);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cargando, cargandoCoordenadas, croquis, habitaciones]);
 
   // ==================== Cargar estadísticas globales ====================
@@ -583,6 +587,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   };
 
   // ==================== Context menu (click derecho) ====================
+  // eslint-disable-next-line no-unused-vars
   const handleContextMenu = (e, habId, nombre) => {
     e.preventDefault();
     if (!modoEdicion) return;

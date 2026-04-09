@@ -29,6 +29,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     } else {
       setCargando(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slugPiso]);
 
   const mostrarSplash = (msj) => {

@@ -14,8 +14,8 @@ const AdminDashboard = () => {
   const [admins, setAdmins] = useState([]);
   const [movimientosAgrupados] = useState({});
   const [stockPañol] = useState({});
-  const [stockUso, setStockUso] = useState({});
-  const [stockLavadero, setStockLavadero] = useState({});
+  const [stockUso] = useState({});
+  const [stockLavadero] = useState({});
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [cargandoCroquis, setCargandoCroquis] = useState(false);
@@ -115,14 +115,16 @@ const AdminDashboard = () => {
     cargarDatos('todos');
     cargarAdmins();
     cargarVisualizadores();
-  }, [cargarDatos, cargarAdmins, cargarVisualizadores]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Recargar datos cuando se cambia a la pestaña historial y no hay datos
   useEffect(() => {
     if (activeTab === 'historial' && Object.keys(stockPañol).length === 0 && !cargandoMonitor) {
       cargarDatos('monitor');
     }
-  }, [activeTab, stockPañol, cargandoMonitor, cargarDatos]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, stockPañol, cargandoMonitor]);
 
   useEffect(() => {
     if (!habitacionesEspeciales.length) return;

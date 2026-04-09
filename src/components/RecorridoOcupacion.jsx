@@ -34,8 +34,6 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       setPiso(pisoData);
       
       // 2. Obtener habitaciones y sus configuraciones en UNA sola consulta
-      const fecha = new Date().toISOString().split('T')[0];
-      
       // Consulta optimizada: obtener habitaciones con su última configuración
       const { data: habitacionesData, error: habError } = await supabase
         .from('habitaciones_especiales')

@@ -24,6 +24,7 @@ const VisualizadorDashboard = () => {
 
   useEffect(() => {
     cargarDatos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Recargar datos cuando se cambia a la pestaña monitor y no hay datos
@@ -31,6 +32,7 @@ const VisualizadorDashboard = () => {
     if (activeTab === 'monitor' && Object.keys(stockPañol).length === 0 && !cargandoMonitor) {
       cargarDatos();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, stockPañol, cargandoMonitor]);
 
   const mostrarSplash = (mensaje) => {

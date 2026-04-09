@@ -33,10 +33,12 @@ const RecorridosList = () => {
   useEffect(() => {
     cargarPisos();
     cargarRecorridos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     cargarRecorridos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroFecha, filtroPiso]);
 
   const cargarPisos = async () => {
