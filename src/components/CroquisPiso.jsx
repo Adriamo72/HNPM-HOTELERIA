@@ -31,8 +31,25 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   // Estado para forzar re-render de marcadores
   const [marcadoresKey, setMarcadoresKey] = useState(0);
   
+  // Estado para tooltip táctil
+  const [tooltipVisible, setTooltipVisible] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  
+  // Detectar si es móvil
+  const [isMobile, setIsMobile] = useState(false);
+  
   const imageRef = useRef(null);
   const containerRef = useRef(null);
+
+  // Detectar tamaño de pantalla
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // ==================== RESETEAR COMPLETO cuando cambia el pisoId ====================
   useEffect(() => {
@@ -412,6 +429,22 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Manejo de tooltip táctil ====================
+  const handleTouchStart = (e, hab, ocup, estilo) => {
+    e.stopPropagation();
+    if (modoEdicion) return;
+    
+    const touch = e.touches[0];
+    setTooltipPosition({ x: touch.clientX, y: touch.clientY - 60 });
+    setTooltipVisible(estilo.title);
+    
+    setTimeout(() => setTooltipVisible(null), 4000);
+  };
+
+  const handleCloseTooltip = () => {
+    setTooltipVisible(null);
+  };
+
   // ==================== Obtener color según tipo y ocupación ====================
   const getColorPorTipoYOcupacion = (habitacion, ocup) => {
     if (!ocup) {
@@ -680,8 +713,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         className="relative overflow-auto bg-slate-950"
         style={{ 
           height: 'auto', 
-          maxHeight: '80vh',
-          minHeight: '400px'
+          maxHeight: isMobile ? '70vh' : '80vh',
+          minHeight: isMobile ? '300px' : '400px',
+          WebkitOverflowScrolling: 'touch'
         }}
       >
         <div
@@ -711,6 +745,28 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             draggable={false}
           />
           
+          {/* Tooltip táctil para móvil */}
+          {tooltipVisible && isMobile && (
+            <div 
+              className="fixed z-50 bg-slate-900 text-white text-xs rounded-lg p-2 shadow-xl border border-slate-600 max-w-[220px]"
+              style={{ 
+                left: `${tooltipPosition.x}px`, 
+                top: `${tooltipPosition.y}px`,
+                transform: 'translateX(-50%)'
+              }}
+            >
+              <button 
+                onClick={handleCloseTooltip}
+                className="absolute top-0 right-1 text-slate-400 text-lg hover:text-white"
+              >
+                ×
+              </button>
+              <div className="whitespace-pre-line text-center mt-1">
+                {tooltipVisible}
+              </div>
+            </div>
+          )}
+          
           {/* Marcadores de habitaciones - con key para forzar re-render */}
           <React.Fragment key={marcadoresKey}>
             {habitaciones.map(hab => {
@@ -736,6 +792,14 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 displayTexto = '';
               }
               
+              // Tamaños responsive
+              const markerWidth = isMobile ? 'min(4%, 50px)' : 'min(2.2%, 34px)';
+              const markerHeight = isMobile ? 'min(10%, 70px)' : 'min(6.5%, 55px)';
+              const minWidth = isMobile ? '45px' : '32px';
+              const minHeight = isMobile ? '60px' : '48px';
+              const fontSizeNumber = isMobile ? 'clamp(11px, 3vw, 16px)' : 'clamp(9px, 1.8vw, 14px)';
+              const fontSizeCount = isMobile ? 'clamp(14px, 3.5vw, 18px)' : 'clamp(12px, 2.2vw, 18px)';
+              
               return (
                 <div
                   key={hab.id}
@@ -744,18 +808,25 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                   style={{
                     left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                     top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                    width: 'min(2.2%, 34px)',
-                    height: 'min(6.5%, 55px)',
+                    width: markerWidth,
+                    height: markerHeight,
                     transform: 'translate(-50%, -50%)',
-                    minWidth: '32px',
-                    minHeight: '48px',
+                    minWidth: minWidth,
+                    minHeight: minHeight,
                     padding: '2px 0',
                     ...estilo.style
                   }}
-                  title={estilo.title}
+                  title={!isMobile ? estilo.title : ''}
+                  onTouchStart={(e) => isMobile && handleTouchStart(e, hab, ocup, estilo)}
+                  onClick={(e) => {
+                    if (isMobile && !modoEdicion) {
+                      handleTouchStart(e, hab, ocup, estilo);
+                    }
+                  }}
+                  onContextMenu={(e) => handleContextMenu(e, hab.id, hab.nombre)}
                 >
-                  <span className="text-[clamp(9px,1.8vw,14px)] font-bold">{hab.nombre}</span>
-                  <span className="text-[clamp(12px,2.2vw,18px)] font-black leading-none">{displayTexto}</span>
+                  <span className="font-bold" style={{ fontSize: fontSizeNumber }}>{hab.nombre}</span>
+                  <span className="font-black leading-none" style={{ fontSize: fontSizeCount }}>{displayTexto}</span>
                 </div>
               );
             })}
@@ -775,6 +846,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             {esVisualizador ? '🔍 Solo visualización - Click derecho para ver detalles' : `🔍 Zoom: ${Math.round(zoom * 100)}% | 🖱️ ${modoMovimiento ? 'Arrastra marcadores' : (modoEdicion ? 'Click para posicionar' : 'Solo visualización')}`}
           </div>
         </div>
+        {isMobile && !esVisualizador && (
+          <p className="text-center text-xs text-blue-400 mt-2">
+            💡 Toca una habitación para ver los detalles
+          </p>
+        )}
         {mensaje && <p className="text-center text-sm mt-2 text-blue-400">{mensaje}</p>}
       </div>
     </div>
