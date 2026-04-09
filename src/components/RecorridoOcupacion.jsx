@@ -10,7 +10,6 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [mensajeExito, setMensajeExito] = useState(null);
-  const [progreso, setProgreso] = useState({ actual: 0, total: 0 });
 
   // Función para cargar datos - optimizada
   const cargarDatos = useCallback(async () => {
@@ -90,7 +89,6 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       
       setHabitaciones(habitacionesInternacion);
       setOcupaciones(ocupState);
-      setProgreso({ actual: 0, total: habitacionesInternacion.length });
       
     } catch (err) {
       console.error("Error:", err);

@@ -7,7 +7,7 @@ const ITEMS_HOTELERIA = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS 
 const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   const [piso, setPiso] = useState(null);
   const [habitacionEspecial, setHabitacionEspecial] = useState(null);
-  const [modo, setModo] = useState(modoAcceso || 'piso'); 
+  const modo = modoAcceso || 'piso';
   const [stocksPorItem, setStocksPorItem] = useState({});
   const [stocksUsoPorItem, setStocksUsoPorItem] = useState({});
   const [stocksLavaderoPorItem, setStocksLavaderoPorItem] = useState({});

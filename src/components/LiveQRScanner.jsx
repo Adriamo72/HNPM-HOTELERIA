@@ -60,12 +60,6 @@ const LiveQRScanner = ({ onScanSuccess, onScanError }) => {
     };
   }, []);
 
-  const stopScanner = () => {
-    if (scannerRef.current && isScanning) {
-      scannerRef.current.stop().catch(console.error);
-      setIsScanning(false);
-    }
-  };
 
   return (
     <div className="w-full">

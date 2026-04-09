@@ -14,14 +14,6 @@ const RecorridosList = () => {
   const [pisos, setPisos] = useState([]);
   const [estadisticas, setEstadisticas] = useState({});
 
-  // Función para normalizar fechas a la zona horaria local
-  const getFechaLocal = (fecha) => {
-    const year = fecha.getFullYear();
-    const month = String(fecha.getMonth() + 1).padStart(2, '0');
-    const day = String(fecha.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
   // Función para convertir una fecha YYYY-MM-DD a rango UTC correcto
   const getRangoFechasLocal = (fechaStr) => {
     // Crear fecha en zona horaria local (Argentina UTC-3)
