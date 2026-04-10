@@ -13,8 +13,3 @@ root.render(
 
 // Registrar service worker para PWA
 serviceWorkerRegistration.register();
-
-// Desbloquear rotación programáticamente (tiene prioridad sobre el manifest)
-if (window.screen && window.screen.orientation && window.screen.orientation.unlock) {
-  try { window.screen.orientation.unlock(); } catch (_) {}
-}
