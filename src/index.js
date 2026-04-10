@@ -15,6 +15,6 @@ root.render(
 serviceWorkerRegistration.register();
 
 // Desbloquear rotación programáticamente (tiene prioridad sobre el manifest)
-if (screen.orientation && screen.orientation.unlock) {
-  try { screen.orientation.unlock(); } catch (_) {}
+if (window.screen && window.screen.orientation && window.screen.orientation.unlock) {
+  try { window.screen.orientation.unlock(); } catch (_) {}
 }
