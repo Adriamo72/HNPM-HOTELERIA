@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
 import RecorridosList from './RecorridosList';
+import AsistenteIA from './AsistenteIA';
 
 const VisualizadorDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
@@ -406,6 +407,8 @@ const VisualizadorDashboard = () => {
           )}
         </div>
       )}
+
+      <AsistenteIA pisos={pisos} habitaciones={habitacionesEspeciales} />
 
       {/* Notificación flotante */}
       {notificacion.visible && (

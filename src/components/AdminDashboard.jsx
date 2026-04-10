@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
 import RecorridosList from './RecorridosList';
+import AsistenteIA from './AsistenteIA';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
@@ -2503,6 +2504,8 @@ const eliminarVisualizador = async (visId, usuario) => {
         </div>
       )}
       
+      <AsistenteIA pisos={pisos} habitaciones={habitacionesEspeciales} />
+
       {/* Notificaciones flotantes */}
       {notificacion.visible && (
         <div className="fixed bottom-6 right-6 bg-slate-800 text-slate-200 px-4 py-3 rounded-lg shadow-lg font-medium text-sm z-[100] border border-slate-600">
