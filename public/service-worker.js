@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hoteleria-hnpm-v3';
+const CACHE_NAME = 'hoteleria-hnpm-v4';
 const urlsToCache = [
   '/manifest.json',
   '/site.webmanifest'
