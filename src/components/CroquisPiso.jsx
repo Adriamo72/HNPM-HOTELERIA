@@ -815,7 +815,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                     padding: '2px 1px',
                     ...estilo.style
                   }}
-                  title={`${hab.nombre} — ${estilo.title}`}
+                  title={`${hab.nombre} - ${estilo.title}`}
                   onClick={(e) => handleMarkerClick(e, hab, ocup, estilo)}
                 >
                   <span className="text-[9px] font-bold leading-none truncate w-full text-center px-0.5">{hab.nombre}</span>
