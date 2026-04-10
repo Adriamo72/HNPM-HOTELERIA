@@ -647,8 +647,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     return (
       <div className="bg-slate-800 rounded-xl p-8 text-center border border-dashed border-slate-600">
         <div className="text-6xl mb-4">🗺️</div>
-        <h3 className="text-xl font-bold text-white mb-2">Croquis no disponible</h3>
-        <p className="text-slate-400 mb-4">Sube la imagen del croquis para {pisoNombre}</p>
+        <h3 className="text-xl font-bold text-white mb-2">Plano no disponible</h3>
+        <p className="text-slate-400 mb-4">Sube la imagen del plano para {pisoNombre}</p>
         {!esVisualizador && (
           <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition-all">
             📤 Subir plano (PNG/JPG)
@@ -815,7 +815,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                     padding: '2px 1px',
                     ...estilo.style
                   }}
-                  title={estilo.title}
+                  title={ocup?.tipo_habitacion === 'activa' ? `${hab.nombre} - ${estilo.title}` : estilo.title}
                   onClick={(e) => handleMarkerClick(e, hab, ocup, estilo)}
                 >
                   <span className="text-[9px] font-bold leading-none truncate w-full text-center px-0.5">{hab.nombre}</span>
@@ -873,7 +873,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 <h4 className="text-white font-bold text-lg">
                   {tooltipHabitacion.hab.nombre}
                   {tooltipHabitacion.ocup?.tipo_habitacion === 'activa' && tooltipHabitacion.ocup?.informacion_ampliatoria
-                    ? ` — ${tooltipHabitacion.ocup.informacion_ampliatoria}`
+                    ? ` - ${tooltipHabitacion.ocup.informacion_ampliatoria}`
                     : ''}
                 </h4>
               </div>
