@@ -108,6 +108,10 @@ const AdminDashboard = () => {
         // ...existing code...
       } catch (error) {
         // ...existing code...
+      } finally {
+        if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(false);
+        if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(false);
+        if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(false);
       }
   };
 
