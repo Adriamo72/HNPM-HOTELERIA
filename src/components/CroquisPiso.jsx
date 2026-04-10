@@ -35,6 +35,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const imageRef = useRef(null);
   const containerRef = useRef(null);
 
+  // Re-render marcadores al rotar el dispositivo
+  useEffect(() => {
+    const handleResize = () => setMarcadoresKey(prev => prev + 1);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // ==================== RESETEAR COMPLETO cuando cambia el pisoId ====================
   useEffect(() => {
     console.log(`🔄 Resetear croquis para pisoId: ${normalizedPisoId}`);
@@ -694,8 +701,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         className="relative overflow-auto bg-slate-950"
         style={{ 
           height: 'auto', 
-          maxHeight: '80vh',
-          minHeight: '400px'
+          maxHeight: '80svh',
+          minHeight: 'min(400px, 60svh)'
         }}
       >
         <div
