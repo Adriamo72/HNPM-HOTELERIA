@@ -496,9 +496,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         
         let titleText = '';
         if (totalCamas === 0) {
-          titleText = `${infoAmpliatoria}\n🚫 Sin camas asignadas\n📅 ${fechaFormateada} ${horaFormateada} hs`;
+          titleText = `${infoAmpliatoria}\nSin camas asignadas\n${fechaFormateada} ${horaFormateada} hs`;
         } else {
-          titleText = `${infoAmpliatoria}\n🛏️ ${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles\n📅 ${fechaFormateada} ${horaFormateada} hs`;
+          titleText = `${infoAmpliatoria}\n${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles\n${fechaFormateada} ${horaFormateada} hs`;
         }
         
         return {
