@@ -261,7 +261,6 @@ const AsistenteIA = ({ pisos, habitaciones }) => {
   const cargarOcupacion = async () => {
     try {
       setCargando(true);
-      const hoy = new Date().toISOString().split('T')[0];
       const ids = habitaciones.map(h => h.id);
       if (!ids.length) return;
 
