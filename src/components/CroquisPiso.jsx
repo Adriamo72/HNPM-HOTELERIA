@@ -758,8 +758,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                   style={{
                     left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                     top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                    width: 'clamp(18px, 2.5vw, 34px)',
-                    height: 'clamp(28px, 4vw, 55px)',
+                    width: 'clamp(14px, 2.2vw, 34px)',
+                    height: 'clamp(22px, 3.8vw, 55px)',
                     transform: 'translate(-50%, -50%)',
                     padding: '1px 0',
                     ...estilo.style
@@ -767,8 +767,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                   title={estilo.title}
                   onClick={(e) => handleMarkerClick(e, hab, ocup, estilo)}
                 >
-                  <span className="text-[clamp(7px,1.5vw,12px)] font-bold leading-none truncate w-full text-center px-0.5">{hab.nombre}</span>
-                  <span className="text-[clamp(10px,2vw,16px)] font-black leading-none">{displayTexto}</span>
+                  <span className="text-[clamp(4px,1vw,11px)] font-bold leading-none truncate w-full text-center px-0.5">{hab.nombre}</span>
+                  <span className="text-[clamp(6px,1.4vw,15px)] font-black leading-none">{displayTexto}</span>
                 </div>
               );
             })}
