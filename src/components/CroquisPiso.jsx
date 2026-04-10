@@ -33,9 +33,28 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [marcadoresKey, setMarcadoresKey] = useState(0);
   const [tooltipHabitacion, setTooltipHabitacion] = useState(null);
   const [imgRenderedWidth, setImgRenderedWidth] = useState(600);
+  const [vp, setVp] = useState({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight });
   
   const imageRef = useRef(null);
   const containerRef = useRef(null);
+
+  // Trackear el viewport visual real (afectado por pinch-zoom del browser)
+  useEffect(() => {
+    const updateVp = () => {
+      const v = window.visualViewport;
+      setVp(v
+        ? { left: v.offsetLeft, top: v.offsetTop, width: v.width, height: v.height }
+        : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+      );
+    };
+    updateVp();
+    window.visualViewport?.addEventListener('resize', updateVp);
+    window.visualViewport?.addEventListener('scroll', updateVp);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateVp);
+      window.visualViewport?.removeEventListener('scroll', updateVp);
+    };
+  }, []);
 
   // Re-render marcadores al rotar el dispositivo y actualizar ancho real de la imagen
   useEffect(() => {
@@ -821,15 +840,25 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         {mensaje && <p className="text-center text-sm mt-2 text-blue-400">{mensaje}</p>}
       </div>
 
-      {/* Tooltip táctil para móvil - renderizado via Portal para escapar transform/overflow */}
+      {/* Tooltip táctil para móvil - renderizado via Portal, posicionado con VisualViewport para funcionar con pinch-zoom */}
       {tooltipHabitacion && ReactDOM.createPortal(
         <div
-          className="fixed inset-0 z-[9999] flex items-end"
-          style={{ touchAction: 'none' }}
+          style={{
+            position: 'fixed',
+            left: vp.left,
+            top: vp.top,
+            width: vp.width,
+            height: vp.height,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'flex-end',
+            touchAction: 'none',
+          }}
           onClick={() => setTooltipHabitacion(null)}
         >
           <div
-            className="w-full bg-slate-800 border-t border-slate-600 rounded-t-2xl p-5 shadow-2xl"
+            className="bg-slate-800 border-t border-slate-600 rounded-t-2xl p-5 shadow-2xl"
+            style={{ width: '100%' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-3">
