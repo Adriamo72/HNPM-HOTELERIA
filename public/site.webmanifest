@@ -4,6 +4,7 @@
   "description": "Sistema de Gestión Hotelera - Hospital Naval Buenos Aires",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "any",
   "theme_color": "#0f172a",
   "background_color": "#0f172a",
   "lang": "es-AR",
