@@ -241,7 +241,7 @@ const VisualizadorDashboard = () => {
           </div>
           
           {cargandoCroquis ? (
-            <SpinnerCarga mensaje="CARGANDO SECTORES..." />
+            <SpinnerCarga mensaje="CARGANDO HABITACIONES..." />
           ) : pisoSeleccionado ? (
             <CroquisPiso
               key={croquisKey}

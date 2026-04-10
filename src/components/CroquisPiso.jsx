@@ -637,7 +637,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       <div className="bg-slate-800 rounded-xl p-12 text-center">
         <div className="animate-pulse">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-400">Cargando croquis...</p>
+          <p className="text-slate-400">Cargando habitaciones...</p>
         </div>
       </div>
     );

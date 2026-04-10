@@ -1427,7 +1427,7 @@ const eliminarVisualizador = async (visId, usuario) => {
           </div>
           
           {cargandoCroquis ? (
-            <SpinnerCarga mensaje="CARGANDO SECTORES..." />
+            <SpinnerCarga mensaje="CARGANDO HABITACIONES..." />
           ) : pisoSeleccionado ? (
             <CroquisPiso
               key={croquisKey}
