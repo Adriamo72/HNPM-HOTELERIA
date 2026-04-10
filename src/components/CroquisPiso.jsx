@@ -870,7 +870,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             <div className="flex justify-between items-start mb-3">
               <div>
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Habitación</p>
-                <h4 className="text-white font-bold text-lg">{tooltipHabitacion.hab.nombre}</h4>
+                <h4 className="text-white font-bold text-lg">
+                  {tooltipHabitacion.hab.nombre}
+                  {tooltipHabitacion.ocup?.tipo_habitacion === 'activa' && tooltipHabitacion.ocup?.informacion_ampliatoria
+                    ? ` — ${tooltipHabitacion.ocup.informacion_ampliatoria}`
+                    : ''}
+                </h4>
               </div>
               <button
                 onClick={() => setTooltipHabitacion(null)}
@@ -880,7 +885,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
               </button>
             </div>
             <p className="text-sm text-slate-300 whitespace-pre-line leading-relaxed">
-              {tooltipHabitacion.estilo.title}
+              {tooltipHabitacion.ocup?.tipo_habitacion === 'activa'
+                ? tooltipHabitacion.estilo.title.split('\n').slice(1).join('\n')
+                : tooltipHabitacion.estilo.title}
             </p>
           </div>
         </div>,
