@@ -53,14 +53,17 @@ const VisualizadorDashboard = () => {
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
       
-      // Seleccionar automáticamente el piso más alto
+      // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
       if (resPisos.data && resPisos.data.length > 0) {
-        const pisoMasAlto = resPisos.data.reduce((prev, current) => {
-          const numPrev = parseInt(prev.nombre_piso.replace(/\D/g, '')) || 0;
-          const numCurrent = parseInt(current.nombre_piso.replace(/\D/g, '')) || 0;
-          return numCurrent > numPrev ? current : prev;
+        setPisoSeleccionado(prev => {
+          if (prev) return prev;
+          const pisoMasAlto = resPisos.data.reduce((a, c) => {
+            const numA = parseInt(a.nombre_piso.replace(/\D/g, '')) || 0;
+            const numC = parseInt(c.nombre_piso.replace(/\D/g, '')) || 0;
+            return numC > numA ? c : a;
+          });
+          return pisoMasAlto.id;
         });
-        setPisoSeleccionado(pisoMasAlto.id);
       }
       
       // Cargar movimientos para monitor
