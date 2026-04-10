@@ -13,3 +13,10 @@ root.render(
 
 // Registrar service worker para PWA
 serviceWorkerRegistration.register();
+
+// Desbloquear rotación SOLO en modo PWA standalone (no afecta el navegador)
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  if (window.screen?.orientation?.unlock) {
+    try { window.screen.orientation.unlock(); } catch (_) {}
+  }
+}

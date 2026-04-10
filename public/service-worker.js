@@ -1,7 +1,6 @@
-const CACHE_NAME = 'hoteleria-hnpm-v4';
+const CACHE_NAME = 'hoteleria-hnpm-v5';
 const urlsToCache = [
-  '/manifest.json',
-  '/site.webmanifest'
+  // Manifests excluidos intencionalmente para que Chrome siempre los busque frescos al instalar PWA
 ];
 
 self.addEventListener('install', (event) => {
