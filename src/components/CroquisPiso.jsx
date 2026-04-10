@@ -33,7 +33,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [marcadoresKey, setMarcadoresKey] = useState(0);
   const [tooltipHabitacion, setTooltipHabitacion] = useState(null);
   const [imgRenderedWidth, setImgRenderedWidth] = useState(600);
-  const [vp, setVp] = useState({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight });
+  const [vp, setVp] = useState({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, scale: 1 });
   
   const imageRef = useRef(null);
   const containerRef = useRef(null);
@@ -43,8 +43,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     const updateVp = () => {
       const v = window.visualViewport;
       setVp(v
-        ? { left: v.offsetLeft, top: v.offsetTop, width: v.width, height: v.height }
-        : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+        ? { left: v.offsetLeft, top: v.offsetTop, width: v.width, height: v.height, scale: v.scale || 1 }
+        : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, scale: 1 }
       );
     };
     updateVp();
@@ -858,7 +858,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         >
           <div
             className="bg-slate-800 border-t border-slate-600 rounded-t-2xl p-5 shadow-2xl"
-            style={{ width: '100%' }}
+            style={{
+              width: `${vp.width * vp.scale}px`,
+              transform: `scale(${1 / vp.scale})`,
+              transformOrigin: 'bottom left',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-3">
