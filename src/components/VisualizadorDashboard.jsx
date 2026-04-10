@@ -224,7 +224,7 @@ const VisualizadorDashboard = () => {
               <input 
                 type="date" 
                 value={fechaSeleccionada}
-                onChange={(e) => setFechaSeleccionada(e.target.value)}
+                onChange={(e) => { setFechaSeleccionada(e.target.value); setCroquisKey(prev => prev + 1); }}
                 className="flex-1 min-w-[130px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
               <button 
