@@ -2,9 +2,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-// ==================== Normalización de texto ====================
+// ==================== Normalización ====================
 const norm = (str) =>
   (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+// ==================== Stop words (no se usan para matching) ====================
+const STOP_WORDS = new Set(['piso', 'sector', 'planta', 'sala', 'area', 'unidad',
+  'hospital', 'gral', 'general', 'los', 'las', 'del', 'de', 'en', 'el', 'la', 'hay',
+]);
 
 // ==================== Ordinales en español ====================
 const ORDINALES = {
@@ -20,9 +25,10 @@ const ORDINALES = {
   decimo: 10, decima: 10,
 };
 
+// ==================== Extraer número de piso ====================
 function extraerNumeroPiso(texto) {
   const n = norm(texto);
-  const match = n.match(/\b(\d+)\b/);
+  const match = n.match(/(\d+)/);
   if (match) return parseInt(match[1]);
   for (const [palabra, num] of Object.entries(ORDINALES)) {
     if (new RegExp(`\\b${palabra}\\b`).test(n)) return num;
@@ -30,21 +36,67 @@ function extraerNumeroPiso(texto) {
   return null;
 }
 
-function encontrarPiso(pisos, texto) {
-  const n = norm(texto);
-  // Intentar coincidencia exacta con el nombre del piso
+// ==================== Encontrar piso por número ====================
+function encontrarPisoPorNumero(pisos, n) {
+  const num = extraerNumeroPiso(n);
+  if (num === null) return null;
   for (const p of pisos) {
-    if (n.includes(norm(p.nombre_piso))) return p;
-  }
-  // Intentar por número
-  const num = extraerNumeroPiso(texto);
-  if (num !== null) {
-    for (const p of pisos) {
-      const pisoNum = parseInt(p.nombre_piso.replace(/\D/g, '')) || 0;
-      if (pisoNum === num) return p;
-    }
+    const pisoNum = parseInt(p.nombre_piso.replace(/\D/g, '')) || 0;
+    if (pisoNum === num) return p;
   }
   return null;
+}
+
+// ==================== Obtener servicios únicos de ocupación ====================
+function getServiciosUnicos(ocupacion) {
+  const set = new Set();
+  for (const occ of Object.values(ocupacion)) {
+    if (occ.informacion_ampliatoria) set.add(occ.informacion_ampliatoria);
+  }
+  return [...set];
+}
+
+// ==================== Encontrar servicios que coinciden con la query ====================
+// Estrategia en 2 pasos: primero exact, luego word-match
+function encontrarServicios(n, serviciosDisponibles) {
+  // Paso 1: exact include (ej. query contiene "clinica i" → matchea "Clínica I")
+  const exactas = serviciosDisponibles.filter(srv => n.includes(norm(srv)));
+  if (exactas.length > 0) return exactas;
+
+  // Paso 2: todas las palabras significativas del servicio aparecen en la query
+  const todas = serviciosDisponibles.filter(srv => {
+    const ns = norm(srv);
+    const palabras = ns.split(/\s+/).filter(w => w.length > 3 && !STOP_WORDS.has(w));
+    return palabras.length > 0 && palabras.every(w => n.includes(w));
+  });
+  if (todas.length > 0) return todas;
+
+  // Paso 3: al menos una palabra significativa larga
+  return serviciosDisponibles.filter(srv => {
+    const ns = norm(srv);
+    const palabras = ns.split(/\s+/).filter(w => w.length > 4 && !STOP_WORDS.has(w));
+    return palabras.length > 0 && palabras.some(w => n.includes(w));
+  });
+}
+
+// ==================== Obtener ocupaciones filtradas por lista de servicios ====================
+function getOcupPorServicios(servicios, ocupacion) {
+  const normSet = new Set(servicios.map(s => norm(s)));
+  return Object.values(ocupacion).filter(o =>
+    o.informacion_ampliatoria && normSet.has(norm(o.informacion_ampliatoria))
+  );
+}
+
+// ==================== Calcular stats de una lista de ocupaciones ====================
+function calcularStats(ocuList) {
+  let total = 0, ocupadas = 0;
+  ocuList.forEach(o => {
+    if (o.tipo_habitacion === 'activa') {
+      total += o.total_camas || 0;
+      ocupadas += o.camas_ocupadas || 0;
+    }
+  });
+  return { total, ocupadas, libres: total - ocupadas, pct: total > 0 ? ((ocupadas / total) * 100).toFixed(1) : '0.0' };
 }
 
 // ==================== Motor de respuestas ====================
@@ -54,130 +106,207 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
   }
 
   const n = norm(texto);
-  const piso = encontrarPiso(pisos, n);
+  const serviciosDisponibles = getServiciosUnicos(ocupacion);
+  const serviciosMatch = encontrarServicios(n, serviciosDisponibles);
+  const piso = encontrarPisoPorNumero(pisos, n);
+  const mencionaPiso = /piso|sector|planta/.test(n) && piso;
+
+  // =========================================================
+  // SCOPE: SERVICIO (tiene prioridad si no se menciona piso)
+  // =========================================================
+  if (serviciosMatch.length > 0 && !mencionaPiso) {
+    const ocuServicio = getOcupPorServicios(serviciosMatch, ocupacion);
+    const labelServicio = serviciosMatch.length === 1
+      ? `**${serviciosMatch[0]}**`
+      : `**${serviciosMatch.join(' + ')}**`;
+
+    // ¿En qué piso está X?
+    if (/en qu[eé] piso|qu[eé] sector|d[oó]nde|donde queda|a qu[eé] piso/.test(n)) {
+      const habIds = new Set(ocuServicio.map(o => o.habitacion_id));
+      const pisoIds = [...new Set(
+        habitaciones.filter(h => habIds.has(h.id)).map(h => h.piso_id)
+      )];
+      const pisosEncontrados = pisoIds.map(pid => pisos.find(p => p.id === pid)).filter(Boolean);
+      if (!pisosEncontrados.length) return `No encontré datos de ubicación para ${labelServicio}.`;
+      const nombresPisos = pisosEncontrados.map(p => p.nombre_piso).join(' y ');
+      return `${labelServicio} se encuentra en **${nombresPisos}**.`;
+    }
+
+    // ¿Cuáles son las habitaciones de X?
+    if (/cu[aá]les? son|qu[eé] habitaciones|listado de hab/.test(n)) {
+      const habIds = new Set(ocuServicio.map(o => o.habitacion_id));
+      const habsDelServicio = habitaciones.filter(h => habIds.has(h.id));
+      if (!habsDelServicio.length) return `No encontré habitaciones registradas para ${labelServicio}.`;
+      const nombres = habsDelServicio.map(h => h.nombre).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join(', ');
+      return `Las habitaciones de ${labelServicio} son:\n${nombres}`;
+    }
+
+    // Reparación
+    if (/reparaci[oó]n/.test(n)) {
+      const count = ocuServicio.filter(o => o.tipo_habitacion === 'reparacion').length;
+      return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} en reparación.`;
+    }
+
+    // Camas libres
+    if (/cama/.test(n) && /libre|disponible/.test(n)) {
+      const { total, ocupadas, libres } = calcularStats(ocuServicio);
+      return `${labelServicio} tiene **${libres}** cama${libres !== 1 ? 's' : ''} libre${libres !== 1 ? 's' : ''} (${ocupadas} ocupadas de ${total} totales).`;
+    }
+
+    // Camas ocupadas
+    if (/cama/.test(n) && /ocupad|usad/.test(n)) {
+      const { total, ocupadas } = calcularStats(ocuServicio);
+      return `${labelServicio} tiene **${ocupadas}** cama${ocupadas !== 1 ? 's' : ''} ocupada${ocupadas !== 1 ? 's' : ''} de ${total} totales.`;
+    }
+
+    // Camas totales / cuántas camas tiene
+    if (/cama/.test(n)) {
+      const { total, ocupadas, libres, pct } = calcularStats(ocuServicio);
+      return `${labelServicio} tiene **${total}** camas en total (${ocupadas} ocupadas, ${libres} libres, **${pct}%** de ocupación).`;
+    }
+
+    // Porcentaje
+    if (/porcentaje|%|ocupaci[oó]n/.test(n)) {
+      const { total, ocupadas, pct } = calcularStats(ocuServicio);
+      return `El porcentaje de ocupación de ${labelServicio} es **${pct}%** (${ocupadas}/${total} camas).`;
+    }
+
+    // Habitaciones activas
+    if (/habitaci[oó]n|habitaciones/.test(n) && /activa|paciente/.test(n)) {
+      const count = ocuServicio.filter(o => o.tipo_habitacion === 'activa').length;
+      return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} activa${count !== 1 ? 's' : ''} con pacientes.`;
+    }
+
+    // Total habitaciones
+    if (/habitaci[oó]n|habitaciones/.test(n)) {
+      const habIds = new Set(ocuServicio.map(o => o.habitacion_id));
+      const count = habitaciones.filter(h => habIds.has(h.id)).length;
+      return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} registradas.`;
+    }
+
+    // Resumen del servicio (default cuando se menciona servicio sin más detalle)
+    {
+      const { total, ocupadas, libres, pct } = calcularStats(ocuServicio);
+      const habIds = new Set(ocuServicio.map(o => o.habitacion_id));
+      const pisoIds = [...new Set(
+        habitaciones.filter(h => habIds.has(h.id)).map(h => h.piso_id)
+      )];
+      const pisosEncontrados = pisoIds.map(pid => pisos.find(p => p.id === pid)).filter(Boolean);
+      const nombresPisos = pisosEncontrados.map(p => p.nombre_piso).join(', ');
+      const enRep = ocuServicio.filter(o => o.tipo_habitacion === 'reparacion').length;
+      return (
+        `${labelServicio}${nombresPisos ? ` (${nombresPisos})` : ''}\n` +
+        `• **${total}** camas totales\n` +
+        `• **${ocupadas}** ocupadas — **${libres}** libres\n` +
+        `• **${pct}%** de ocupación` +
+        (enRep > 0 ? `\n• **${enRep}** en reparación` : '')
+      );
+    }
+  }
+
+  // =========================================================
+  // SCOPE: PISO o TODO EL HOSPITAL
+  // =========================================================
   const habs = piso
     ? habitaciones.filter(h => String(h.piso_id) === String(piso.id))
     : habitaciones;
-
   const label = piso ? `en **${piso.nombre_piso}**` : 'en todo el hospital';
   const labelInicio = piso ? `**${piso.nombre_piso}**` : '**Todo el hospital**';
-
   const getOcup = (h) => ocupacion[h.id];
 
-  // ---- Reparación ----
+  // ¿En qué piso está X? (sin servicio identificado)
+  if (/en qu[eé] piso|qu[eé] sector|d[oó]nde/.test(n)) {
+    const lista = pisos.map(p => p.nombre_piso).join(', ');
+    return `No identifiqué el servicio que buscás. Los sectores disponibles son: ${lista}.`;
+  }
+
+  // ¿Cuáles son las habitaciones de X?
+  if (/cu[aá]les? son.*habitaci|habitaciones? de|listado de hab/.test(n)) {
+    if (piso) {
+      if (!habs.length) return `No hay habitaciones registradas en **${piso.nombre_piso}**.`;
+      const nombres = habs.map(h => h.nombre).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join(', ');
+      return `Las habitaciones de **${piso.nombre_piso}** son:\n${nombres}`;
+    }
+    return 'Especificá el servicio o piso. Por ejemplo: "¿Cuáles son las habitaciones de Recuperación?"';
+  }
+
+  // Reparación
   if (/reparaci[oó]n/.test(n)) {
     const lista = habs.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion');
     const count = lista.length;
     const nombres = lista.map(h => h.nombre).join(', ');
-    const detalle = nombres ? ` (${nombres})` : '';
-    return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} en reparación${detalle}.`;
+    return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} en reparación${nombres ? ` (${nombres})` : ''}.`;
   }
 
-  // ---- Otros ----
+  // Otros
   if (/\botros?\b/.test(n) && /habitaci[oó]n|habitaciones/.test(n)) {
     const lista = habs.filter(h => getOcup(h)?.tipo_habitacion === 'otros');
     const count = lista.length;
     const nombres = lista.map(h => h.nombre).join(', ');
-    const detalle = nombres ? ` (${nombres})` : '';
-    return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} en estado "Otros"${detalle}.`;
+    return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} en estado "Otros"${nombres ? ` (${nombres})` : ''}.`;
   }
 
-  // ---- Porcentaje de ocupación ----
-  if (/porcentaje|% de ocupaci[oó]n/.test(n) || (/ocupaci[oó]n/.test(n) && /porcentaje|%/.test(n))) {
-    let totalCamas = 0, camasOcupadas = 0;
-    habs.forEach(h => {
-      const o = getOcup(h);
-      if (o?.tipo_habitacion === 'activa') {
-        totalCamas += o.total_camas || 1;
-        camasOcupadas += o.camas_ocupadas || 0;
-      }
-    });
-    const pct = totalCamas > 0 ? ((camasOcupadas / totalCamas) * 100).toFixed(1) : '0.0';
-    return `El porcentaje de ocupación ${label} es del **${pct}%** (${camasOcupadas} de ${totalCamas} camas ocupadas).`;
+  // Porcentaje
+  if (/porcentaje|%/.test(n) || (/ocupaci[oó]n/.test(n) && /porcentaje|%/.test(n))) {
+    const { total, ocupadas, pct } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    return `El porcentaje de ocupación ${label} es del **${pct}%** (${ocupadas} de ${total} camas ocupadas).`;
   }
 
-  // ---- Camas libres / disponibles ----
+  // Camas libres
   if (/cama/.test(n) && /libre|disponible/.test(n)) {
-    let totalCamas = 0, camasOcupadas = 0;
-    habs.forEach(h => {
-      const o = getOcup(h);
-      if (o?.tipo_habitacion === 'activa') {
-        totalCamas += o.total_camas || 1;
-        camasOcupadas += o.camas_ocupadas || 0;
-      }
-    });
-    const libres = totalCamas - camasOcupadas;
-    return `${labelInicio} hay **${libres}** cama${libres !== 1 ? 's' : ''} libre${libres !== 1 ? 's' : ''} de un total de ${totalCamas}.`;
+    const { total, ocupadas, libres } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    return `${labelInicio} hay **${libres}** cama${libres !== 1 ? 's' : ''} libre${libres !== 1 ? 's' : ''} de ${total} totales.`;
   }
 
-  // ---- Camas ocupadas ----
+  // Camas ocupadas
   if (/cama/.test(n) && /ocupad|usad|llena/.test(n)) {
-    let totalCamas = 0, camasOcupadas = 0;
-    habs.forEach(h => {
-      const o = getOcup(h);
-      if (o?.tipo_habitacion === 'activa') {
-        totalCamas += o.total_camas || 1;
-        camasOcupadas += o.camas_ocupadas || 0;
-      }
-    });
-    return `${labelInicio} hay **${camasOcupadas}** cama${camasOcupadas !== 1 ? 's' : ''} ocupada${camasOcupadas !== 1 ? 's' : ''} de un total de ${totalCamas}.`;
+    const { total, ocupadas } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    return `${labelInicio} hay **${ocupadas}** cama${ocupadas !== 1 ? 's' : ''} ocupada${ocupadas !== 1 ? 's' : ''} de ${total} totales.`;
   }
 
-  // ---- Total de camas ----
-  if (/cuantas? cama/.test(n) || (/cama/.test(n) && /total/.test(n))) {
-    let totalCamas = 0;
-    habs.forEach(h => {
-      const o = getOcup(h);
-      if (o?.tipo_habitacion === 'activa') {
-        totalCamas += o.total_camas || 1;
-      }
-    });
-    return `${labelInicio} hay **${totalCamas}** cama${totalCamas !== 1 ? 's' : ''} en habitaciones activas.`;
+  // Camas totales
+  if (/cama/.test(n)) {
+    const { total, ocupadas, libres, pct } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    return `${labelInicio} hay **${total}** camas en habitaciones activas (${ocupadas} ocupadas, ${libres} libres, **${pct}%** de ocupación).`;
   }
 
-  // ---- Habitaciones activas / con pacientes ----
-  if (/habitaci[oó]n|habitaciones/.test(n) && /activa|paciente|con camas/.test(n)) {
+  // Habitaciones activas
+  if (/habitaci[oó]n|habitaciones/.test(n) && /activa|paciente/.test(n)) {
     const count = habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
     return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} activa${count !== 1 ? 's' : ''} con pacientes.`;
   }
 
-  // ---- Habitaciones disponibles / libres ----
+  // Habitaciones disponibles
   if (/habitaci[oó]n|habitaciones/.test(n) && /disponible|libre/.test(n)) {
-    const count = habs.filter(h => {
-      const o = getOcup(h);
-      return !o || o.tipo_habitacion === 'disponible';
-    }).length;
+    const count = habs.filter(h => { const o = getOcup(h); return !o || o.tipo_habitacion === 'disponible'; }).length;
     return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} disponible${count !== 1 ? 's' : ''}.`;
   }
 
-  // ---- Total habitaciones ----
+  // Total habitaciones
   if (/habitaci[oó]n|habitaciones/.test(n)) {
-    const count = habs.length;
-    return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} en total.`;
+    return `${labelInicio} hay **${habs.length}** habitación${habs.length !== 1 ? 'es' : ''} en total.`;
   }
 
-  // ---- Pisos disponibles ----
-  if (/piso|sector|planta/.test(n) && /cuantos|listado|cuales|lista/.test(n)) {
+  // Sectores / pisos
+  if (/piso|sector|planta/.test(n) && /cu[aá]ntos|listado|cu[aá]les|lista/.test(n)) {
     const lista = pisos.map(p => p.nombre_piso).join(', ');
-    return `El hospital tiene **${pisos.length}** sectores/pisos: ${lista}.`;
+    return `El hospital tiene **${pisos.length}** sectores: ${lista}.`;
   }
 
-  // ---- Resumen general ----
-  if (/resumen|estadistica|estadísticas|como esta|cómo está|general/.test(n)) {
+  // Servicios disponibles
+  if (/servicio|especialidad|especialidades/.test(n)) {
+    if (!serviciosDisponibles.length) return 'No encontré datos de servicios cargados.';
+    return `Los servicios registrados son:\n${serviciosDisponibles.sort().join(', ')}`;
+  }
+
+  // Resumen general
+  if (/resumen|estadistica|estad[ií]sticas|como est[aá]|general/.test(n)) {
     const scope = habs;
     const enReparacion = scope.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
     const enOtros = scope.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
     const activas = scope.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
     const sinDatos = scope.filter(h => !getOcup(h)).length;
-    let totalCamas = 0, camasOcupadas = 0;
-    scope.forEach(h => {
-      const o = getOcup(h);
-      if (o?.tipo_habitacion === 'activa') {
-        totalCamas += o.total_camas || 1;
-        camasOcupadas += o.camas_ocupadas || 0;
-      }
-    });
-    const pct = totalCamas > 0 ? ((camasOcupadas / totalCamas) * 100).toFixed(1) : '0.0';
+    const { total, ocupadas, libres, pct } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
     return (
       `${labelInicio} — Resumen:\n` +
       `• **${scope.length}** habitaciones en total\n` +
@@ -185,7 +314,7 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
       `• **${enReparacion}** en reparación\n` +
       `• **${enOtros}** en estado "Otros"\n` +
       `• **${sinDatos}** sin datos de hoy\n` +
-      `• **${pct}%** de ocupación (${camasOcupadas}/${totalCamas} camas)`
+      `• **${pct}%** de ocupación (${ocupadas}/${total} camas, ${libres} libres)`
     );
   }
 
@@ -213,13 +342,14 @@ function FormatText({ text }) {
 
 // ==================== Preguntas sugeridas ====================
 const SUGERENCIAS = [
-  '¿Cuántas habitaciones hay en total?',
-  '¿Cuántas habitaciones están en reparación?',
-  '¿Cuántas habitaciones son "Otros"?',
-  '¿Cuántas camas libres hay en total?',
-  '¿Cuántas camas ocupadas hay en total?',
-  '¿Cuál es el porcentaje de ocupación?',
   'Resumen general del hospital',
+  '¿Cuántas habitaciones hay en total?',
+  '¿Cuántas camas libres hay en total?',
+  '¿Cuántas habitaciones están en reparación?',
+  '¿Cuál es el porcentaje de ocupación?',
+  '¿Cuáles son los sectores disponibles?',
+  '¿En qué piso está Recuperación?',
+  '¿Cuáles son las habitaciones de Pediatría?',
 ];
 
 // ==================== Componente principal ====================
@@ -266,7 +396,7 @@ const AsistenteIA = ({ pisos, habitaciones }) => {
 
       const { data } = await supabase
         .from('ocupacion_habitaciones')
-        .select('habitacion_id, tipo_habitacion, camas_ocupadas, total_camas, fecha, actualizado_en')
+        .select('habitacion_id, tipo_habitacion, camas_ocupadas, total_camas, fecha, actualizado_en, informacion_ampliatoria')
         .in('habitacion_id', ids)
         .order('fecha', { ascending: false })
         .order('actualizado_en', { ascending: false });
