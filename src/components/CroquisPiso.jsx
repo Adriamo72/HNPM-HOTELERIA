@@ -1,5 +1,6 @@
 // components/CroquisPiso.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { supabase } from '../supabaseClient';
 
 const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false, fechaConsulta }) => {
@@ -820,10 +821,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         {mensaje && <p className="text-center text-sm mt-2 text-blue-400">{mensaje}</p>}
       </div>
 
-      {/* Tooltip táctil para móvil */}
-      {tooltipHabitacion && (
+      {/* Tooltip táctil para móvil - renderizado via Portal para escapar transform/overflow */}
+      {tooltipHabitacion && ReactDOM.createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end"
+          className="fixed inset-0 z-[9999] flex items-end"
+          style={{ touchAction: 'none' }}
           onClick={() => setTooltipHabitacion(null)}
         >
           <div
@@ -846,7 +848,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
               {tooltipHabitacion.estilo.title}
             </p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
