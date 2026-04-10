@@ -120,47 +120,30 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   }
   
   setGuardando(true);
-  mostrarNotificacion("Guardando ocupación...", 'loading');
   
   const fecha = new Date().toISOString().split('T')[0];
-  let guardados = 0;
-  let errores = 0;
   
   try {
-    for (const hab of habitaciones) {
-      const ocupActual = ocupaciones[hab.id];
-      
-      const payload = {
-        habitacion_id: hab.id,
-        fecha: fecha,
-        tipo_habitacion: 'activa',
-        total_camas: hab.total_camas,
-        camas_ocupadas: ocupActual?.camas_ocupadas || 0,
-        observaciones: null,
-        actualizado_por: perfilUsuario?.dni,
-        actualizado_en: new Date().toISOString()
-      };
-      
-      const { error } = await supabase
-        .from('ocupacion_habitaciones')
-        .upsert(payload, { onConflict: 'habitacion_id,fecha' });
-      
-      if (error) {
-        errores++;
-      } else {
-        guardados++;
-      }
-    }
+    // Un solo upsert con todos los registros en paralelo
+    const payload = habitaciones.map(hab => ({
+      habitacion_id: hab.id,
+      fecha: fecha,
+      tipo_habitacion: 'activa',
+      total_camas: hab.total_camas,
+      camas_ocupadas: ocupaciones[hab.id]?.camas_ocupadas || 0,
+      observaciones: null,
+      actualizado_por: perfilUsuario?.dni,
+      actualizado_en: new Date().toISOString()
+    }));
+
+    const [{ error: upsertError }] = await Promise.all([
+      supabase.from('ocupacion_habitaciones').upsert(payload, { onConflict: 'habitacion_id,fecha' }),
+      guardarLogRecorrido()
+    ]);
     
-    // Guardar el log del recorrido
-    await guardarLogRecorrido();
-    
-    if (errores === 0) {
-      mostrarNotificacion(`${guardados} habitaciones guardadas correctamente`, 'success');
-      setTimeout(() => cargarDatos(), 1000);
-    } else {
-      mostrarNotificacion(`⚠️ ${guardados} guardadas, ${errores} errores`, 'error');
-    }
+    if (upsertError) throw upsertError;
+
+    mostrarNotificacion(`✅ ${habitaciones.length} habitaciones guardadas correctamente`, 'success');
     
   } catch (err) {
     console.error("Error guardando:", err);
