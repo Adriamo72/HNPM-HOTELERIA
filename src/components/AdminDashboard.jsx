@@ -88,9 +88,11 @@ const AdminDashboard = () => {
     if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(true);
       try {
         if (tipo === 'croquis' || tipo === 'todos') {
-          const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
-          const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
-          const resPers = await supabase.from('personal').select('*').order('apellido');
+          const [resPisos, resHabs, resPers] = await Promise.all([
+            supabase.from('pisos').select('*').order('nombre_piso'),
+            supabase.from('habitaciones_especiales').select('*').order('nombre'),
+            supabase.from('personal').select('*').order('apellido'),
+          ]);
           setPisos(resPisos.data || []);
           setHabitacionesEspeciales(resHabs.data || []);
           setPersonal(resPers.data || []);
@@ -110,11 +112,19 @@ const AdminDashboard = () => {
           const resPisosMonitor = await supabase.from('pisos').select('*').order('nombre_piso');
           const pisosMonitor = resPisosMonitor.data || [];
 
-          const { data: movs } = await supabase
-            .from('movimientos_stock')
-            .select('*, pisos(nombre_piso, id), pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)')
-            .order('created_at', { ascending: false })
-            .limit(500);
+          const pisoIds = pisosMonitor.map(p => p.id);
+          const pisoNombrePorId = Object.fromEntries(pisosMonitor.map(p => [p.id, p.nombre_piso]));
+
+          const [{ data: movs }, { data: todosLosStocks }] = await Promise.all([
+            supabase
+              .from('movimientos_stock')
+              .select('*, pisos(nombre_piso, id), pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)')
+              .order('created_at', { ascending: false })
+              .limit(500),
+            pisoIds.length > 0
+              ? supabase.from('stock_piso').select('piso_id, item, stock_pañol, stock_en_uso, stock_lavadero').in('piso_id', pisoIds).in('item', ITEMS_REQUERIDOS)
+              : Promise.resolve({ data: [] }),
+          ]);
 
           const stockPañolMap = {};
           const stockUsoMap = {};
@@ -125,16 +135,18 @@ const AdminDashboard = () => {
             stockUsoMap[piso.nombre_piso] = {};
             stockLavaderoMap[piso.nombre_piso] = {};
             for (const item of ITEMS_REQUERIDOS) {
-              const { data: stockData } = await supabase
-                .from('stock_piso')
-                .select('stock_pañol, stock_en_uso, stock_lavadero')
-                .eq('piso_id', piso.id)
-                .eq('item', item)
-                .maybeSingle();
-              stockPañolMap[piso.nombre_piso][item] = stockData?.stock_pañol || 0;
-              stockUsoMap[piso.nombre_piso][item] = stockData?.stock_en_uso || 0;
-              stockLavaderoMap[piso.nombre_piso][item] = stockData?.stock_lavadero || 0;
+              stockPañolMap[piso.nombre_piso][item] = 0;
+              stockUsoMap[piso.nombre_piso][item] = 0;
+              stockLavaderoMap[piso.nombre_piso][item] = 0;
             }
+          }
+
+          for (const row of (todosLosStocks || [])) {
+            const nombrePiso = pisoNombrePorId[row.piso_id];
+            if (!nombrePiso) continue;
+            stockPañolMap[nombrePiso][row.item] = row.stock_pañol || 0;
+            stockUsoMap[nombrePiso][row.item] = row.stock_en_uso || 0;
+            stockLavaderoMap[nombrePiso][row.item] = row.stock_lavadero || 0;
           }
 
           const agrupados = movs ? movs.reduce((acc, curr) => {
