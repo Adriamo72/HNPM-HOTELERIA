@@ -254,7 +254,7 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
 
   // Camas libres
   if (/cama/.test(n) && /libre|disponible/.test(n)) {
-    const { total, ocupadas, libres } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    const { total, libres } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
     return `${labelInicio} hay **${libres}** cama${libres !== 1 ? 's' : ''} libre${libres !== 1 ? 's' : ''} de ${total} totales.`;
   }
 
