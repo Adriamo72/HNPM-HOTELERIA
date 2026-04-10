@@ -45,9 +45,11 @@ const VisualizadorDashboard = () => {
     setCargandoMonitor(true);
     
     try {
-      // Cargar pisos y habitaciones
-      const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
-      const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
+      // Cargar pisos y habitaciones en paralelo
+      const [resPisos, resHabs] = await Promise.all([
+        supabase.from('pisos').select('*').order('nombre_piso'),
+        supabase.from('habitaciones_especiales').select('*').order('nombre'),
+      ]);
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
       
@@ -73,29 +75,40 @@ const VisualizadorDashboard = () => {
         .order('created_at', { ascending: false })
         .limit(500);
       
-      // Cargar stocks
+      // Cargar stocks — una sola consulta para todos los pisos e ítems
       const stockPañolMap = {};
       const stockUsoMap = {};
       const stockLavaderoMap = {};
-      
+
       if (resPisos.data && resPisos.data.length > 0) {
+        const pisoIds = resPisos.data.map(p => p.id);
+        const pisoNombrePorId = Object.fromEntries(resPisos.data.map(p => [p.id, p.nombre_piso]));
+
+        const { data: todosLosStocks } = await supabase
+          .from('stock_piso')
+          .select('piso_id, item, stock_pañol, stock_en_uso, stock_lavadero')
+          .in('piso_id', pisoIds)
+          .in('item', ITEMS_REQUERIDOS);
+
+        // Inicializar mapas con ceros
         for (const piso of resPisos.data) {
           stockPañolMap[piso.nombre_piso] = {};
           stockUsoMap[piso.nombre_piso] = {};
           stockLavaderoMap[piso.nombre_piso] = {};
-          
           for (const item of ITEMS_REQUERIDOS) {
-            const { data: stockData } = await supabase
-              .from('stock_piso')
-              .select('stock_pañol, stock_en_uso, stock_lavadero')
-              .eq('piso_id', piso.id)
-              .eq('item', item)
-              .maybeSingle();
-            
-            stockPañolMap[piso.nombre_piso][item] = stockData?.stock_pañol || 0;
-            stockUsoMap[piso.nombre_piso][item] = stockData?.stock_en_uso || 0;
-            stockLavaderoMap[piso.nombre_piso][item] = stockData?.stock_lavadero || 0;
+            stockPañolMap[piso.nombre_piso][item] = 0;
+            stockUsoMap[piso.nombre_piso][item] = 0;
+            stockLavaderoMap[piso.nombre_piso][item] = 0;
           }
+        }
+
+        // Poblar con los datos reales
+        for (const row of (todosLosStocks || [])) {
+          const nombrePiso = pisoNombrePorId[row.piso_id];
+          if (!nombrePiso) continue;
+          stockPañolMap[nombrePiso][row.item] = row.stock_pañol || 0;
+          stockUsoMap[nombrePiso][row.item] = row.stock_en_uso || 0;
+          stockLavaderoMap[nombrePiso][row.item] = row.stock_lavadero || 0;
         }
       }
       
@@ -393,8 +406,10 @@ const VisualizadorDashboard = () => {
 
       {/* Notificación flotante */}
       {notificacion.visible && (
-        <div className="fixed bottom-6 right-6 bg-slate-800 text-slate-200 px-4 py-3 rounded-lg shadow-lg font-medium text-sm z-[100] border border-slate-600">
-          {notificacion.mensaje}
+        <div className="fixed inset-0 flex items-center justify-center z-[100] pointer-events-none">
+          <div className="bg-slate-800 text-slate-200 px-6 py-4 rounded-lg shadow-xl font-medium text-sm border border-slate-600">
+            {notificacion.mensaje}
+          </div>
         </div>
       )}
     </div>
