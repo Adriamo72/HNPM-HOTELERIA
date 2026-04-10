@@ -2,7 +2,7 @@
   "short_name": "Hoteleria HNPM",
   "name": "Sistema de Gestión Hotelera - Hospital Naval",
   "description": "Sistema de Gestión Hotelera - Hospital Naval Buenos Aires",
-  "start_url": "/",
+  "start_url": "/?pwa=1",
   "display": "standalone",
   "orientation": "any",
   "theme_color": "#0f172a",
