@@ -31,13 +31,20 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   // Estado para forzar re-render de marcadores
   const [marcadoresKey, setMarcadoresKey] = useState(0);
   const [tooltipHabitacion, setTooltipHabitacion] = useState(null);
+  const [imgRenderedWidth, setImgRenderedWidth] = useState(600);
   
   const imageRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Re-render marcadores al rotar el dispositivo
+  // Re-render marcadores al rotar el dispositivo y actualizar ancho real de la imagen
   useEffect(() => {
-    const handleResize = () => setMarcadoresKey(prev => prev + 1);
+    const handleResize = () => {
+      if (imageRef.current) {
+        const w = imageRef.current.getBoundingClientRect().width;
+        if (w > 0) setImgRenderedWidth(w);
+      }
+      setMarcadoresKey(prev => prev + 1);
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -730,6 +737,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             }}
             onClick={handleImageClick}
             draggable={false}
+            onLoad={() => {
+              if (imageRef.current) {
+                const w = imageRef.current.getBoundingClientRect().width;
+                if (w > 0) setImgRenderedWidth(w);
+              }
+              setMarcadoresKey(prev => prev + 1);
+            }}
           />
           
           {/* Marcadores de habitaciones - con key para forzar re-render */}
@@ -757,25 +771,33 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 displayTexto = '';
               }
               
+              // Escalar el marcador proporcionalmente al ancho renderizado de la imagen.
+              // Se renderiza a tamaño base (legible) y se reduce con scale() para
+              // evitar el mínimo de fuente del browser en pantallas pequeñas.
+              const BASE_W = 38;
+              const BASE_H = 60;
+              const markerScale = Math.min(1, Math.max(0.42, (imgRenderedWidth * 0.028) / BASE_W));
+
               return (
                 <div
                   key={hab.id}
                   data-habitacion-id={hab.id}
-                  className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg transition-all hover:scale-105 ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
+                  className={`marcador-habitacion absolute rounded-md border-2 ${estilo.bg} ${estilo.text} flex flex-col items-center justify-center font-bold shadow-lg ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${estilo.blink ? 'animate-pulse' : ''}`}
                   style={{
                     left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                     top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                    width: 'clamp(14px, 2.2vw, 34px)',
-                    height: 'clamp(22px, 3.8vw, 55px)',
-                    transform: 'translate(-50%, -50%)',
-                    padding: '1px 0',
+                    width: `${BASE_W}px`,
+                    height: `${BASE_H}px`,
+                    transform: `translate(-50%, -50%) scale(${markerScale.toFixed(3)})`,
+                    transformOrigin: 'center center',
+                    padding: '2px 1px',
                     ...estilo.style
                   }}
                   title={estilo.title}
                   onClick={(e) => handleMarkerClick(e, hab, ocup, estilo)}
                 >
-                  <span className="text-[clamp(4px,1vw,11px)] font-bold leading-none truncate w-full text-center px-0.5">{hab.nombre}</span>
-                  <span className="text-[clamp(6px,1.4vw,15px)] font-black leading-none">{displayTexto}</span>
+                  <span className="text-[9px] font-bold leading-none truncate w-full text-center px-0.5">{hab.nombre}</span>
+                  <span className="text-[14px] font-black leading-none">{displayTexto}</span>
                 </div>
               );
             })}
