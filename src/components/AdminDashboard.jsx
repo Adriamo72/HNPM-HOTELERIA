@@ -1338,40 +1338,40 @@ const eliminarVisualizador = async (visId, usuario) => {
   return (
     <div className="p-6 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
       {/* Tabs */}
-      <div className="flex gap-3 mb-8 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-fit">
+      <div className="flex gap-1 mb-6 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full">
         <button 
           onClick={() => setActiveTab('croquis')} 
-          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'croquis' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'croquis' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Hotelería
         </button>
         <button 
           onClick={() => setActiveTab('recorridos')} 
-          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'recorridos' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'recorridos' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Recorridos
         </button>
         <button 
           onClick={() => setActiveTab('historial')} 
-          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Monitor
         </button>
         <button 
           onClick={() => setActiveTab('admin')} 
-          className={`px-8 py-2.5 rounded-lg text-sm font-semibold uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
-          Administración
+          Admin
         </button>
       </div>
       {/* Panel CROQUIS - Monitor de ocupacion*/}
       {activeTab === 'croquis' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+            <h2 className="text-lg sm:text-2xl font-semibold text-white uppercase tracking-tighter">
               HOTELERIA
             </h2>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <select
                 value={pisoSeleccionado}
                 onChange={async (e) => {
@@ -1394,7 +1394,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                   setCroquisKey(prev => prev + 1);
                   setCargandoCroquis(false);
                 }}
-                className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white"
+                className="flex-1 min-w-[120px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               >
                 <option value="">Seleccionar piso...</option>
                 {pisos.map(p => (
@@ -1404,7 +1404,7 @@ const eliminarVisualizador = async (visId, usuario) => {
               <button
                 onClick={recargarCroquis}
                 disabled={cargandoCroquis}
-                className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2"
+                className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-1 px-3 py-2 rounded-xl hover:bg-slate-800"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
