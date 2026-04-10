@@ -758,11 +758,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                   style={{
                     left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                     top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                    width: 'min(2.2%, 34px)',
-                    height: 'min(6.5%, 55px)',
+                    width: 'clamp(18px, 2.5vw, 34px)',
+                    height: 'clamp(28px, 4vw, 55px)',
                     transform: 'translate(-50%, -50%)',
-                    minWidth: '18px',
-                    minHeight: '28px',
                     padding: '1px 0',
                     ...estilo.style
                   }}
