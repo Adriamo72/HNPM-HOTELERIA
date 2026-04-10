@@ -12,10 +12,10 @@ const AdminDashboard = () => {
   const [pisos, setPisos] = useState([]);
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [admins, setAdmins] = useState([]);
-  const [movimientosAgrupados] = useState({});
-  const [stockPañol] = useState({});
-  const [stockUso] = useState({});
-  const [stockLavadero] = useState({});
+  const [movimientosAgrupados, setMovimientosAgrupados] = useState({});
+  const [stockPañol, setStockPañol] = useState({});
+  const [stockUso, setStockUso] = useState({});
+  const [stockLavadero, setStockLavadero] = useState({});
   const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [cargandoCroquis, setCargandoCroquis] = useState(false);
@@ -91,7 +91,7 @@ const AdminDashboard = () => {
           const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
           const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
           const resPers = await supabase.from('personal').select('*').order('apellido');
-          // setPisos(resPisos.data || []);
+          setPisos(resPisos.data || []);
           setHabitacionesEspeciales(resHabs.data || []);
           setPersonal(resPers.data || []);
           // Seleccionar automáticamente el piso más alto
@@ -105,9 +105,53 @@ const AdminDashboard = () => {
           }
           await cargarEstadoHabitaciones(resHabs.data || []);
         }
-        // ...existing code...
+
+        if (tipo === 'monitor' || tipo === 'todos') {
+          const resPisosMonitor = await supabase.from('pisos').select('*').order('nombre_piso');
+          const pisosMonitor = resPisosMonitor.data || [];
+
+          const { data: movs } = await supabase
+            .from('movimientos_stock')
+            .select('*, pisos(nombre_piso, id), pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)')
+            .order('created_at', { ascending: false })
+            .limit(500);
+
+          const stockPañolMap = {};
+          const stockUsoMap = {};
+          const stockLavaderoMap = {};
+
+          for (const piso of pisosMonitor) {
+            stockPañolMap[piso.nombre_piso] = {};
+            stockUsoMap[piso.nombre_piso] = {};
+            stockLavaderoMap[piso.nombre_piso] = {};
+            for (const item of ITEMS_REQUERIDOS) {
+              const { data: stockData } = await supabase
+                .from('stock_piso')
+                .select('stock_pañol, stock_en_uso, stock_lavadero')
+                .eq('piso_id', piso.id)
+                .eq('item', item)
+                .maybeSingle();
+              stockPañolMap[piso.nombre_piso][item] = stockData?.stock_pañol || 0;
+              stockUsoMap[piso.nombre_piso][item] = stockData?.stock_en_uso || 0;
+              stockLavaderoMap[piso.nombre_piso][item] = stockData?.stock_lavadero || 0;
+            }
+          }
+
+          const agrupados = movs ? movs.reduce((acc, curr) => {
+            const nombrePiso = curr.pisos?.nombre_piso || 'Sector Desconocido';
+            if (!acc[nombrePiso]) acc[nombrePiso] = [];
+            acc[nombrePiso].push(curr);
+            return acc;
+          }, {}) : {};
+
+          setMovimientosAgrupados(agrupados);
+          setStockPañol(stockPañolMap);
+          setStockUso(stockUsoMap);
+          setStockLavadero(stockLavaderoMap);
+        }
       } catch (error) {
-        // ...existing code...
+        console.error('Error cargando datos:', error);
+        mostrarSplash('Error al cargar datos');
       } finally {
         if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(false);
         if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(false);
