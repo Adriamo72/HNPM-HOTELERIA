@@ -701,8 +701,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         className="relative overflow-auto bg-slate-950"
         style={{ 
           height: 'auto', 
-          maxHeight: '80svh',
-          minHeight: 'min(400px, 60svh)'
+          maxHeight: '80vh',
+          minHeight: 'min(400px, 60vh)'
         }}
       >
         <div
