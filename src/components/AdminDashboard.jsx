@@ -477,6 +477,25 @@ const AdminDashboard = () => {
 
   const rechazosNoLeidos = rechazosPacientes.filter(r => !rechazosLeidos.includes(r.id)).length;
 
+  useEffect(() => {
+    const actualizarBadgePwa = async () => {
+      try {
+        if (rechazosNoLeidos > 0 && 'setAppBadge' in navigator) {
+          await navigator.setAppBadge(rechazosNoLeidos);
+          return;
+        }
+
+        if ('clearAppBadge' in navigator) {
+          await navigator.clearAppBadge();
+        }
+      } catch {
+        // Algunos navegadores/plataformas no soportan el badge o lo restringen.
+      }
+    };
+
+    actualizarBadgePwa();
+  }, [rechazosNoLeidos]);
+
   // ==================== FUNCIÓN PARA RECALCULAR STOCK DE UN PISO ====================
   const recalcularStockPiso = async (pisoId) => {
     try {

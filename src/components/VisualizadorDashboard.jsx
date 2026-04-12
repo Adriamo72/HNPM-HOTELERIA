@@ -296,6 +296,25 @@ const VisualizadorDashboard = () => {
 
   const rechazosNoLeidos = rechazosPacientes.filter(r => !rechazosLeidos.includes(r.id)).length;
 
+  useEffect(() => {
+    const actualizarBadgePwa = async () => {
+      try {
+        if (rechazosNoLeidos > 0 && 'setAppBadge' in navigator) {
+          await navigator.setAppBadge(rechazosNoLeidos);
+          return;
+        }
+
+        if ('clearAppBadge' in navigator) {
+          await navigator.clearAppBadge();
+        }
+      } catch {
+        // Algunos navegadores/plataformas no soportan el badge o lo restringen.
+      }
+    };
+
+    actualizarBadgePwa();
+  }, [rechazosNoLeidos]);
+
   return (
     <div className="p-6 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
       {/* Banner de solo lectura */}
