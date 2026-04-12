@@ -114,6 +114,24 @@ const VisualizadorDashboard = () => {
     };
   };
 
+  const deduplicarRechazos = (items) => {
+    const vistos = new Set();
+    return (items || []).filter((item) => {
+      const clave = [
+        (item.apellido || '').toUpperCase().trim(),
+        (item.nombre || '').toUpperCase().trim(),
+        (item.obraSocial || '').toUpperCase().trim(),
+        (item.causa || '').toUpperCase().trim(),
+        (item.responsableMi || '').toUpperCase().trim(),
+        (item.diagnostico || '').toUpperCase().trim(),
+      ].join('|');
+
+      if (vistos.has(clave)) return false;
+      vistos.add(clave);
+      return true;
+    });
+  };
+
   const cargarRechazosPacientes = async () => {
     setCargandoRechazos(true);
     setErrorRechazos('');
@@ -127,7 +145,7 @@ const VisualizadorDashboard = () => {
 
       if (error) throw error;
 
-      const normalizados = (data || []).map(normalizarRechazo);
+      const normalizados = deduplicarRechazos((data || []).map(normalizarRechazo));
       setRechazosPacientes(normalizados);
       setRechazosLeidos(cargarRechazosLeidosStorage());
     } catch (error) {
@@ -321,6 +339,18 @@ const VisualizadorDashboard = () => {
               MAPA DE SECTORES
             </h2>
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={abrirModalInfo}
+                className="relative bg-red-600 hover:bg-red-500 text-white transition-colors text-sm flex items-center gap-1 px-3 py-2 rounded-xl"
+                title="Rechazos de pacientes"
+              >
+                <span className="font-semibold">Info</span>
+                {rechazosNoLeidos > 0 && (
+                  <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full bg-white text-red-700 text-[10px] font-black flex items-center justify-center border border-red-600">
+                    {rechazosNoLeidos > 99 ? '99+' : rechazosNoLeidos}
+                  </span>
+                )}
+              </button>
               <select
                 value={pisoSeleccionado}
                 onChange={(e) => {
@@ -349,18 +379,6 @@ const VisualizadorDashboard = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 {cargandoCroquis ? 'Cargando...' : 'Actualizar'}
-              </button>
-              <button
-                onClick={abrirModalInfo}
-                className="relative bg-red-600 hover:bg-red-500 text-white transition-colors text-sm flex items-center gap-1 px-3 py-2 rounded-xl"
-                title="Rechazos de pacientes"
-              >
-                <span className="font-semibold">Info</span>
-                {rechazosNoLeidos > 0 && (
-                  <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full bg-white text-red-700 text-[10px] font-black flex items-center justify-center border border-red-600">
-                    {rechazosNoLeidos > 99 ? '99+' : rechazosNoLeidos}
-                  </span>
-                )}
               </button>
             </div>
           </div>
