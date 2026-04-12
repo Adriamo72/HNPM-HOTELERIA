@@ -25,6 +25,7 @@ const VisualizadorDashboard = () => {
   const [mostrarModalInfo, setMostrarModalInfo] = useState(false);
   const [cargandoRechazos, setCargandoRechazos] = useState(false);
   const [errorRechazos, setErrorRechazos] = useState('');
+  const [rechazosEliminando, setRechazosEliminando] = useState([]);
 
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STORAGE_RECHAZOS_LEIDOS = 'rechazos_pacientes_leidos_visualizador';
@@ -162,6 +163,32 @@ const VisualizadorDashboard = () => {
     setMostrarModalInfo(true);
     const idsActuales = rechazosPacientes.map(r => r.id);
     guardarRechazosLeidosStorage([...rechazosLeidos, ...idsActuales]);
+  };
+
+  const eliminarRechazoPaciente = async (rechazoId, nombreCompleto) => {
+    if (!window.confirm(`¿Eliminar el rechazo de "${nombreCompleto}"?\n\nEsta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      setRechazosEliminando(prev => [...prev, String(rechazoId)]);
+
+      const { error } = await supabase
+        .from('rechazos_pacientes')
+        .delete()
+        .eq('id', rechazoId);
+
+      if (error) throw error;
+
+      setRechazosPacientes(prev => prev.filter(item => item.id !== String(rechazoId)));
+      guardarRechazosLeidosStorage(rechazosLeidos.filter(id => id !== String(rechazoId)));
+      mostrarSplash('Rechazo eliminado correctamente');
+    } catch (error) {
+      console.error('Error eliminando rechazo:', error);
+      mostrarSplash('❌ Error al eliminar el rechazo');
+    } finally {
+      setRechazosEliminando(prev => prev.filter(id => id !== String(rechazoId)));
+    }
   };
 
   const cargarDatos = async () => {
@@ -611,23 +638,35 @@ const VisualizadorDashboard = () => {
 
               {!cargandoRechazos && !errorRechazos && rechazosPacientes.map((rechazo) => {
                 const noLeido = !rechazosLeidos.includes(rechazo.id);
+                const eliminando = rechazosEliminando.includes(rechazo.id);
+                const nombreCompleto = `${rechazo.apellido || 'Sin apellido'}, ${rechazo.nombre || 'Sin nombre'}`;
 
                 return (
                   <div key={rechazo.id} className={`rounded-xl border p-3 ${noLeido ? 'border-red-700 bg-red-950/20' : 'border-slate-800 bg-slate-950/40'}`}>
                     <div className="flex justify-between gap-2 items-start">
                       <div>
                         <p className="text-sm font-semibold text-white uppercase">
-                          {rechazo.apellido || 'Sin apellido'}, {rechazo.nombre || 'Sin nombre'}
+                          {nombreCompleto}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           {new Date(rechazo.createdAt).toLocaleString('es-AR')}
                         </p>
                       </div>
-                      {noLeido ? (
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-600/20 text-red-300 border border-red-600/40">No leído</span>
-                      ) : (
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-600/20 text-emerald-300 border border-emerald-600/40">Leído</span>
-                      )}
+                      <div className="flex items-start gap-2">
+                        {noLeido ? (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-600/20 text-red-300 border border-red-600/40">No leído</span>
+                        ) : (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-600/20 text-emerald-300 border border-emerald-600/40">Leído</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => eliminarRechazoPaciente(rechazo.id, nombreCompleto)}
+                          disabled={eliminando}
+                          className="bg-red-950/60 hover:bg-red-900/70 disabled:opacity-60 disabled:cursor-not-allowed text-red-200 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border border-red-800"
+                        >
+                          {eliminando ? 'Eliminando...' : 'Eliminar'}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
