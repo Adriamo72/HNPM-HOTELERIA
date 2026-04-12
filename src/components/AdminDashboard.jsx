@@ -389,7 +389,7 @@ const AdminDashboard = () => {
 
     for (const etiqueta of etiquetas) {
       const escaped = etiqueta.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`${escaped}\\s*:\\s*(.*?)(?=,\\s*[A-ZÁÉÍÓÚÑ. ]+\\s*:|$)`, 'i');
+      const regex = new RegExp(`${escaped}\\s*:\\s*(.*?)(?=\\s*(?:[\\r\\n]|,\\s*[A-ZÁÉÍÓÚÑ. ]+\\s*:|$))`, 'i');
       const match = texto.match(regex);
       if (match?.[1]) return match[1].trim();
     }
