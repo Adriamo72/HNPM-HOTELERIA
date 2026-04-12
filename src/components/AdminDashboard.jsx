@@ -426,17 +426,19 @@ const AdminDashboard = () => {
     };
   };
 
+  const construirClaveRechazo = (item) => [
+    (item.apellido || '').toUpperCase().trim(),
+    (item.nombre || '').toUpperCase().trim(),
+    (item.obraSocial || '').toUpperCase().trim(),
+    (item.causa || '').toUpperCase().trim(),
+    (item.responsableMi || '').toUpperCase().trim(),
+    (item.diagnostico || '').toUpperCase().trim(),
+  ].join('|');
+
   const deduplicarRechazos = (items) => {
     const vistos = new Set();
     return (items || []).filter((item) => {
-      const clave = [
-        (item.apellido || '').toUpperCase().trim(),
-        (item.nombre || '').toUpperCase().trim(),
-        (item.obraSocial || '').toUpperCase().trim(),
-        (item.causa || '').toUpperCase().trim(),
-        (item.responsableMi || '').toUpperCase().trim(),
-        (item.diagnostico || '').toUpperCase().trim(),
-      ].join('|');
+      const clave = construirClaveRechazo(item);
 
       if (vistos.has(clave)) return false;
       vistos.add(clave);
@@ -484,15 +486,39 @@ const AdminDashboard = () => {
     try {
       setRechazosEliminando(prev => [...prev, String(rechazoId)]);
 
+      const rechazoActual = rechazosPacientes.find(item => item.id === String(rechazoId));
+      const claveObjetivo = rechazoActual ? construirClaveRechazo(rechazoActual) : null;
+
+      let idsAEliminar = [String(rechazoId)];
+
+      if (claveObjetivo) {
+        const { data: filasRelacionadas, error: errorConsulta } = await supabase
+          .from('rechazos_pacientes')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(500);
+
+        if (errorConsulta) throw errorConsulta;
+
+        idsAEliminar = (filasRelacionadas || [])
+          .map(normalizarRechazo)
+          .filter(item => construirClaveRechazo(item) === claveObjetivo)
+          .map(item => item.id);
+
+        if (!idsAEliminar.length) {
+          idsAEliminar = [String(rechazoId)];
+        }
+      }
+
       const { error } = await supabase
         .from('rechazos_pacientes')
         .delete()
-        .eq('id', rechazoId);
+        .in('id', idsAEliminar);
 
       if (error) throw error;
 
-      setRechazosPacientes(prev => prev.filter(item => item.id !== String(rechazoId)));
-      guardarRechazosLeidosStorage(rechazosLeidos.filter(id => id !== String(rechazoId)));
+      setRechazosPacientes(prev => prev.filter(item => construirClaveRechazo(item) !== claveObjetivo));
+      guardarRechazosLeidosStorage(rechazosLeidos.filter(id => !idsAEliminar.includes(id)));
       mostrarSplash('Rechazo eliminado correctamente');
     } catch (error) {
       console.error('Error eliminando rechazo:', error);
