@@ -6,6 +6,7 @@ type IncomingPayload = {
   subject?: string;
   body?: string;
   pacienteNombre?: string;
+  pacienteNombreCompleto?: string; // alias sent by Apps Script
   pacienteApellido?: string;
   responsableMi?: string;
   obraSocial?: string;
@@ -26,7 +27,7 @@ const extraerDatoMail = (texto: string, etiquetas: string[]): string => {
 
   for (const etiqueta of etiquetas) {
     const escaped = etiqueta.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`${escaped}\\s*:\\s*(.*?)(?=,\\s*[A-ZÁÉÍÓÚÑ. ]+\\s*:|$)`, 'i');
+    const regex = new RegExp(`${escaped}\\s*:\\s*(.*?)(?=\\s*(?:[\\r\\n]|,\\s*[A-ZÁÉÍÓÚÑ. ]+\\s*:|$))`, 'i');
     const match = texto.match(regex);
     if (match?.[1]) return match[1].trim();
   }
@@ -55,6 +56,14 @@ const normalizarPayload = (payload: IncomingPayload) => {
     cuerpo_email: body || null,
     paciente_nombre: payload.pacienteNombre || paciente.nombre || null,
     paciente_apellido: payload.pacienteApellido || paciente.apellido || null,
+    // If Apps Script sends full name as pacienteNombreCompleto, split it
+    ...(() => {
+      if (!payload.pacienteNombre && !payload.pacienteApellido && payload.pacienteNombreCompleto) {
+        const p = parsePaciente(payload.pacienteNombreCompleto);
+        return { paciente_nombre: p.nombre || null, paciente_apellido: p.apellido || null };
+      }
+      return {};
+    })(),
     responsable_mi: payload.responsableMi || extraerDatoMail(body, ['Responsable M.I', 'Responsable MI', 'Responsable']) || null,
     obra_social: payload.obraSocial || extraerDatoMail(body, ['OOSS', 'Obra social']) || null,
     motivo: payload.motivo || extraerDatoMail(body, ['Motivo', 'Causa']) || null,
@@ -109,7 +118,7 @@ Deno.serve(async (req) => {
 
     const query = supabase
       .from('rechazos_pacientes')
-      .upsert(registro, registro.gmail_message_id ? { onConflict: 'gmail_message_id' } : undefined)
+      .insert(registro)
       .select('id')
       .single();
 
