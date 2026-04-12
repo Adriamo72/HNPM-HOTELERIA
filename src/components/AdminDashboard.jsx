@@ -27,6 +27,11 @@ const AdminDashboard = () => {
   const [nuevoVisualizador, setNuevoVisualizador] = useState({ usuario: '', pin: '', confirmarPin: '' });
   const [visualizadorSeleccionado, setVisualizadorSeleccionado] = useState(null);
   const [mostrarModalCambioPinVisualizador, setMostrarModalCambioPinVisualizador] = useState(false);
+  const [rechazosPacientes, setRechazosPacientes] = useState([]);
+  const [rechazosLeidos, setRechazosLeidos] = useState([]);
+  const [mostrarModalInfo, setMostrarModalInfo] = useState(false);
+  const [cargandoRechazos, setCargandoRechazos] = useState(false);
+  const [errorRechazos, setErrorRechazos] = useState('');
 
   
   // Estados para modales
@@ -55,6 +60,7 @@ const AdminDashboard = () => {
   const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
   const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
+  const STORAGE_RECHAZOS_LEIDOS = 'rechazos_pacientes_leidos_admin';
 
   const formatearResumenHabitacion = (config) => {
   if (config.tipo === 'INTERNACION') {
@@ -179,6 +185,16 @@ const AdminDashboard = () => {
     cargarDatos('todos');
     cargarAdmins();
     cargarVisualizadores();
+    cargarRechazosPacientes();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const intervalo = setInterval(() => {
+      cargarRechazosPacientes();
+    }, 60000);
+
+    return () => clearInterval(intervalo);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -352,6 +368,97 @@ const AdminDashboard = () => {
     setTimeout(() => setNotificacion({ visible: false, mensaje: '' }), 2500);
   };
 
+  const cargarRechazosLeidosStorage = () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_RECHAZOS_LEIDOS);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const guardarRechazosLeidosStorage = (ids) => {
+    const normalizados = Array.from(new Set((ids || []).map(id => String(id))));
+    localStorage.setItem(STORAGE_RECHAZOS_LEIDOS, JSON.stringify(normalizados));
+    setRechazosLeidos(normalizados);
+  };
+
+  const extraerDatoMail = (texto, etiquetas = []) => {
+    if (!texto) return '';
+
+    for (const etiqueta of etiquetas) {
+      const escaped = etiqueta.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`${escaped}\\s*:\\s*(.*?)(?=,\\s*[A-ZÁÉÍÓÚÑ. ]+\\s*:|$)`, 'i');
+      const match = texto.match(regex);
+      if (match?.[1]) return match[1].trim();
+    }
+
+    return '';
+  };
+
+  const normalizarRechazo = (row) => {
+    const cuerpoEmail = row?.cuerpo_email || row?.contenido_email || row?.raw_email || row?.detalle || '';
+    const pacienteMail = extraerDatoMail(cuerpoEmail, ['Paciente']);
+    const [apellidoMail = '', ...restoNombreMail] = pacienteMail.split(/\s+/).filter(Boolean);
+    const nombreMail = restoNombreMail.join(' ');
+    const nombre = row?.nombre || row?.paciente_nombre || row?.nombre_paciente || row?.first_name || nombreMail || '';
+    const apellido = row?.apellido || row?.paciente_apellido || row?.apellido_paciente || row?.last_name || apellidoMail || '';
+    const obraSocial = row?.obra_social || row?.obraSocial || row?.cobertura || row?.financiador || extraerDatoMail(cuerpoEmail, ['OOSS', 'Obra social']) || 'Sin dato';
+    const causa = row?.causa_rechazo || row?.causa || row?.motivo || row?.observacion || extraerDatoMail(cuerpoEmail, ['Motivo', 'Causa']) || 'Sin causa registrada';
+    const responsableMi = row?.responsable_mi || row?.responsableMi || extraerDatoMail(cuerpoEmail, ['Responsable M.I', 'Responsable MI', 'Responsable']) || 'Sin dato';
+    const diagnostico = row?.diagnostico || extraerDatoMail(cuerpoEmail, ['Diagnostico', 'Diagnóstico']) || 'Sin dato';
+    const createdAt = row?.created_at || row?.fecha || row?.fecha_rechazo || new Date().toISOString();
+    const emailEnviado = Boolean(row?.email_enviado || row?.notificado_email || row?.email_notificado);
+
+    return {
+      id: String(row?.id ?? `${nombre}-${apellido}-${createdAt}`),
+      nombre,
+      apellido,
+      obraSocial,
+      causa,
+      responsableMi,
+      diagnostico,
+      createdAt,
+      emailEnviado,
+      cuerpoEmail,
+    };
+  };
+
+  const cargarRechazosPacientes = async () => {
+    setCargandoRechazos(true);
+    setErrorRechazos('');
+
+    try {
+      const { data, error } = await supabase
+        .from('rechazos_pacientes')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      const normalizados = (data || []).map(normalizarRechazo);
+      setRechazosPacientes(normalizados);
+      setRechazosLeidos(cargarRechazosLeidosStorage());
+    } catch (error) {
+      console.error('Error cargando rechazos de pacientes:', error);
+      setErrorRechazos('No se pudieron cargar los rechazos de pacientes.');
+      setRechazosPacientes([]);
+      setRechazosLeidos(cargarRechazosLeidosStorage());
+    } finally {
+      setCargandoRechazos(false);
+    }
+  };
+
+  const abrirModalInfo = () => {
+    setMostrarModalInfo(true);
+    const idsActuales = rechazosPacientes.map(r => r.id);
+    guardarRechazosLeidosStorage([...rechazosLeidos, ...idsActuales]);
+  };
+
+  const rechazosNoLeidos = rechazosPacientes.filter(r => !rechazosLeidos.includes(r.id)).length;
+
   // ==================== FUNCIÓN PARA RECALCULAR STOCK DE UN PISO ====================
   const recalcularStockPiso = async (pisoId) => {
     try {
@@ -429,7 +536,10 @@ const AdminDashboard = () => {
 
   // Funciones de recarga por pestaña
 // Funciones de recarga por pestaña
-const recargarCroquis = () => cargarDatos('croquis');
+const recargarCroquis = async () => {
+  await cargarDatos('croquis');
+  await cargarRechazosPacientes();
+};
 const recargarMonitor = () => cargarDatos('monitor');
 const recargarAdmin = async () => {
   setCargandoAdmin(true);
@@ -444,6 +554,7 @@ const recargarAdmin = async () => {
     // Recargar admins y visualizadores
     await cargarAdmins();
     await cargarVisualizadores();
+    await cargarRechazosPacientes();
     
     // Recargar estado de habitaciones
     await cargarEstadoHabitaciones(resHabs.data || []);
@@ -1426,6 +1537,18 @@ const eliminarVisualizador = async (visId, usuario) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 Actualizar
+              </button>
+              <button
+                onClick={abrirModalInfo}
+                className="relative bg-red-600 hover:bg-red-500 text-white transition-colors text-sm flex items-center gap-1 px-3 py-2 rounded-xl"
+                title="Rechazos de pacientes"
+              >
+                <span className="font-semibold">Info</span>
+                {rechazosNoLeidos > 0 && (
+                  <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full bg-white text-red-700 text-[10px] font-black flex items-center justify-center border border-red-600">
+                    {rechazosNoLeidos > 99 ? '99+' : rechazosNoLeidos}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -2500,6 +2623,103 @@ const eliminarVisualizador = async (visId, usuario) => {
                 Crear Sector
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {mostrarModalInfo && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl p-5 max-w-3xl w-full border border-red-800 max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg sm:text-xl font-black text-red-400 uppercase tracking-wide">Info de Rechazos</h3>
+                <p className="text-xs text-slate-400">Notificaciones de rechazos de pacientes y estado de aviso por email</p>
+              </div>
+              <button
+                onClick={() => setMostrarModalInfo(false)}
+                className="text-slate-400 hover:text-white text-2xl leading-none"
+                title="Cerrar"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs uppercase font-semibold text-slate-400">Total: {rechazosPacientes.length}</span>
+              <span className="text-xs uppercase font-semibold text-red-400">No leídos: {rechazosNoLeidos}</span>
+              <button
+                onClick={() => guardarRechazosLeidosStorage(rechazosPacientes.map(r => r.id))}
+                className="ml-auto bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700"
+              >
+                Marcar todos como leídos
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {cargandoRechazos && (
+                <div className="text-center text-slate-400 text-sm py-8">Cargando rechazos...</div>
+              )}
+
+              {!cargandoRechazos && errorRechazos && (
+                <div className="bg-red-950/30 border border-red-900/40 rounded-xl p-4 text-sm text-red-300">
+                  {errorRechazos}
+                </div>
+              )}
+
+              {!cargandoRechazos && !errorRechazos && rechazosPacientes.length === 0 && (
+                <div className="text-center text-slate-500 text-sm py-8">Sin rechazos registrados.</div>
+              )}
+
+              {!cargandoRechazos && !errorRechazos && rechazosPacientes.map((rechazo) => {
+                const noLeido = !rechazosLeidos.includes(rechazo.id);
+
+                return (
+                  <div key={rechazo.id} className={`rounded-xl border p-3 ${noLeido ? 'border-red-700 bg-red-950/20' : 'border-slate-800 bg-slate-950/40'}`}>
+                    <div className="flex justify-between gap-2 items-start">
+                      <div>
+                        <p className="text-sm font-semibold text-white uppercase">
+                          {rechazo.apellido || 'Sin apellido'}, {rechazo.nombre || 'Sin nombre'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {new Date(rechazo.createdAt).toLocaleString('es-AR')}
+                        </p>
+                      </div>
+                      {noLeido ? (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-600/20 text-red-300 border border-red-600/40">No leído</span>
+                      ) : (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-600/20 text-emerald-300 border border-emerald-600/40">Leído</span>
+                      )}
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="bg-slate-900/70 rounded-lg px-2.5 py-2 border border-slate-800">
+                        <p className="text-slate-500 uppercase font-semibold">Obra social</p>
+                        <p className="text-slate-200 font-semibold mt-0.5">{rechazo.obraSocial || 'Sin dato'}</p>
+                      </div>
+                      <div className="bg-slate-900/70 rounded-lg px-2.5 py-2 border border-slate-800">
+                        <p className="text-slate-500 uppercase font-semibold">Email</p>
+                        <p className={`font-semibold mt-0.5 ${rechazo.emailEnviado ? 'text-emerald-300' : 'text-amber-300'}`}>
+                          {rechazo.emailEnviado ? 'Enviado' : 'Pendiente / Sin confirmar'}
+                        </p>
+                      </div>
+                      <div className="bg-slate-900/70 rounded-lg px-2.5 py-2 border border-slate-800">
+                        <p className="text-slate-500 uppercase font-semibold">Responsable M.I.</p>
+                        <p className="text-slate-200 font-semibold mt-0.5">{rechazo.responsableMi || 'Sin dato'}</p>
+                      </div>
+                      <div className="bg-slate-900/70 rounded-lg px-2.5 py-2 border border-slate-800">
+                        <p className="text-slate-500 uppercase font-semibold">Diagnóstico</p>
+                        <p className="text-slate-200 font-semibold mt-0.5">{rechazo.diagnostico || 'Sin dato'}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 bg-slate-900/70 rounded-lg px-2.5 py-2 border border-slate-800">
+                      <p className="text-slate-500 uppercase font-semibold text-xs">Causa del rechazo</p>
+                      <p className="text-slate-200 text-sm mt-0.5">{rechazo.causa}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
