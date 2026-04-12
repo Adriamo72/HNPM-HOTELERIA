@@ -199,15 +199,20 @@ const VisualizadorDashboard = () => {
         }
       }
 
-      const { error } = await supabase
+      const { data: eliminados, error } = await supabase
         .from('rechazos_pacientes')
         .delete()
+        .select('id')
         .in('id', idsAEliminar);
 
       if (error) throw error;
+      if (!eliminados || eliminados.length === 0) {
+        throw new Error('Sin permisos para eliminar rechazos (RLS/policy)');
+      }
 
       setRechazosPacientes(prev => prev.filter(item => construirClaveRechazo(item) !== claveObjetivo));
-      guardarRechazosLeidosStorage(rechazosLeidos.filter(id => !idsAEliminar.includes(id)));
+      const idsEliminados = eliminados.map(item => String(item.id));
+      guardarRechazosLeidosStorage(rechazosLeidos.filter(id => !idsEliminados.includes(id)));
       mostrarSplash('Rechazo eliminado correctamente');
     } catch (error) {
       console.error('Error eliminando rechazo:', error);
