@@ -1439,14 +1439,40 @@ const eliminarVisualizador = async (visId, usuario) => {
       return;
     }
 
-    const { error } = await supabase.from('personal').insert([nuevoMiembro]);
+    // DNI es TEXT en la DB, pero validamos que contenga solo dígitos
+    const dniTexto = String(nuevoMiembro.dni || '').trim();
+    if (!/^\d+$/.test(dniTexto)) {
+      mostrarSplash("❌ DNI debe ser un número válido");
+      return;
+    }
+
+    const personalToInsert = {
+      dni: dniTexto,
+      nombre: nuevoMiembro.nombre.trim(),
+      apellido: nuevoMiembro.apellido.trim(),
+      jerarquia: nuevoMiembro.jerarquia.trim(),
+      celular: nuevoMiembro.celular?.trim() || null,
+      rol: nuevoMiembro.rol
+    };
+
+    const { error } = await supabase.from('personal').insert([personalToInsert]);
     if (!error) {
       setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
       mostrarSplash("✅ Personal registrado");
       setMostrarModalPersonal(false);
       cargarDatos();
     } else {
-      mostrarSplash("❌ Error al registrar");
+      console.error("Error al registrar personal:", error);
+      const errorMsg = error?.message || error?.hint || "Error desconocido";
+      const esConstraintRol =
+        String(error?.message || '').toLowerCase().includes('personal_rol_check') ||
+        String(error?.message || '').toLowerCase().includes('check constraint');
+
+      if (esConstraintRol) {
+        mostrarSplash("❌ Tu DB no permite este rol. Actualizá el CHECK de personal.rol en Supabase.");
+      } else {
+        mostrarSplash(`❌ Error: ${errorMsg}`);
+      }
     }
   };
 
