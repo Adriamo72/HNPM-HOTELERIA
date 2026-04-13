@@ -12,8 +12,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
   const [stocksUsoPorItem, setStocksUsoPorItem] = useState({});
   const [stocksLavaderoPorItem, setStocksLavaderoPorItem] = useState({});
   const [novedades, setNovedades] = useState("Sin novedades");
-  const [busquedaDni, setBusquedaDni] = useState('');
-  const [enfermeroEncontrado, setEnfermeroEncontrado] = useState(null);
+  const [encargadoPisoTexto, setEncargadoPisoTexto] = useState('');
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [datos, setDatos] = useState({ item: 'SABANAS', carga_lavadero: 0, entrega_piso: 0, retirado_sucio: 0 });
   const [cargando, setCargando] = useState(true);
@@ -389,8 +388,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       return;
     }
 
-    if (!enfermeroEncontrado) {
-      mostrarSplash("Debe buscar un encargado de piso");
+    const encargadoPiso = (encargadoPisoTexto || '').trim();
+    if (!encargadoPiso) {
+      mostrarSplash("Debe indicar un encargado de piso");
       return;
     }
 
@@ -412,14 +412,24 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       return;
     }
 
+    const operador = `${perfilUsuario?.jerarquia || ''} ${perfilUsuario?.apellido || ''} ${perfilUsuario?.nombre || ''}`.trim();
+    const detalleOperativo = [
+      `Encargado de piso: ${encargadoPiso}`,
+      operador ? `Operador: ${operador}` : '',
+    ].filter(Boolean).join(' | ');
+
+    const novedadesBase = (novedades || '').trim();
+    const novedadesFinales = novedadesBase && novedadesBase !== 'Sin novedades'
+      ? `${novedadesBase} | ${detalleOperativo}`
+      : detalleOperativo;
+
     const movimiento = {
       piso_id: piso.id,
       dni_pañolero: perfilUsuario.dni,
-      dni_enfermero: enfermeroEncontrado.dni,
       item: datos.item,
       egreso_limpio: cantidadEntregada,
       stock_fisico_piso: nuevoStockPañol,
-      novedades: novedades
+      novedades: novedadesFinales
     };
 
     const { error: movError } = await supabase.from('movimientos_stock').insert([movimiento]);
@@ -435,37 +445,15 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
     if (ok) {
       setStocksPorItem(prev => ({ ...prev, [datos.item]: nuevoStockPañol }));
       setStocksUsoPorItem(prev => ({ ...prev, [datos.item]: nuevoStockUso }));
-      mostrarSplash(`✅ ${cantidadEntregada} ${datos.item} entregados a ${enfermeroEncontrado.apellido}`);
+      mostrarSplash(`✅ ${cantidadEntregada} ${datos.item} entregados a ${encargadoPiso}`);
       setDatos({ ...datos, entrega_piso: 0 });
-      setBusquedaDni('');
-      setEnfermeroEncontrado(null);
+      setEncargadoPisoTexto('');
       setNovedades("Sin novedades");
     } else {
       mostrarSplash("❌ ERROR AL ACTUALIZAR STOCK");
     }
     
     setRegistrando(false);
-  };
-
-  const buscarEnfermero = async () => {
-    if (busquedaDni.length < 7) {
-      mostrarSplash("DNI inválido");
-      return;
-    }
-    
-    const { data } = await supabase
-      .from('personal')
-      .select('*')
-      .eq('dni', busquedaDni)
-      .in('rol', ['encargado_piso', 'enfermero'])
-      .maybeSingle();
-    
-    setEnfermeroEncontrado(data);
-    if (!data) {
-      mostrarSplash("DNI NO REGISTRADO");
-    } else {
-      mostrarSplash(`${data.jerarquia} ${data.apellido} encontrado`);
-    }
   };
 
   if (cargando) {
@@ -502,6 +490,9 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
           {modo === 'habitacion' ? 'SERVICIO HABITACIÓN' : modo === 'lavadero' ? 'CONTROL LAVADERO' : 'CONTROL PAÑOL'}
         </p>
         <h3 className="text-xl font-black uppercase">{piso.nombre_piso}</h3>
+        <p className="text-xs text-slate-400 mt-1 uppercase font-semibold">
+          Operador: {perfilUsuario?.jerarquia || ''} {perfilUsuario?.apellido || ''}, {perfilUsuario?.nombre || ''}
+        </p>
         {habitacionEspecial && (
           <p className="text-sm text-blue-400 mt-1 uppercase font-bold">
             Habitación: {habitacionEspecial.nombre}
@@ -664,30 +655,13 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
             <p className="text-sm font-black text-slate-500 mb-3 uppercase">ENCARGADO DE PISO</p>
-            <div className="flex gap-3">
-              <input 
-                type="text" 
-                className="flex-1 bg-slate-950 p-3 rounded-xl border border-slate-800 text-base outline-none font-mono"
-                value={busquedaDni}
-                onChange={(e) => setBusquedaDni(e.target.value)}
-                placeholder="DNI del encargado"
-              />
-              <button 
-                type="button" 
-                onClick={buscarEnfermero} 
-                className="bg-blue-600 px-5 rounded-xl text-sm font-black uppercase hover:bg-blue-500 transition-all"
-              >
-                Buscar
-              </button>
-            </div>
-            {enfermeroEncontrado && (
-              <div className="mt-3 p-3 bg-green-900/30 rounded-xl border border-green-800/50">
-                <p className="text-green-400 text-sm font-bold">
-                  📋 {enfermeroEncontrado.jerarquia} {enfermeroEncontrado.apellido}, {enfermeroEncontrado.nombre}
-                </p>
-                <p className="text-green-500/70 text-[10px] mt-1">DNI: {enfermeroEncontrado.dni}</p>
-              </div>
-            )}
+            <input
+              type="text"
+              className="w-full bg-slate-950 p-3 rounded-xl border border-slate-800 text-base outline-none"
+              value={encargadoPisoTexto}
+              onChange={(e) => setEncargadoPisoTexto(e.target.value)}
+              placeholder="Ej: SPEN Martinez"
+            />
           </div>
 
           <div className="bg-orange-900/10 p-5 rounded-xl border border-orange-900/30">
@@ -718,8 +692,8 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
 
           <button 
             type="submit" 
-            disabled={!enfermeroEncontrado || registrando}
-            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(!enfermeroEncontrado || registrando) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
+            disabled={!encargadoPisoTexto.trim() || registrando}
+            className={`w-full p-5 rounded-xl font-black uppercase text-base transition-all ${(!encargadoPisoTexto.trim() || registrando) ? 'bg-slate-600 cursor-not-allowed opacity-50' : 'bg-blue-600 active:scale-95'}`}
           >
             {registrando ? 'REGISTRANDO...' : 'Entregar al Piso'}
           </button>
