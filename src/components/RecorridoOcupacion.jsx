@@ -44,6 +44,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
             tipo_habitacion,
             total_camas,
             camas_ocupadas,
+            informacion_ampliatoria,
             fecha,
             actualizado_en
           )
@@ -59,7 +60,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         return;
       }
       
-      // 3. Procesar los datos - filtrar SOLO internación activa
+      // 3. Procesar los datos - incluir solo habitaciones cuyo estado más reciente sea internación
       const habitacionesInternacion = [];
       const ocupState = {};
       
@@ -67,17 +68,17 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         // Ordenar ocupaciones por fecha y actualización (más reciente primero)
         const ocupacionesList = hab.ocupacion_habitaciones || [];
         const ocupReciente = ocupacionesList
-          .filter(o => o.tipo_habitacion === 'activa')
           .sort((a, b) => {
             if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
             return new Date(b.actualizado_en) - new Date(a.actualizado_en);
           })[0];
         
-        if (ocupReciente) {
+        if (ocupReciente?.tipo_habitacion === 'activa') {
           habitacionesInternacion.push({
             id: hab.id,
             nombre: hab.nombre,
-            total_camas: ocupReciente.total_camas || 1
+            total_camas: ocupReciente.total_camas || 1,
+            informacion_ampliatoria: (ocupReciente.informacion_ampliatoria || '').trim()
           });
           ocupState[hab.id] = {
             camas_ocupadas: ocupReciente.camas_ocupadas || 0
@@ -345,7 +346,9 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
               <div className="flex justify-between items-center mb-3">
                 <div>
                   <span className="text-lg font-bold text-white">{hab.nombre}</span>
-                  <span className="text-xs text-slate-400 ml-2">({totalCamasHab} cama{totalCamasHab === 1 ? '' : 's'})</span>
+                  {!!hab.informacion_ampliatoria && (
+                    <span className="text-xs text-slate-400 ml-2">{hab.informacion_ampliatoria}</span>
+                  )}
                 </div>
                 <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${colorBg.replace('/20', '/50')} border ${colorBorder}`}>
                   {iconoEstado} {estado}
