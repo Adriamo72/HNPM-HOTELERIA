@@ -485,8 +485,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         const totalCamas = ocup.total_camas || 0;
         const camasOcupadas = ocup.camas_ocupadas || 0;
         const camasDisponibles = totalCamas - camasOcupadas;
-        const hayOcupacion = camasOcupadas > 0;
-        const parpadeo = !hayOcupacion && totalCamas > 0;
+        const ocupacionCompleta = totalCamas > 0 && camasOcupadas >= totalCamas;
+        const parpadeo = camasDisponibles > 0 && totalCamas > 0;
         
         const fechaActualizacion = ocup.actualizado_en || ocup.created_at;
         const fechaObj = new Date(fechaActualizacion);
@@ -503,11 +503,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         }
         
         return {
-          bg: hayOcupacion ? 'border-blue-400' : 'border-green-400',
+          bg: ocupacionCompleta ? 'border-blue-400' : 'border-green-400',
           text: 'text-white',
           blink: parpadeo,
           title: titleText,
-          style: { backgroundColor: hayOcupacion ? 'rgba(37, 99, 235, 0.9)' : 'rgba(32, 205, 10, 0.9)' }
+          style: { backgroundColor: ocupacionCompleta ? 'rgba(37, 99, 235, 0.9)' : 'rgba(32, 205, 10, 0.9)' }
         };
 
       default:
