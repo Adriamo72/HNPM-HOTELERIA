@@ -38,23 +38,10 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       if (pisoError) throw new Error("Sector no encontrado");
       setPiso(pisoData);
       
-      // 2. Obtener habitaciones y sus configuraciones en UNA sola consulta
-      // Consulta optimizada: obtener habitaciones con su última configuración
+      // 2. Obtener habitaciones del piso
       const { data: habitacionesData, error: habError } = await supabase
         .from('habitaciones_especiales')
-        .select(`
-          id, 
-          nombre,
-          ocupacion_habitaciones!left (
-            tipo_habitacion,
-            total_camas,
-            camas_ocupadas,
-            observaciones,
-            informacion_ampliatoria,
-            fecha,
-            actualizado_en
-          )
-        `)
+        .select('id, nombre')
         .eq('piso_id', pisoData.id)
         .order('nombre');
       
@@ -65,19 +52,31 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         setCargando(false);
         return;
       }
+
+      // 3. Obtener ocupaciones y quedarnos con la más reciente por habitación
+      const habitacionIds = habitacionesData.map(h => h.id);
+      const { data: ocupacionesData, error: ocupError } = await supabase
+        .from('ocupacion_habitaciones')
+        .select('habitacion_id, tipo_habitacion, total_camas, camas_ocupadas, observaciones, informacion_ampliatoria, fecha, actualizado_en')
+        .in('habitacion_id', habitacionIds)
+        .order('fecha', { ascending: false })
+        .order('actualizado_en', { ascending: false });
+
+      if (ocupError) throw new Error("Error al cargar ocupación");
       
-      // 3. Procesar los datos - incluir solo habitaciones cuyo estado más reciente sea internación
+      // 4. Procesar los datos - incluir solo habitaciones cuyo estado más reciente sea internación
       const habitacionesInternacion = [];
       const ocupState = {};
+
+      const ultimaOcupacionPorHab = {};
+      (ocupacionesData || []).forEach((occ) => {
+        if (!ultimaOcupacionPorHab[occ.habitacion_id]) {
+          ultimaOcupacionPorHab[occ.habitacion_id] = occ;
+        }
+      });
       
       for (const hab of habitacionesData) {
-        // Ordenar ocupaciones por fecha y actualización (más reciente primero)
-        const ocupacionesList = hab.ocupacion_habitaciones || [];
-        const ocupReciente = ocupacionesList
-          .sort((a, b) => {
-            if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
-            return new Date(b.actualizado_en) - new Date(a.actualizado_en);
-          })[0];
+        const ocupReciente = ultimaOcupacionPorHab[hab.id];
         
         if (ocupReciente?.tipo_habitacion === 'activa') {
           habitacionesInternacion.push({
