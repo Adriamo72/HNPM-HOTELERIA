@@ -840,7 +840,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                   onClick={(e) => handleMarkerClick(e, hab, ocup, estilo)}
                 >
                   {aislamientoActivo && (
-                    <span className="absolute -top-3 -right-3 w-4 h-4 rounded-full bg-red-600 border border-red-300 text-[9px] leading-[14px] text-white font-black text-center shadow-lg">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-600 border border-red-300 text-[9px] leading-[14px] text-white font-black text-center shadow-lg">
                       !
                     </span>
                   )}
