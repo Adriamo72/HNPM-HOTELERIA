@@ -2,6 +2,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
+const AISLAMIENTO_TOKEN = 'AISLAMIENTO_PATOLOGIA';
+
+const esAislamientoPatologia = (observaciones) =>
+  String(observaciones || '').toUpperCase().includes('AISLAMIENTO');
+
 const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const [piso, setPiso] = useState(null);
   const [habitaciones, setHabitaciones] = useState([]);
@@ -44,6 +49,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
             tipo_habitacion,
             total_camas,
             camas_ocupadas,
+            observaciones,
             informacion_ampliatoria,
             fecha,
             actualizado_en
@@ -81,7 +87,8 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
             informacion_ampliatoria: (ocupReciente.informacion_ampliatoria || '').trim()
           });
           ocupState[hab.id] = {
-            camas_ocupadas: ocupReciente.camas_ocupadas || 0
+            camas_ocupadas: ocupReciente.camas_ocupadas || 0,
+            aislamiento: esAislamientoPatologia(ocupReciente.observaciones)
           };
         }
       }
@@ -110,8 +117,33 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     
     setOcupaciones(prev => ({
       ...prev,
-      [habitacionId]: { camas_ocupadas: valor }
+      [habitacionId]: {
+        ...(prev[habitacionId] || {}),
+        camas_ocupadas: valor
+      }
     }));
+  };
+
+  const togglearAislamiento = (habitacionId) => {
+    setOcupaciones(prev => ({
+      ...prev,
+      [habitacionId]: {
+        ...(prev[habitacionId] || {}),
+        aislamiento: !(prev[habitacionId]?.aislamiento)
+      }
+    }));
+  };
+
+  const getCamasOcupadasEfectivas = (hab, estado) => {
+    const totalCamasHab = hab?.total_camas || 0;
+    const camasOcupadasHab = estado?.camas_ocupadas || 0;
+    const aislamientoActivo = Boolean(estado?.aislamiento);
+
+    if (aislamientoActivo && camasOcupadasHab > 0 && totalCamasHab > 0) {
+      return totalCamasHab;
+    }
+
+    return Math.min(totalCamasHab, Math.max(0, camasOcupadasHab));
   };
 
   const guardarTodas = async () => {
@@ -132,7 +164,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       tipo_habitacion: 'activa',
       total_camas: hab.total_camas,
       camas_ocupadas: ocupaciones[hab.id]?.camas_ocupadas || 0,
-      observaciones: null,
+      observaciones: ocupaciones[hab.id]?.aislamiento ? AISLAMIENTO_TOKEN : null,
       actualizado_por: perfilUsuario?.dni,
       actualizado_en: new Date().toISOString()
     }));
@@ -201,7 +233,10 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
 
   // Calcular estadísticas
   const totalCamas = habitaciones.reduce((sum, hab) => sum + (hab.total_camas || 1), 0);
-  const totalOcupadas = habitaciones.reduce((sum, hab) => sum + (ocupaciones[hab.id]?.camas_ocupadas || 0), 0);
+  const totalOcupadas = habitaciones.reduce(
+    (sum, hab) => sum + getCamasOcupadasEfectivas(hab, ocupaciones[hab.id]),
+    0
+  );
   const porcentaje = totalCamas > 0 ? (totalOcupadas / totalCamas) * 100 : 0;
 
   // Pantalla de carga
@@ -314,18 +349,20 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         {habitaciones.map((hab, index) => {
           const camasOcupadas = ocupaciones[hab.id]?.camas_ocupadas || 0;
           const totalCamasHab = hab.total_camas;
+          const aislamientoActivo = Boolean(ocupaciones[hab.id]?.aislamiento);
+          const camasOcupadasEfectivas = getCamasOcupadasEfectivas(hab, ocupaciones[hab.id]);
           
           let estado = '';
           let colorBg = '';
           let colorBorder = '';
           let iconoEstado = '';
           
-          if (camasOcupadas === 0) {
+          if (camasOcupadasEfectivas === 0) {
             estado = 'VACÍA';
             colorBg = 'bg-red-900/20';
             colorBorder = 'border-red-800/50';
             iconoEstado = '🔴';
-          } else if (camasOcupadas === totalCamasHab) {
+          } else if (camasOcupadasEfectivas === totalCamasHab) {
             estado = 'COMPLETA';
             colorBg = 'bg-green-900/20';
             colorBorder = 'border-green-800/50';
@@ -350,9 +387,17 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
                     <span className="text-xs text-slate-400 ml-2">{hab.informacion_ampliatoria}</span>
                   )}
                 </div>
-                <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${colorBg.replace('/20', '/50')} border ${colorBorder}`}>
-                  {iconoEstado} {estado}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => togglearAislamiento(hab.id)}
+                  className={`px-2 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                    aislamientoActivo
+                      ? 'bg-red-600/30 border-red-500 text-red-200'
+                      : 'bg-slate-700/60 border-slate-500 text-slate-200'
+                  }`}
+                >
+                  {aislamientoActivo ? '🔴 AISLAMIENTO ON' : 'AISLAMIENTO OFF'}
+                </button>
               </div>
               
               <div className="flex items-center gap-4">
@@ -376,6 +421,11 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
                     />
                     <span className="text-xl text-slate-500 font-bold">/ {totalCamasHab}</span>
                   </div>
+                  {aislamientoActivo && camasOcupadas > 0 && (
+                    <p className="text-[10px] text-red-400 font-bold uppercase tracking-wider mt-1">
+                      Aislamiento activo: cuenta como {totalCamasHab}/{totalCamasHab}
+                    </p>
+                  )}
                   <p className="text-[9px] text-slate-500 uppercase tracking-wider mt-1">PACIENTES OCUPANDO CAMA</p>
                 </div>
                 

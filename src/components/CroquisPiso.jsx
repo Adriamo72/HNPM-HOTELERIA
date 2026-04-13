@@ -3,6 +3,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { supabase } from '../supabaseClient';
 
+const esAislamientoPatologia = (observaciones) =>
+  String(observaciones || '').toUpperCase().includes('AISLAMIENTO');
+
+const getCamasOcupadasEfectivas = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadas = ocup?.camas_ocupadas || 0;
+  const aislamientoActivo = esAislamientoPatologia(ocup?.observaciones);
+
+  if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
+    return totalCamas;
+  }
+
+  return Math.min(totalCamas, Math.max(0, camasOcupadas));
+};
+
 const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false, fechaConsulta }) => {
   const normalizedPisoId = typeof pisoId === 'string' && pisoId.trim() !== '' && !Number.isNaN(Number(pisoId))
     ? Number(pisoId)
@@ -185,7 +200,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         const ocup = ocupMap[hab.id];
         if (ocup && ocup.tipo_habitacion === 'activa') {
           totalCamasGlobal += ocup.total_camas || 1;
-          camasOcupadasGlobal += ocup.camas_ocupadas || 0;
+          camasOcupadasGlobal += getCamasOcupadasEfectivas(ocup);
         }
       });
       
@@ -211,7 +226,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       const ocup = ocupacion[hab.id];
       if (ocup && ocup.tipo_habitacion === 'activa') {
         totalCamas += ocup.total_camas || 1;
-        camasOcupadas += ocup.camas_ocupadas || 0;
+        camasOcupadas += getCamasOcupadasEfectivas(ocup);
       }
     });
     
@@ -483,10 +498,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         };
       case 'activa':
         const totalCamas = ocup.total_camas || 0;
-        const camasOcupadas = ocup.camas_ocupadas || 0;
+        const camasOcupadas = getCamasOcupadasEfectivas(ocup);
         const camasDisponibles = totalCamas - camasOcupadas;
         const ocupacionCompleta = totalCamas > 0 && camasOcupadas >= totalCamas;
         const parpadeo = camasDisponibles > 0 && totalCamas > 0;
+        const aislamientoActivo = esAislamientoPatologia(ocup.observaciones);
         
         const fechaActualizacion = ocup.actualizado_en || ocup.created_at;
         const fechaObj = new Date(fechaActualizacion);
@@ -499,7 +515,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         if (totalCamas === 0) {
           titleText = `${infoAmpliatoria}\nSin camas asignadas\n${fechaFormateada} ${horaFormateada} hs`;
         } else {
-          titleText = `${infoAmpliatoria}\n${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles\n${fechaFormateada} ${horaFormateada} hs`;
+          const detalleAislamiento = aislamientoActivo ? '\nAislamiento por patología activo' : '';
+          titleText = `${infoAmpliatoria}\n${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles${detalleAislamiento}\n${fechaFormateada} ${horaFormateada} hs`;
         }
         
         return {
@@ -777,6 +794,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
               
               const ocup = ocupacion[hab.id];
               const estilo = getColorPorTipoYOcupacion(hab, ocup);
+              const aislamientoActivo = ocup?.tipo_habitacion === 'activa' && esAislamientoPatologia(ocup?.observaciones);
               
               let displayTexto = '';
               if (!ocup) {
@@ -819,6 +837,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                   title={`${hab.nombre} - ${estilo.title}`}
                   onClick={(e) => handleMarkerClick(e, hab, ocup, estilo)}
                 >
+                  {aislamientoActivo && (
+                    <span className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-red-600 border border-red-300 text-[9px] leading-[14px] text-white font-black text-center">
+                      !
+                    </span>
+                  )}
                   <span className="text-[9px] font-bold leading-none truncate w-full text-center px-0.5">{hab.nombre}</span>
                   <span className="text-[14px] font-black leading-none">{displayTexto}</span>
                 </div>
@@ -833,6 +856,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           <div className="flex gap-4 text-xs">
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div> Disponible</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Ocupada</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500"></div> Aislamiento</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div> Reparación</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-500"></div> Otros</span>
           </div>
