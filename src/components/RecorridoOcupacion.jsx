@@ -352,26 +352,18 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
           const aislamientoActivo = Boolean(ocupaciones[hab.id]?.aislamiento);
           const camasOcupadasEfectivas = getCamasOcupadasEfectivas(hab, ocupaciones[hab.id]);
           
-          let estado = '';
           let colorBg = '';
           let colorBorder = '';
-          let iconoEstado = '';
           
           if (camasOcupadasEfectivas === 0) {
-            estado = 'VACÍA';
             colorBg = 'bg-red-900/20';
             colorBorder = 'border-red-800/50';
-            iconoEstado = '🔴';
           } else if (camasOcupadasEfectivas === totalCamasHab) {
-            estado = 'COMPLETA';
             colorBg = 'bg-green-900/20';
             colorBorder = 'border-green-800/50';
-            iconoEstado = '🟢';
           } else {
-            estado = 'PARCIAL';
             colorBg = 'bg-yellow-900/20';
             colorBorder = 'border-yellow-800/50';
-            iconoEstado = '🟡';
           }
           
           return (
