@@ -729,6 +729,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             <div className="flex gap-4 text-sm">
               <span className="text-green-400">Camas en este piso: {estadisticas.totalCamas}</span>
               <span className="text-yellow-400">Ocupadas: {estadisticas.camasOcupadas}</span>
+              <span className="text-emerald-300">Disponibles: {Math.max(0, estadisticas.totalCamas - estadisticas.camasOcupadas)}</span>
               <span className="text-blue-400">{estadisticas.porcentaje.toFixed(1)}% ocupación</span>
             </div>
             {ultimaActualizacion && (
@@ -832,13 +833,14 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                     transform: `translate(-50%, -50%) scale(${markerScale.toFixed(3)})`,
                     transformOrigin: 'center center',
                     padding: '2px 1px',
+                    zIndex: aislamientoActivo ? 40 : 10,
                     ...estilo.style
                   }}
                   title={`${hab.nombre} - ${estilo.title}`}
                   onClick={(e) => handleMarkerClick(e, hab, ocup, estilo)}
                 >
                   {aislamientoActivo && (
-                    <span className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-red-600 border border-red-300 text-[9px] leading-[14px] text-white font-black text-center">
+                    <span className="absolute -top-3 -right-3 w-4 h-4 rounded-full bg-red-600 border border-red-300 text-[9px] leading-[14px] text-white font-black text-center shadow-lg">
                       !
                     </span>
                   )}
