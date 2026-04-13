@@ -457,7 +457,7 @@ const FormularioPiso = ({ perfilUsuario, slugPiso, modoAcceso }) => {
       .from('personal')
       .select('*')
       .eq('dni', busquedaDni)
-      .in('rol', ['enfermero', 'ADMIN'])
+      .in('rol', ['encargado_piso', 'enfermero'])
       .maybeSingle();
     
     setEnfermeroEncontrado(data);

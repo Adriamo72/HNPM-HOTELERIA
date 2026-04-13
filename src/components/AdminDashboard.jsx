@@ -62,6 +62,12 @@ const AdminDashboard = () => {
   const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STORAGE_RECHAZOS_LEIDOS = 'rechazos_pacientes_leidos_admin';
+  const ROLE_LABELS_TRIPULACION = {
+    pañolero: 'PAÑOLERO',
+    operador: 'OPERADOR',
+    encargado_piso: 'ENCARGADO DE PISO',
+    enfermero: 'ENCARGADO DE PISO',
+  };
 
   const formatearResumenHabitacion = (config) => {
   if (config.tipo === 'INTERNACION') {
@@ -1426,6 +1432,13 @@ const eliminarVisualizador = async (visId, usuario) => {
       mostrarSplash("Complete todos los campos");
       return;
     }
+
+    const rolesPermitidos = ['pañolero', 'operador', 'encargado_piso'];
+    if (!rolesPermitidos.includes(nuevoMiembro.rol)) {
+      mostrarSplash("❌ Rol no permitido en Tripulación");
+      return;
+    }
+
     const { error } = await supabase.from('personal').insert([nuevoMiembro]);
     if (!error) {
       setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
@@ -2079,7 +2092,7 @@ const eliminarVisualizador = async (visId, usuario) => {
           <div className="flex justify-between items-center mb-4">
             <div>
               <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">👥 Tripulación</h3>
-              <p className="text-xs text-slate-500 mt-1">Personal operativo del sistema</p>
+              <p className="text-xs text-slate-500 mt-1">Personal operativo con acceso por QR (no incluye Administradores ni Visualizadores)</p>
             </div>
             <button
               onClick={() => setMostrarModalPersonal(true)}
@@ -2095,7 +2108,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                 <div key={p.dni} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center text-sm uppercase font-semibold">
                   <span>
                     {p.jerarquia} {p.apellido}, {p.nombre} 
-                    <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{p.rol}]</span>
+                    <span className="text-blue-500 opacity-50 ml-2 text-[10px]">[{ROLE_LABELS_TRIPULACION[p.rol] || String(p.rol || '').toUpperCase()}]</span>
                   </span>
                   <div className="flex gap-2">
                     <button 
@@ -2643,7 +2656,7 @@ const eliminarVisualizador = async (visId, usuario) => {
             <form onSubmit={agregarPersonal} className="space-y-3">
               <input 
                 className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Jerarquía (Ej: Enfermero)" 
+                placeholder="Jerarquía (Ej: Operador)" 
                 value={nuevoMiembro.jerarquia} 
                 onChange={e => setNuevoMiembro({...nuevoMiembro, jerarquia: e.target.value})} 
                 required 
@@ -2674,9 +2687,9 @@ const eliminarVisualizador = async (visId, usuario) => {
                 value={nuevoMiembro.rol} 
                 onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}
               >
-                <option value="pañolero">🧺 Pañolero / Operador</option>
-                <option value="enfermero">🩺 Encargado de Piso</option>
-                <option value="ADMIN">⚙️ Administrador</option>
+                <option value="pañolero">Pañolero</option>
+                <option value="operador">Operador</option>
+                <option value="encargado_piso">Encargado de Piso</option>
               </select>
               <button 
                 type="submit" 
