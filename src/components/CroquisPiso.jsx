@@ -485,7 +485,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         const totalCamas = ocup.total_camas || 0;
         const camasOcupadas = ocup.camas_ocupadas || 0;
         const camasDisponibles = totalCamas - camasOcupadas;
-        const parpadeo = camasDisponibles > 0 && totalCamas > 0;
+        const hayOcupacion = camasOcupadas > 0;
+        const parpadeo = !hayOcupacion && totalCamas > 0;
         
         const fechaActualizacion = ocup.actualizado_en || ocup.created_at;
         const fechaObj = new Date(fechaActualizacion);
@@ -502,11 +503,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         }
         
         return {
-          bg: 'border-green-400',
+          bg: hayOcupacion ? 'border-blue-400' : 'border-green-400',
           text: 'text-white',
           blink: parpadeo,
           title: titleText,
-          style: { backgroundColor: 'rgba(32, 205, 10, 0.9)' }
+          style: { backgroundColor: hayOcupacion ? 'rgba(37, 99, 235, 0.9)' : 'rgba(32, 205, 10, 0.9)' }
         };
 
       default:
@@ -831,7 +832,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         <div className="flex flex-wrap justify-between items-center gap-2">
           <div className="flex gap-4 text-xs">
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div> Disponible</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div> Ocupada</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Ocupada</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div> Reparación</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-500"></div> Otros</span>
           </div>
