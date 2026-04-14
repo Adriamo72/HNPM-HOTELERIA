@@ -91,12 +91,16 @@ function getOcupPorServicios(servicios, ocupacion) {
 function calcularStats(ocuList) {
   let total = 0, ocupadas = 0;
   ocuList.forEach(o => {
-    if (o.tipo_habitacion === 'activa') {
-      total += o.total_camas || 0;
-      ocupadas += o.camas_ocupadas || 0;
+    if (o && o.tipo_habitacion === 'activa') {
+      const totalCamas = parseInt(o.total_camas) || 0;
+      const camasOcupadas = parseInt(o.camas_ocupadas) || 0;
+      total += totalCamas;
+      ocupadas += camasOcupadas;
     }
   });
-  return { total, ocupadas, libres: total - ocupadas, pct: total > 0 ? ((ocupadas / total) * 100).toFixed(1) : '0.0' };
+  const libres = Math.max(0, total - ocupadas);
+  const pct = total > 0 ? ((ocupadas / total) * 100).toFixed(1) : '0.0';
+  return { total, ocupadas, libres, pct };
 }
 
 // ==================== Motor de respuestas ====================
@@ -248,26 +252,38 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
 
   // Porcentaje
   if (/porcentaje|%/.test(n) || (/ocupaci[oó]n/.test(n) && /porcentaje|%/.test(n))) {
-    const { total, ocupadas, pct } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
-    return `El porcentaje de ocupación ${label} es del **${pct}%** (${ocupadas} de ${total} camas ocupadas).`;
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    if (stats.total === 0) {
+      return `No hay camas activas ${label} para calcular porcentaje de ocupación.`;
+    }
+    return `El porcentaje de ocupación ${label} es del **${stats.pct}%** (${stats.ocupadas} de ${stats.total} camas ocupadas).`;
   }
 
   // Camas libres
   if (/cama/.test(n) && /libre|disponible/.test(n)) {
-    const { total, libres } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
-    return `${labelInicio} hay **${libres}** cama${libres !== 1 ? 's' : ''} libre${libres !== 1 ? 's' : ''} de ${total} totales.`;
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    if (stats.total === 0) {
+      return `No hay camas activas ${label}.`;
+    }
+    return `${labelInicio} hay **${stats.libres}** cama${stats.libres !== 1 ? 's' : ''} libre${stats.libres !== 1 ? 's' : ''} de ${stats.total} totales.`;
   }
 
   // Camas ocupadas
   if (/cama/.test(n) && /ocupad|usad|llena/.test(n)) {
-    const { total, ocupadas } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
-    return `${labelInicio} hay **${ocupadas}** cama${ocupadas !== 1 ? 's' : ''} ocupada${ocupadas !== 1 ? 's' : ''} de ${total} totales.`;
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    if (!stats || stats.total === 0) {
+      return `No hay camas activas ${label}.`;
+    }
+    return `${labelInicio} hay **${stats.ocupadas}** cama${stats.ocupadas !== 1 ? 's' : ''} ocupada${stats.ocupadas !== 1 ? 's' : ''} de ${stats.total} totales.`;
   }
 
   // Camas totales
   if (/cama/.test(n)) {
-    const { total, ocupadas, libres, pct } = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
-    return `${labelInicio} hay **${total}** camas en habitaciones activas (${ocupadas} ocupadas, ${libres} libres, **${pct}%** de ocupación).`;
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    if (!stats || stats.total === 0) {
+      return `No hay camas activas ${label}.`;
+    }
+    return `${labelInicio} hay **${stats.total}** camas en habitaciones activas (${stats.ocupadas} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
   }
 
   // Habitaciones activas
@@ -278,7 +294,10 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
 
   // Habitaciones disponibles
   if (/habitaci[oó]n|habitaciones/.test(n) && /disponible|libre/.test(n)) {
-    const count = habs.filter(h => { const o = getOcup(h); return !o || o.tipo_habitacion === 'disponible'; }).length;
+    const count = habs.filter(h => {
+      const o = getOcup(h);
+      return !o || o.tipo_habitacion === 'disponible' || o.tipo_habitacion === null;
+    }).length;
     return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} disponible${count !== 1 ? 's' : ''}.`;
   }
 
