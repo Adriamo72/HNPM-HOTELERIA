@@ -109,6 +109,8 @@ const getCamasNoUtilizadasPorAislamiento = (ocup) => {
 // ==================== Calcular stats de una lista de ocupaciones (actualizado) ====================
 function calcularStats(ocuList) {
   let total = 0, ocupadas = 0, ocupadasReales = 0, aislamiento = 0;
+  console.log('🏥 AsistenteIA - calcularStats - ocuList length:', ocuList.length);
+  
   ocuList.forEach(o => {
     if (o && o.tipo_habitacion === 'activa') {
       const totalCamas = parseInt(o.total_camas) || 0;
@@ -120,6 +122,16 @@ function calcularStats(ocuList) {
   ocupadas = ocupadasReales + aislamiento; // Ocupación práctica
   const libres = Math.max(0, total - ocupadas);
   const pct = total > 0 ? ((ocupadas / total) * 100).toFixed(1) : '0.0';
+  
+  console.log('🏥 AsistenteIA - calcularStats result:', {
+    total,
+    ocupadas,
+    libres,
+    pct,
+    ocupadasReales,
+    aislamiento
+  });
+  
   return { total, ocupadas, libres, pct, ocupadasReales, aislamiento };
 }
 
@@ -443,6 +455,7 @@ const AsistenteIA = ({ pisos }) => {
         .select('id, piso_id, nombre');
       
       if (error) throw error;
+      console.log('🏥 AsistenteIA - Habitaciones especiales cargadas:', data?.length || 0);
       setHabitacionesEspeciales(data || []);
     } catch (err) {
       console.error('Error cargando habitaciones especiales:', err);
@@ -469,6 +482,9 @@ const AsistenteIA = ({ pisos }) => {
           ocupMap[occ.habitacion_id] = occ;
         }
       });
+
+      console.log('🏥 AsistenteIA - Registros de ocupación:', Object.keys(ocupMap).length);
+      console.log('🏥 AsistenteIA - Datos de ocupación:', ocupMap);
 
       setOcupacion(ocupMap);
       setDatosListos(true);
