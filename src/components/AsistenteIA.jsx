@@ -94,10 +94,13 @@ const getCamasOcupadasReales = (ocup) => {
   return Math.min(totalCamas, Math.max(0, camasOcupadas));
 };
 
+const esAislamientoPatologia = (observaciones) =>
+  String(observaciones || '').toUpperCase().includes('AISLAMIENTO');
+
 const getCamasNoUtilizadasPorAislamiento = (ocup) => {
   const totalCamas = ocup?.total_camas || 0;
   const camasOcupadasReales = getCamasOcupadasReales(ocup);
-  const aislamientoActivo = ocup?.informacion_ampliatoria?.toLowerCase().includes('aislamiento') || false;
+  const aislamientoActivo = esAislamientoPatologia(ocup?.observaciones);
 
   if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) {
     return 0;
