@@ -2870,7 +2870,7 @@ const eliminarVisualizador = async (visId, usuario) => {
         </div>
       )}
       
-      <AsistenteIA pisos={pisos} habitaciones={habitacionesEspeciales} />
+      <AsistenteIA pisos={pisos} />
 
       {/* Notificaciones flotantes */}
       {notificacion.visible && (

@@ -392,7 +392,7 @@ const SUGERENCIAS = [
 ];
 
 // ==================== Componente principal ====================
-const AsistenteIA = ({ pisos, habitaciones }) => {
+const AsistenteIA = ({ pisos }) => {
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [abierto, setAbierto] = useState(false);
   const [mensajes, setMensajes] = useState([
@@ -410,12 +410,19 @@ const AsistenteIA = ({ pisos, habitaciones }) => {
 
   // Cargar habitaciones especiales y ocupación al abrir por primera vez
   useEffect(() => {
-    if (abierto && !datosListos && habitaciones.length > 0) {
+    if (abierto && !datosListos) {
       cargarHabitacionesEspeciales();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierto]);
+
+  // Cargar ocupación cuando habitaciones especiales estén listas
+  useEffect(() => {
+    if (habitacionesEspeciales.length > 0 && !datosListos) {
       cargarOcupacion();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abierto, habitaciones]);
+  }, [habitacionesEspeciales]);
 
   // Auto-scroll al último mensaje
   useEffect(() => {
@@ -445,8 +452,8 @@ const AsistenteIA = ({ pisos, habitaciones }) => {
   const cargarOcupacion = async () => {
     try {
       setCargando(true);
-      const ids = habitacionesEspeciales.length > 0 ? habitacionesEspeciales.map(h => h.id) : habitaciones.map(h => h.id);
-      if (!ids.length) return;
+      if (habitacionesEspeciales.length === 0) return;
+      const ids = habitacionesEspeciales.map(h => h.id);
 
       const { data } = await supabase
         .from('ocupacion_habitaciones')
@@ -485,8 +492,7 @@ const AsistenteIA = ({ pisos, habitaciones }) => {
       return;
     }
 
-    const habitacionesUsar = habitacionesEspeciales.length > 0 ? habitacionesEspeciales : habitaciones;
-    const respuesta = responder(texto, { pisos, habitaciones: habitacionesUsar, ocupacion });
+    const respuesta = responder(texto, { pisos, habitaciones: habitacionesEspeciales, ocupacion });
 
     if (respuesta) {
       setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);

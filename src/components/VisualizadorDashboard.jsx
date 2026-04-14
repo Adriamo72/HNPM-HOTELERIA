@@ -733,7 +733,7 @@ const VisualizadorDashboard = () => {
         </div>
       )}
 
-      <AsistenteIA pisos={pisos} habitaciones={habitacionesEspeciales} />
+      <AsistenteIA pisos={pisos} />
 
       {/* Notificación flotante */}
       {notificacion.visible && (
