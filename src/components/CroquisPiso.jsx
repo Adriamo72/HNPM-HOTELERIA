@@ -18,6 +18,24 @@ const getCamasOcupadasEfectivas = (ocup) => {
   return Math.min(totalCamas, Math.max(0, camasOcupadas));
 };
 
+const getCamasOcupadasReales = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadas = ocup?.camas_ocupadas || 0;
+  return Math.min(totalCamas, Math.max(0, camasOcupadas));
+};
+
+const getCamasNoUtilizadasPorAislamiento = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadasReales = getCamasOcupadasReales(ocup);
+  const aislamientoActivo = esAislamientoPatologia(ocup?.observaciones);
+
+  if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, totalCamas - camasOcupadasReales);
+};
+
 const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false, fechaConsulta }) => {
   const normalizedPisoId = typeof pisoId === 'string' && pisoId.trim() !== '' && !Number.isNaN(Number(pisoId))
     ? Number(pisoId)
@@ -41,7 +59,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     habitacionesActivas: 0,
     habitacionesAisladas: 0,
   });
-  const [estadisticasGlobales, setEstadisticasGlobales] = useState({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
+  const [estadisticasGlobales, setEstadisticasGlobales] = useState({
+    totalCamas: 0,
+    camasOcupadasReales: 0,
+    camasNoUtilizadasPorAislamiento: 0,
+    camasDisponibles: 0,
+    porcentajePractico: 0,
+  });
   
   // Estados para zoom y arrastre
   const [zoom, setZoom] = useState(1);
@@ -176,7 +200,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       if (habError) throw habError;
       
       if (!todasHabitaciones || todasHabitaciones.length === 0) {
-        setEstadisticasGlobales({ totalCamas: 0, camasOcupadas: 0, porcentaje: 0 });
+        setEstadisticasGlobales({
+          totalCamas: 0,
+          camasOcupadasReales: 0,
+          camasNoUtilizadasPorAislamiento: 0,
+          camasDisponibles: 0,
+          porcentajePractico: 0,
+        });
         return;
       }
       
@@ -206,22 +236,27 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       });
       
       let totalCamasGlobal = 0;
-      let camasOcupadasGlobal = 0;
+      let camasOcupadasRealesGlobal = 0;
+      let camasNoUtilizadasPorAislamientoGlobal = 0;
       
       todasHabitaciones.forEach(hab => {
         const ocup = ocupMap[hab.id];
         if (ocup && ocup.tipo_habitacion === 'activa') {
           totalCamasGlobal += ocup.total_camas || 1;
-          camasOcupadasGlobal += getCamasOcupadasEfectivas(ocup);
+          camasOcupadasRealesGlobal += getCamasOcupadasReales(ocup);
+          camasNoUtilizadasPorAislamientoGlobal += getCamasNoUtilizadasPorAislamiento(ocup);
         }
       });
       
-      const porcentajeGlobal = totalCamasGlobal > 0 ? (camasOcupadasGlobal / totalCamasGlobal) * 100 : 0;
+      const camasOcupadasPracticas = camasOcupadasRealesGlobal + camasNoUtilizadasPorAislamientoGlobal;
+      const porcentajeGlobal = totalCamasGlobal > 0 ? (camasOcupadasPracticas / totalCamasGlobal) * 100 : 0;
       
       setEstadisticasGlobales({
         totalCamas: totalCamasGlobal,
-        camasOcupadas: camasOcupadasGlobal,
-        porcentaje: porcentajeGlobal
+        camasOcupadasReales: camasOcupadasRealesGlobal,
+        camasNoUtilizadasPorAislamiento: camasNoUtilizadasPorAislamientoGlobal,
+        camasDisponibles: Math.max(0, totalCamasGlobal - camasOcupadasPracticas),
+        porcentajePractico: porcentajeGlobal,
       });
       
     } catch (error) {
@@ -717,18 +752,26 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         
         {/* Estadísticas HNPM Globales */}
         <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center md:order-2 flex-1 md:flex-none">
-          <div className="flex gap-6 justify-center">
+          <div className="flex gap-6 justify-center flex-wrap">
             <div>
               <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL CAMAS HNPM</p>
               <p className="text-2xl font-black text-green-400">{estadisticasGlobales.totalCamas}</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">CAMAS OCUPADAS HNPM</p>
-              <p className="text-2xl font-black text-yellow-400">{estadisticasGlobales.camasOcupadas}</p>
+              <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">CAMAS OCUPADAS REAL HNPM</p>
+              <p className="text-2xl font-black text-yellow-400">{estadisticasGlobales.camasOcupadasReales}</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">OCUPACIÓN GLOBAL</p>
-              <p className="text-2xl font-black text-blue-400">{estadisticasGlobales.porcentaje.toFixed(0)}%</p>
+              <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">CAMAS NO UTILIZADAS POR AISLACIÓN</p>
+              <p className="text-2xl font-black text-red-500">{estadisticasGlobales.camasNoUtilizadasPorAislamiento}</p>
+            </div>
+            <div className="border-l border-slate-700 pl-6">
+              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">OCUPACIÓN GLOBAL PRACTICA</p>
+              <p className="text-2xl font-black text-blue-400">{estadisticasGlobales.porcentajePractico.toFixed(0)}%</p>
+            </div>
+            <div className="border-l border-slate-700 pl-6">
+              <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES GLOBAL</p>
+              <p className="text-2xl font-black text-emerald-300">{estadisticasGlobales.camasDisponibles}</p>
             </div>
           </div>
         </div>
