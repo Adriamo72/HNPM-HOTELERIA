@@ -87,20 +87,40 @@ function getOcupPorServicios(servicios, ocupacion) {
   );
 }
 
-// ==================== Calcular stats de una lista de ocupaciones ====================
+// ==================== Funciones de cálculo de camas (igual que sistema principal) ====================
+const getCamasOcupadasReales = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadas = ocup?.camas_ocupadas || 0;
+  return Math.min(totalCamas, Math.max(0, camasOcupadas));
+};
+
+const getCamasNoUtilizadasPorAislamiento = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadasReales = getCamasOcupadasReales(ocup);
+  const aislamientoActivo = ocup?.informacion_ampliatoria?.toLowerCase().includes('aislamiento') || false;
+
+  if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, totalCamas - camasOcupadasReales);
+};
+
+// ==================== Calcular stats de una lista de ocupaciones (actualizado) ====================
 function calcularStats(ocuList) {
-  let total = 0, ocupadas = 0;
+  let total = 0, ocupadas = 0, ocupadasReales = 0, aislamiento = 0;
   ocuList.forEach(o => {
     if (o && o.tipo_habitacion === 'activa') {
       const totalCamas = parseInt(o.total_camas) || 0;
-      const camasOcupadas = parseInt(o.camas_ocupadas) || 0;
       total += totalCamas;
-      ocupadas += camasOcupadas;
+      ocupadasReales += getCamasOcupadasReales(o);
+      aislamiento += getCamasNoUtilizadasPorAislamiento(o);
     }
   });
+  ocupadas = ocupadasReales + aislamiento; // Ocupación práctica
   const libres = Math.max(0, total - ocupadas);
   const pct = total > 0 ? ((ocupadas / total) * 100).toFixed(1) : '0.0';
-  return { total, ocupadas, libres, pct };
+  return { total, ocupadas, libres, pct, ocupadasReales, aislamiento };
 }
 
 // ==================== Motor de respuestas ====================
@@ -373,6 +393,7 @@ const SUGERENCIAS = [
 
 // ==================== Componente principal ====================
 const AsistenteIA = ({ pisos, habitaciones }) => {
+  const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [abierto, setAbierto] = useState(false);
   const [mensajes, setMensajes] = useState([
     {
@@ -387,9 +408,10 @@ const AsistenteIA = ({ pisos, habitaciones }) => {
   const mensajesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Cargar ocupación al abrir por primera vez
+  // Cargar habitaciones especiales y ocupación al abrir por primera vez
   useEffect(() => {
     if (abierto && !datosListos && habitaciones.length > 0) {
+      cargarHabitacionesEspeciales();
       cargarOcupacion();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -407,10 +429,23 @@ const AsistenteIA = ({ pisos, habitaciones }) => {
     }
   }, [abierto]);
 
+  const cargarHabitacionesEspeciales = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('habitaciones_especiales')
+        .select('id, piso_id, nombre');
+      
+      if (error) throw error;
+      setHabitacionesEspeciales(data || []);
+    } catch (err) {
+      console.error('Error cargando habitaciones especiales:', err);
+    }
+  };
+
   const cargarOcupacion = async () => {
     try {
       setCargando(true);
-      const ids = habitaciones.map(h => h.id);
+      const ids = habitacionesEspeciales.length > 0 ? habitacionesEspeciales.map(h => h.id) : habitaciones.map(h => h.id);
       if (!ids.length) return;
 
       const { data } = await supabase
@@ -450,7 +485,8 @@ const AsistenteIA = ({ pisos, habitaciones }) => {
       return;
     }
 
-    const respuesta = responder(texto, { pisos, habitaciones, ocupacion });
+    const habitacionesUsar = habitacionesEspeciales.length > 0 ? habitacionesEspeciales : habitaciones;
+    const respuesta = responder(texto, { pisos, habitaciones: habitacionesUsar, ocupacion });
 
     if (respuesta) {
       setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
