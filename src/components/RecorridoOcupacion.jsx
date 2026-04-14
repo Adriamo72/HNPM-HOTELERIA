@@ -164,6 +164,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       total_camas: hab.total_camas,
       camas_ocupadas: ocupaciones[hab.id]?.camas_ocupadas || 0,
       observaciones: ocupaciones[hab.id]?.aislamiento ? AISLAMIENTO_TOKEN : null,
+      informacion_ampliatoria: hab.informacion_ampliatoria,  // PRESERVAR DATOS DE ADMIN
       actualizado_por: perfilUsuario?.dni,
       actualizado_en: new Date().toISOString()
     }));
