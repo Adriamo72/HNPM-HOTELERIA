@@ -300,7 +300,7 @@ const AdminDashboard = () => {
       totalCamas = Number(config.camas) || 0;
       camasOcupadas = Number(config.camas_ocupadas) || 0;
       observaciones = null;
-      informacionAmpliatoria = config.informacion_ampliatoria || null;  // NUEVO
+      informacionAmpliatoria = config.informacion_ampliatoria;  // MANTENER VALOR EXISTENTE
     } else if (config.tipo === 'EN REPARACION') {
       totalCamas = 1;
       camasOcupadas = 0;
