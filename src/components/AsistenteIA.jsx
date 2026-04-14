@@ -307,6 +307,15 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     return `${labelInicio} hay **${stats.libres}** cama${stats.libres !== 1 ? 's' : ''} libre${stats.libres !== 1 ? 's' : ''} de ${stats.total} totales.`;
   }
 
+  // Pacientes (equivalente a camas ocupadas)
+  if (/paciente|pacientes/.test(n)) {
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    if (!stats || stats.total === 0) {
+      return `No hay pacientes ${label}.`;
+    }
+    return `${labelInicio} hay **${stats.ocupadasReales}** paciente${stats.ocupadasReales !== 1 ? 's' : ''} internado${stats.ocupadasReales !== 1 ? 's' : ''} de ${stats.total} camas totales.`;
+  }
+
   // Camas ocupadas
   if (/cama/.test(n) && /ocupad|usad|llena/.test(n)) {
     const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
