@@ -54,8 +54,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
   const [estadisticas, setEstadisticas] = useState({
     totalCamas: 0,
-    camasOcupadas: 0,
-    porcentaje: 0,
+    camasOcupadasReales: 0,
+    camasBloqueadasAislamiento: 0,
+    camasDisponibles: 0,
+    porcentajePractico: 0,
     habitacionesActivas: 0,
     habitacionesAisladas: 0,
   });
@@ -131,8 +133,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     setModoMovimiento(false);
     setEstadisticas({
       totalCamas: 0,
-      camasOcupadas: 0,
-      porcentaje: 0,
+      camasOcupadasReales: 0,
+      camasBloqueadasAislamiento: 0,
+      camasDisponibles: 0,
+      porcentajePractico: 0,
       habitacionesActivas: 0,
       habitacionesAisladas: 0,
     });
@@ -250,12 +254,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       
       const camasOcupadasPracticas = camasOcupadasRealesGlobal + camasNoUtilizadasPorAislamientoGlobal;
       const porcentajeGlobal = totalCamasGlobal > 0 ? (camasOcupadasPracticas / totalCamasGlobal) * 100 : 0;
+      const camasDisponiblesGlobal = Math.max(0, totalCamasGlobal - camasOcupadasPracticas);
       
       setEstadisticasGlobales({
         totalCamas: totalCamasGlobal,
         camasOcupadasReales: camasOcupadasRealesGlobal,
         camasNoUtilizadasPorAislamiento: camasNoUtilizadasPorAislamientoGlobal,
-        camasDisponibles: Math.max(0, totalCamasGlobal - camasOcupadasPracticas),
+        camasDisponibles: camasDisponiblesGlobal,
         porcentajePractico: porcentajeGlobal,
       });
       
@@ -267,7 +272,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   // ==================== Calcular estadísticas del piso ====================
   const calcularEstadisticas = () => {
     let totalCamas = 0;
-    let camasOcupadas = 0;
+    let camasOcupadasReales = 0;
+    let camasBloqueadasAislamiento = 0;
     let habitacionesActivas = 0;
     let habitacionesAisladas = 0;
     
@@ -276,18 +282,29 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       if (ocup && ocup.tipo_habitacion === 'activa') {
         habitacionesActivas += 1;
         totalCamas += ocup.total_camas || 1;
-        camasOcupadas += getCamasOcupadasEfectivas(ocup);
+        
+        const ocupadasReales = getCamasOcupadasReales(ocup);
+        camasOcupadasReales += ocupadasReales;
+        
+        const bloqueadas = getCamasNoUtilizadasPorAislamiento(ocup);
+        camasBloqueadasAislamiento += bloqueadas;
+        
         if (esAislamientoPatologia(ocup.observaciones)) {
           habitacionesAisladas += 1;
         }
       }
     });
     
-    const porcentaje = totalCamas > 0 ? (camasOcupadas / totalCamas) * 100 : 0;
+    const camasOcupadasPracticas = camasOcupadasReales + camasBloqueadasAislamiento;
+    const porcentajePractico = totalCamas > 0 ? (camasOcupadasPracticas / totalCamas) * 100 : 0;
+    const camasDisponibles = Math.max(0, totalCamas - camasOcupadasPracticas);
+    
     setEstadisticas({
       totalCamas,
-      camasOcupadas,
-      porcentaje,
+      camasOcupadasReales,
+      camasBloqueadasAislamiento,
+      camasDisponibles,
+      porcentajePractico,
       habitacionesActivas,
       habitacionesAisladas,
     });
@@ -789,16 +806,17 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         </div>
       </div>
 
-      {/* Estadísticas del piso actual */}
+      {/* Estadísticas del piso actual - NUEVO DISEÑO */}
       {estadisticas.totalCamas > 0 && (
         <div className="bg-slate-800/50 p-3 mx-4 mt-2 rounded-lg">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div className="flex flex-col gap-2 text-sm">
               <div className="flex gap-4 flex-wrap">
-              <span className="text-green-400">Camas en este piso: {estadisticas.totalCamas}</span>
-              <span className="text-yellow-400">Ocupadas: {estadisticas.camasOcupadas}</span>
-              <span className="text-emerald-300">Disponibles: {Math.max(0, estadisticas.totalCamas - estadisticas.camasOcupadas)}</span>
-              <span className="text-blue-400">{estadisticas.porcentaje.toFixed(1)}% ocupación</span>
+                <span className="text-green-400">Camas en este piso: {estadisticas.totalCamas}</span>
+                <span className="text-yellow-400">Ocupadas Reales: {estadisticas.camasOcupadasReales}</span>
+                <span className="text-red-500">Camas Bloqueadas por Aislamiento: {estadisticas.camasBloqueadasAislamiento}</span>
+                <span className="text-emerald-300">Disponibles: {estadisticas.camasDisponibles}</span>
+                <span className="text-blue-400">{estadisticas.porcentajePractico.toFixed(1)}% ocupación práctica</span>
               </div>
               {estadisticas.habitacionesActivas > 0 && (
                 <div className="text-sm text-red-500">
@@ -813,7 +831,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             )}
           </div>
           <div className="w-full bg-slate-700 rounded-full h-2 mt-2">
-            <div className="bg-green-500 h-2 rounded-full transition-all duration-500" style={{ width: `${estadisticas.porcentaje}%` }}></div>
+            <div className="bg-green-500 h-2 rounded-full transition-all duration-500" style={{ width: `${estadisticas.porcentajePractico}%` }}></div>
           </div>
         </div>
       )}
