@@ -120,7 +120,7 @@ function calcularStats(ocuList) {
   
   ocuList.forEach(o => {
     if (o && o.tipo_habitacion === 'activa') {
-      const totalCamas = parseInt(o.total_camas) || 0;
+      const totalCamas = o.total_camas || 1;  // Same as CroquisPiso
       total += totalCamas;
       ocupadasReales += getCamasOcupadasReales(o);
       aislamiento += getCamasNoUtilizadasPorAislamiento(o);
