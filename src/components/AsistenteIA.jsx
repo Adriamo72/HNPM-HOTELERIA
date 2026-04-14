@@ -364,7 +364,8 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     const enOtros = scope.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
     const activas = scope.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
     const sinDatos = scope.filter(h => !getOcup(h)).length;
-    const { total, ocupadas, libres, pct } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
+    const { total, ocupadas, libres, pct, aislamiento } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
+    const disponiblesReales = libres - aislamiento;
     return (
       `${labelInicio} — Resumen:\n` +
       `• **${scope.length}** habitaciones en total\n` +
@@ -372,7 +373,7 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
       `• **${enReparacion}** en reparación\n` +
       `• **${enOtros}** en estado "Otros"\n` +
       `• **${sinDatos}** sin datos de hoy\n` +
-      `• **${pct}%** de ocupación (${ocupadas}/${total} camas, ${libres} libres)`
+      `• **${pct}%** de ocupación (${ocupadas}/${total} camas, ${libres} libres, ${aislamiento} bloqueadas por aislamiento, ${disponiblesReales} realmente disponibles)`
     );
   }
 
