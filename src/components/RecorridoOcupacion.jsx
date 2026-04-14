@@ -82,7 +82,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
           habitacionesInternacion.push({
             id: hab.id,
             nombre: hab.nombre,
-            total_camas: ocupReciente.total_camas || 1,
+            total_camas: ocupReciente.total_camas,  // Respetar valor 0 si está configurado
             informacion_ampliatoria: (ocupReciente.informacion_ampliatoria || '').trim()
           });
           ocupState[hab.id] = {
@@ -232,7 +232,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   };
 
   // Calcular estadísticas
-  const totalCamas = habitaciones.reduce((sum, hab) => sum + (hab.total_camas || 1), 0);
+  const totalCamas = habitaciones.reduce((sum, hab) => sum + (hab.total_camas || 0), 0);
   const totalOcupadas = habitaciones.reduce(
     (sum, hab) => sum + getCamasOcupadasEfectivas(hab, ocupaciones[hab.id]),
     0
