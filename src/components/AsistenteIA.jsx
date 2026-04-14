@@ -102,11 +102,15 @@ const getCamasNoUtilizadasPorAislamiento = (ocup) => {
   const camasOcupadasReales = getCamasOcupadasReales(ocup);
   const aislamientoActivo = esAislamientoPatologia(ocup?.observaciones);
 
+  console.log('Debug aislamiento - habitacion:', ocup?.habitacion_id, 'observaciones:', ocup?.observaciones, 'aislamientoActivo:', aislamientoActivo, 'totalCamas:', totalCamas, 'ocupadasReales:', camasOcupadasReales);
+
   if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) {
     return 0;
   }
 
-  return Math.max(0, totalCamas - camasOcupadasReales);
+  const bloqueadas = Math.max(0, totalCamas - camasOcupadasReales);
+  console.log('Debug aislamiento - camas bloqueadas:', bloqueadas);
+  return bloqueadas;
 };
 
 // ==================== Calcular stats de una lista de ocupaciones (actualizado) ====================
