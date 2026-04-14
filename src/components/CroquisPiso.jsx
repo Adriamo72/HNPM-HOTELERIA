@@ -758,7 +758,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
               <span className="text-blue-400">{estadisticas.porcentaje.toFixed(1)}% ocupación</span>
               </div>
               {estadisticas.habitacionesActivas > 0 && (
-                <div className="text-xs uppercase tracking-[0.12em] text-red-300">
+                <div className="text-[10px] uppercase tracking-[0.08em] text-red-300/90">
                   {estadisticas.habitacionesAisladas} habitaciones aisladas de {estadisticas.habitacionesActivas} activas para pacientes
                 </div>
               )}
