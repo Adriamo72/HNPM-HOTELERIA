@@ -246,7 +246,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       todasHabitaciones.forEach(hab => {
         const ocup = ocupMap[hab.id];
         if (ocup && ocup.tipo_habitacion === 'activa') {
-          totalCamasGlobal += ocup.total_camas || 1;
+          totalCamasGlobal += ocup.total_camas || 0;
           camasOcupadasRealesGlobal += getCamasOcupadasReales(ocup);
           camasNoUtilizadasPorAislamientoGlobal += getCamasNoUtilizadasPorAislamiento(ocup);
         }
@@ -281,7 +281,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       const ocup = ocupacion[hab.id];
       if (ocup && ocup.tipo_habitacion === 'activa') {
         habitacionesActivas += 1;
-        totalCamas += ocup.total_camas || 1;
+        totalCamas += ocup.total_camas > 0 ? ocup.total_camas : 0;
         
         const ocupadasReales = getCamasOcupadasReales(ocup);
         camasOcupadasReales += ocupadasReales;
