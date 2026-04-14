@@ -477,7 +477,7 @@ const AsistenteIA = ({ pisos }) => {
 
       const { data } = await supabase
         .from('ocupacion_habitaciones')
-        .select('habitacion_id, tipo_habitacion, camas_ocupadas, total_camas, fecha, actualizado_en, informacion_ampliatoria')
+        .select('habitacion_id, tipo_habitacion, camas_ocupadas, total_camas, fecha, actualizado_en, informacion_ampliatoria, observaciones')
         .in('habitacion_id', ids)
         .order('fecha', { ascending: false })
         .order('actualizado_en', { ascending: false });
