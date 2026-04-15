@@ -122,16 +122,21 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     const enOtros = scope.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
     const activas = scope.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
     const sinDatos = scope.filter(h => !getOcup(h)).length;
-    const { total, ocupadas, libres, pct, aislamiento } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
-    const disponiblesReales = libres - aislamiento;
+    const { total, ocupadas, libres, pct, aislamiento, ocupadasReales } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
+    // Las camas disponibles ya tienen en cuenta las bloqueadas por aislamiento
+    // No hay que restarlas nuevamente
     return (
       `${labelInicio} — Resumen:\n` +
+      `• **${total}** camas totales\n` +
+      `• **${ocupadasReales}** camas ocupadas reales\n` +
+      `• **${aislamiento}** camas no utilizadas por aislamiento\n` +
+      `• **${pct}%** de ocupación práctica\n` +
+      `• **${libres}** camas disponibles global\n` +
       `• **${scope.length}** habitaciones en total\n` +
       `• **${activas}** activas con pacientes\n` +
       `• **${enReparacion}** en reparación\n` +
       `• **${enOtros}** en estado "Otros"\n` +
-      `• **${sinDatos}** sin datos de hoy\n` +
-      `• **${pct}%** de ocupación (${ocupadas}/${total} camas, ${libres} libres, ${aislamiento} bloqueadas por aislamiento, ${disponiblesReales} realmente disponibles)`
+      `• **${sinDatos}** sin datos de hoy`
     );
   }
 
