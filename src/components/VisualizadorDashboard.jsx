@@ -98,7 +98,22 @@ const VisualizadorDashboard = () => {
     const causa = row?.causa_rechazo || row?.causa || row?.motivo || row?.observacion || extraerDatoMail(cuerpoEmail, ['Motivo', 'Causa']) || 'Sin causa registrada';
     const responsableMi = row?.responsable_mi || row?.responsableMi || extraerDatoMail(cuerpoEmail, ['Responsable M.I', 'Responsable MI', 'Responsable']) || 'Sin dato';
     const diagnostico = row?.diagnostico || extraerDatoMail(cuerpoEmail, ['Diagnostico', 'Diagnóstico']) || 'Sin dato';
-    const createdAt = row?.created_at || row?.fecha || row?.fecha_rechazo || new Date().toISOString();
+    
+    // Extraer hora de detección del email (formato: "Hora de detección: 14/04/2026 21:19:21")
+    const horaDeteccionStr = extraerDatoMail(cuerpoEmail, ['Hora de detección']);
+    let horaDeteccion = null;
+    
+    if (horaDeteccionStr) {
+      // Parsear formato "dd/MM/yyyy HH:mm:ss"
+      const match = horaDeteccionStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+      if (match) {
+        const [, dia, mes, anio, horas, minutos, segundos] = match;
+        horaDeteccion = new Date(`${anio}-${mes}-${dia}T${horas}:${minutos}:${segundos}`);
+      }
+    }
+    
+    // Si no se puede extraer la hora, usar created_at como fallback
+    const createdAt = horaDeteccion?.toISOString() || row?.created_at || row?.fecha || row?.fecha_rechazo || new Date().toISOString();
     const emailEnviado = Boolean(row?.email_enviado || row?.notificado_email || row?.email_notificado);
 
     return {
@@ -112,6 +127,7 @@ const VisualizadorDashboard = () => {
       createdAt,
       emailEnviado,
       cuerpoEmail,
+      horaDeteccion,
     };
   };
 
@@ -680,7 +696,23 @@ const VisualizadorDashboard = () => {
                           {nombreCompleto}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          {new Date(rechazo.createdAt).toLocaleString('es-AR')}
+                          {rechazo.horaDeteccion ? 
+                            `Hora de detección: ${rechazo.horaDeteccion.toLocaleTimeString('es-AR', { 
+                              hour12: false,
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                            })}` :
+                            new Date(rechazo.createdAt).toLocaleString('es-AR', { 
+                              hour12: false,
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            })
+                          }
                         </p>
                       </div>
                       <div className="flex items-start gap-2">
