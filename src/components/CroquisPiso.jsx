@@ -368,10 +368,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       if (data && data.length > 0) {
         const ultima = new Date(data[0].fecha_registro);
         ultima.setMinutes(ultima.getMinutes() - ultima.getTimezoneOffset());
-        console.log('CroquisPiso - Último recorrido encontrado:', data[0].fecha_registro, '-> Local:', ultima.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }));
         setUltimaActualizacion(ultima);
       } else {
-        console.log('CroquisPiso - No se encontraron recorridos para este piso y fecha');
         setUltimaActualizacion(null);
       }
     } catch (error) {
