@@ -159,6 +159,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   useEffect(() => {
     if (habitaciones.length > 0 && pisoId && croquis) {
       cargarOcupacion();
+      cargarUltimoRecorrido();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fechaSeleccionada, habitaciones, croquis]);
@@ -331,23 +332,50 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
 
       if (error) throw error;
 
-      console.log('CroquisPiso - Procesando', data?.length || 0, 'registros de ocupación');
       const ocupMap = {};
-      let ultima = null;
       (data || []).forEach(occ => {
         if (!ocupMap[occ.habitacion_id]) {
           ocupMap[occ.habitacion_id] = occ;
         }
-        const fecha = new Date(occ.actualizado_en || occ.created_at);
-        fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
-        console.log('CroquisPiso - Registro:', occ.habitacion_id, 'Timestamp:', occ.actualizado_en, '-> Local:', fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }));
-        if (!ultima || fecha > ultima) ultima = fecha;
       });
-      console.log('CroquisPiso - Última actualización seleccionada:', ultima ? ultima.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) : 'null');
       setOcupacion(ocupMap);
-      setUltimaActualizacion(ultima);
     } catch (error) {
       console.error("Error cargando ocupación:", error);
+    }
+  };
+
+  // ==================== Cargar último recorrido ====================
+  const cargarUltimoRecorrido = async () => {
+    if (!pisoId) return;
+    
+    try {
+      const hoy = new Date().toISOString().split('T')[0];
+      let query = supabase
+        .from('log_recorridos')
+        .select('fecha_registro')
+        .eq('piso_id', pisoId);
+
+      if (fechaSeleccionada === hoy) {
+        query = query.order('fecha_registro', { ascending: false }).limit(1);
+      } else {
+        query = query.eq('fecha', fechaSeleccionada).order('fecha_registro', { ascending: false }).limit(1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const ultima = new Date(data[0].fecha_registro);
+        ultima.setMinutes(ultima.getMinutes() - ultima.getTimezoneOffset());
+        console.log('CroquisPiso - Último recorrido encontrado:', data[0].fecha_registro, '-> Local:', ultima.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }));
+        setUltimaActualizacion(ultima);
+      } else {
+        console.log('CroquisPiso - No se encontraron recorridos para este piso y fecha');
+        setUltimaActualizacion(null);
+      }
+    } catch (error) {
+      console.error("Error cargando último recorrido:", error);
     }
   };
 
