@@ -221,7 +221,7 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     const enOtros = scope.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
     const activas = scope.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
     const sinDatos = scope.filter(h => !getOcup(h)).length;
-    const { total, ocupadas, libres, pct, aislamiento, ocupadasReales } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
+    const { total, libres, pct, aislamiento, ocupadasReales } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
     // Las camas disponibles ya tienen en cuenta las bloqueadas por aislamiento
     // No hay que restarlas nuevamente
     return (
