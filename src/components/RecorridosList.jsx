@@ -129,6 +129,30 @@ const RecorridosList = () => {
     return total > 0 ? ((ocupadas / total) * 100).toFixed(0) : 0;
   };
 
+  const borrarRecorrido = async (id, operador, fecha) => {
+    if (!window.confirm(`¿Estás seguro que quieres borrar el recorrido de ${operador} del ${fecha}?\n\n⚠️ Esta acción solo borra el registro del recorrido. Los datos de ocupación de habitaciones permanecerán intactos.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('log_recorridos')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error borrando recorrido:', error);
+        alert('Error al borrar el recorrido. Intenta nuevamente.');
+      } else {
+        console.log('✅ Recorrido borrado exitosamente');
+        cargarRecorridos(); // Recargar la lista
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      alert('Error al borrar el recorrido. Intenta nuevamente.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Filtros */}
@@ -162,24 +186,6 @@ const RecorridosList = () => {
         </div>
       </div>
 
-      {/* Estadísticas rápidas */}
-      {recorridos.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-blue-900/20 rounded-xl p-3 text-center border border-blue-800/30">
-            <p className="text-[10px] text-blue-400 uppercase font-bold">Recorridos</p>
-            <p className="text-2xl font-bold text-white">{estadisticas.totalRecorridos}</p>
-          </div>
-          <div className="bg-purple-900/20 rounded-xl p-3 text-center border border-purple-800/30">
-            <p className="text-[10px] text-purple-400 uppercase font-bold">Operadores</p>
-            <p className="text-2xl font-bold text-white">{estadisticas.totalOperadores}</p>
-          </div>
-          <div className="bg-green-900/20 rounded-xl p-3 text-center border border-green-800/30">
-            <p className="text-[10px] text-green-400 uppercase font-bold">Ocupación Prom.</p>
-            <p className="text-2xl font-bold text-white">{estadisticas.promedioOcupacion}%</p>
-          </div>
-        </div>
-      )}
-
       {/* Tabla de recorridos */}
       <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
         <div className="overflow-x-auto">
@@ -192,18 +198,19 @@ const RecorridosList = () => {
                 <th className="p-3">SECTOR</th>
                 <th className="p-3">OCUPACIÓN</th>
                 <th className="p-3">CAMAS</th>
+                <th className="p-3">ACCIONES</th>
                </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {cargando ? (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-slate-500">
+                  <td colSpan="7" className="p-8 text-center text-slate-500">
                     <div className="animate-pulse">Cargando recorridos...</div>
                   </td>
                 </tr>
               ) : recorridos.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-slate-500">
+                  <td colSpan="7" className="p-8 text-center text-slate-500">
                     📭 No hay recorridos registrados en esta fecha
                     <p className="text-xs mt-2 text-slate-600">
                       Sugerencia: Verifica que los recorridos se estén registrando correctamente al guardar estados de habitaciones.
@@ -214,6 +221,7 @@ const RecorridosList = () => {
                 recorridos.map((rec) => {
                   const { fecha, hora } = formatearFechaHora(rec.fecha_registro);
                   const porcentaje = getPorcentajeOcupacion(rec.camas_ocupadas, rec.camas_libres);
+                  const operadorCompleto = `${rec.jerarquia_hist} ${rec.apellido_hist}`;
                   
                   return (
                     <tr key={rec.id} className="hover:bg-slate-800/30 transition-colors">
@@ -256,6 +264,15 @@ const RecorridosList = () => {
                         <p className="text-[9px] text-slate-500">
                           {rec.camas_libres} libres
                         </p>
+                      </td>
+                      <td className="p-3">
+                        <button
+                          onClick={() => borrarRecorrido(rec.id, operadorCompleto, fecha)}
+                          className="bg-red-600/20 hover:bg-red-600/30 text-red-400 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+                          title="Borrar recorrido (solo registro, no afecta datos de ocupación)"
+                        >
+                          🗑️ Borrar
+                        </button>
                       </td>
                     </tr>
                   );
