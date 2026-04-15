@@ -76,7 +76,6 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
 
   // Detectar si menciona un piso
   const piso = encontrarPisoPorNumero(pisos, texto);
-  const mencionaPiso = /piso|sector|planta/.test(n) && piso;
 
   // Filtrar habitaciones por piso si se menciona
   const habs = piso
@@ -156,7 +155,7 @@ const AsistenteIA = ({ pisos }) => {
     if (abierto && habitaciones.length === 0) {
       cargarDatos();
     }
-  }, [abierto]);
+  }, [abierto, habitaciones.length]);
 
   const cargarDatos = async () => {
     try {
