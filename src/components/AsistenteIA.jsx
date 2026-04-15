@@ -39,11 +39,17 @@ function extraerNumeroPiso(texto) {
 // ==================== Encontrar piso por número ====================
 function encontrarPisoPorNumero(pisos, n) {
   const num = extraerNumeroPiso(n);
+  console.log('Debug floor recognition - input:', n, 'extracted number:', num);
   if (num === null) return null;
   for (const p of pisos) {
     const pisoNum = parseInt(p.nombre_piso.replace(/\D/g, '')) || 0;
-    if (pisoNum === num) return p;
+    console.log('Debug floor comparison - checking:', p.nombre_piso, 'number:', pisoNum, 'looking for:', num);
+    if (pisoNum === num) {
+      console.log('Debug floor found:', p.nombre_piso);
+      return p;
+    }
   }
+  console.log('Debug floor not found for number:', num);
   return null;
 }
 
