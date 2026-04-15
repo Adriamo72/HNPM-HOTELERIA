@@ -362,14 +362,17 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
 
+      console.log(`CroquisPiso - PISO ${pisoId} - Query results:`, data);
+      
       if (data && data.length > 0) {
         const ultima = new Date(data[0].fecha_registro);
-        ultima.setMinutes(ultima.getMinutes() - ultima.getTimezoneOffset());
+        console.log(`CroquisPiso - PISO ${pisoId} - Raw timestamp:`, data[0].fecha_registro);
+        console.log(`CroquisPiso - PISO ${pisoId} - Date object:`, ultima);
         setUltimaActualizacion(ultima);
       } else {
+        console.log(`CroquisPiso - PISO ${pisoId} - No records found`);
         setUltimaActualizacion(null);
       }
     } catch (error) {
