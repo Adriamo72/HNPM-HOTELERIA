@@ -259,6 +259,15 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
   const habs = piso
     ? habitaciones.filter(h => String(h.piso_id) === String(piso.id))
     : habitaciones;
+  
+  // Debug logging for floor filtering
+  if (piso) {
+    console.log('Debug floor filtering - looking for piso_id:', piso.id, 'name:', piso.nombre_piso);
+    console.log('Debug floor filtering - total habitaciones:', habitaciones.length);
+    console.log('Debug floor filtering - filtered habitaciones:', habs.length);
+    console.log('Debug floor filtering - sample room piso_ids:', habitaciones.slice(0, 5).map(h => ({id: h.id, name: h.nombre, piso_id: h.piso_id})));
+  }
+  
   const label = piso ? `en **${piso.nombre_piso}**` : 'en todo el hospital';
   const labelInicio = piso ? `**${piso.nombre_piso}**` : '**Todo el hospital**';
   const getOcup = (h) => ocupacion[h.id];
