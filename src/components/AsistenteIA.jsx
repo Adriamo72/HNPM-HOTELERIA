@@ -162,6 +162,10 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
   const serviciosMatch = encontrarServicios(n, serviciosDisponibles);
   const piso = encontrarPisoPorNumero(pisos, n);
   const mencionaPiso = /piso|sector|planta/.test(n) && piso;
+  
+  console.log('Debug servicios - serviciosDisponibles:', serviciosDisponibles);
+  console.log('Debug servicios - serviciosMatch:', serviciosMatch);
+  console.log('Debug servicios - mencionaPiso:', mencionaPiso, 'condition:', serviciosMatch.length > 0 && !mencionaPiso);
 
   // =========================================================
   // SCOPE: SERVICIO (tiene prioridad si no se menciona piso)
