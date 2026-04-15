@@ -225,19 +225,52 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     const { total, libres, pct, aislamiento, ocupadasReales } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
     // Las camas disponibles ya tienen en cuenta las bloqueadas por aislamiento
     // No hay que restarlas nuevamente
+    // Agrupar camas disponibles por servicio y piso
+    const disponiblesPorServicioPiso = {};
+    scope.forEach(h => {
+      const ocup = getOcup(h);
+      if (ocup?.tipo_habitacion === 'activa') {
+        const camasLibres = Math.max(0, ocup.total_camas - ocup.camas_ocupadas - (ocup.observaciones?.includes('AISLAMIENTO') ? ocup.total_camas : 0));
+        if (camasLibres > 0) {
+          const servicio = ocup.informacion_ampliatoria?.trim() || 'Sin servicio';
+          const piso = pisos.find(p => String(p.id) === String(h.piso_id))?.nombre_piso || 'Sin piso';
+          const key = `${servicio} - ${piso}`;
+          
+          if (!disponiblesPorServicioPiso[key]) {
+            disponiblesPorServicioPiso[key] = 0;
+          }
+          disponiblesPorServicioPiso[key] += camasLibres;
+        }
+      }
+    });
+
+    // Crear lista detallada de camas disponibles
+    const detalleDisponibles = Object.entries(disponiblesPorServicioPiso)
+      .sort((a, b) => {
+        // Ordenar por piso primero, luego por servicio
+        const pisoA = a[0].split(' - ')[1] || '';
+        const pisoB = b[0].split(' - ')[1] || '';
+        if (pisoA !== pisoB) {
+          return pisoA.localeCompare(pisoB);
+        }
+        return a[0].localeCompare(b[0]);
+      })
+      .map(([servicioPiso, camas]) => `- ${camas} camas ${servicioPiso}`)
+      .join('\n');
+
     return (
-      `${labelInicio} — Resumen:\n` +
-      `• **${total}** camas totales\n` +
-      `• **${ocupadasReales}** camas ocupadas reales\n` +
-      `• **${aislamiento}** camas no utilizadas por aislamiento\n` +
-      `• **${pct}%** de ocupación práctica\n` +
-      `• **${libres}** camas disponibles global\n` +
-      `• **${scope.length}** habitaciones en total\n` +
-      `• **${activas}** habitaciones activas\n` +
-      `• **${activasConPacientes}** activas con pacientes\n` +
-      `• **${enReparacion}** en reparación\n` +
-      `• **${enOtros}** en estado "Otros"\n` +
-      `• **${sinDatos}** sin datos de hoy`
+      `${labelInicio} - Resumen:\n` +
+      `* **${total}** camas totales\n` +
+      `* **${ocupadasReales}** camas ocupadas con pacientes\n` +
+      `* **${aislamiento}** camas no utilizadas por aislamiento\n` +
+      `* **${pct}%** de ocupación práctica\n` +
+      `* **${libres}** camas disponibles global:\n${detalleDisponibles}\n` +
+      `* **${scope.length}** habitaciones en total\n` +
+      `* **${activas}** habitaciones activas\n` +
+      `* **${activasConPacientes}** activas con pacientes\n` +
+      `* **${enReparacion}** en reparación\n` +
+      `* **${enOtros}** en estado "Otros"\n` +
+      `* **${sinDatos}** sin datos de hoy`
     );
   }
 
