@@ -331,6 +331,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
 
       if (error) throw error;
 
+      console.log('CroquisPiso - Procesando', data?.length || 0, 'registros de ocupación');
       const ocupMap = {};
       let ultima = null;
       (data || []).forEach(occ => {
@@ -339,8 +340,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         }
         const fecha = new Date(occ.actualizado_en || occ.created_at);
         fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
+        console.log('CroquisPiso - Registro:', occ.habitacion_id, 'Timestamp:', occ.actualizado_en, '-> Local:', fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }));
         if (!ultima || fecha > ultima) ultima = fecha;
       });
+      console.log('CroquisPiso - Última actualización seleccionada:', ultima ? ultima.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) : 'null');
       setOcupacion(ocupMap);
       setUltimaActualizacion(ultima);
     } catch (error) {
