@@ -90,10 +90,10 @@ const RecorridosList = ({ esVisualizador = false }) => {
 
   const formatearFechaHora = (fechaISO) => {
     const fecha = new Date(fechaISO);
-    // Mostrar en hora local de Argentina
+    // Mostrar en hora local de Argentina en formato 24h
     return {
       fecha: fecha.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }),
-      hora: fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+      hora: fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
     };
   };
 
