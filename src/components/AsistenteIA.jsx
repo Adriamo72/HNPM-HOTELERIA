@@ -259,6 +259,8 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
   // =========================================================
   // SCOPE: PISO o TODO EL HOSPITAL
   // =========================================================
+  console.log('Debug - Entering floor scope section. piso:', piso, 'mencionaPiso:', mencionaPiso);
+  
   const habs = piso
     ? habitaciones.filter(h => String(h.piso_id) === String(piso.id))
     : habitaciones;
