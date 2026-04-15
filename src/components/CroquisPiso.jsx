@@ -338,6 +338,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           ocupMap[occ.habitacion_id] = occ;
         }
         const fecha = new Date(occ.actualizado_en || occ.created_at);
+        fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
         console.log('CroquisPiso - Timestamp:', occ.actualizado_en, '-> Fecha local:', fecha);
         if (!ultima || fecha > ultima) ultima = fecha;
       });
