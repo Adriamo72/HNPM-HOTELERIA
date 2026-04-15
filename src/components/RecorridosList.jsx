@@ -12,7 +12,6 @@ const RecorridosList = () => {
   });
   const [filtroPiso, setFiltroPiso] = useState('');
   const [pisos, setPisos] = useState([]);
-  const [estadisticas, setEstadisticas] = useState({});
 
   // Función para convertir una fecha YYYY-MM-DD a rango UTC correcto
   const getRangoFechasLocal = (fechaStr) => {
@@ -82,29 +81,11 @@ const RecorridosList = () => {
     
     if (!error && data) {
       setRecorridos(data);
-      calcularEstadisticas(data);
     } else if (error) {
       console.error('Error cargando recorridos:', error);
     }
     
     setCargando(false);
-  };
-
-  const calcularEstadisticas = (recorridosData) => {
-    const totalRecorridos = recorridosData.length;
-    const totalOperadores = new Set(recorridosData.map(r => r.dni_responsable)).size;
-    const totalCamasOcupadas = recorridosData.reduce((sum, r) => sum + (r.camas_ocupadas || 0), 0);
-    const totalCamasLibres = recorridosData.reduce((sum, r) => sum + (r.camas_libres || 0), 0);
-    const totalCamas = totalCamasOcupadas + totalCamasLibres;
-    const promedioOcupacion = totalCamas > 0 ? (totalCamasOcupadas / totalCamas) * 100 : 0;
-    
-    setEstadisticas({
-      totalRecorridos,
-      totalOperadores,
-      promedioOcupacion: promedioOcupacion.toFixed(1),
-      totalCamasOcupadas,
-      totalCamasLibres
-    });
   };
 
   const formatearFechaHora = (fechaISO) => {
