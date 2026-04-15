@@ -339,7 +339,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         }
         const fecha = new Date(occ.actualizado_en || occ.created_at);
         fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
-        console.log('CroquisPiso - Timestamp:', occ.actualizado_en, '-> Fecha local:', fecha);
         if (!ultima || fecha > ultima) ultima = fecha;
       });
       setOcupacion(ocupMap);
@@ -584,6 +583,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         
         const fechaActualizacion = ocup.actualizado_en || ocup.created_at;
         const fechaObj = new Date(fechaActualizacion);
+        fechaObj.setMinutes(fechaObj.getMinutes() - fechaObj.getTimezoneOffset());
         const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
         const horaFormateada = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
         
