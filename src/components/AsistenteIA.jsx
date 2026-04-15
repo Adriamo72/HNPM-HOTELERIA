@@ -220,6 +220,7 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     const enReparacion = scope.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
     const enOtros = scope.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
     const activas = scope.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
+    const activasConPacientes = scope.filter(h => getOcup(h)?.tipo_habitacion === 'activa' && getOcup(h)?.camas_ocupadas > 0).length;
     const sinDatos = scope.filter(h => !getOcup(h)).length;
     const { total, libres, pct, aislamiento, ocupadasReales } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
     // Las camas disponibles ya tienen en cuenta las bloqueadas por aislamiento
@@ -232,7 +233,8 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
       `• **${pct}%** de ocupación práctica\n` +
       `• **${libres}** camas disponibles global\n` +
       `• **${scope.length}** habitaciones en total\n` +
-      `• **${activas}** activas con pacientes\n` +
+      `• **${activas}** habitaciones activas\n` +
+      `• **${activasConPacientes}** activas con pacientes\n` +
       `• **${enReparacion}** en reparación\n` +
       `• **${enOtros}** en estado "Otros"\n` +
       `• **${sinDatos}** sin datos de hoy`
