@@ -496,7 +496,7 @@ const VisualizadorDashboard = () => {
               Historial de recorridos de ocupación
             </p>
           </div>
-          <RecorridosList />
+          <RecorridosList esVisualizador={true} />
         </div>
       )}
 

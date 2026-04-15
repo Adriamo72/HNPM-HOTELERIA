@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-const RecorridosList = () => {
+const RecorridosList = ({ esVisualizador = false }) => {
   const [recorridos, setRecorridos] = useState([]);
   const [cargando, setCargando] = useState(true);
   // Inicializar con la fecha actual en zona horaria local
@@ -179,19 +179,19 @@ const RecorridosList = () => {
                 <th className="p-3">SECTOR</th>
                 <th className="p-3">OCUPACIÓN</th>
                 <th className="p-3">CAMAS</th>
-                <th className="p-3">ACCIONES</th>
+                {!esVisualizador && <th className="p-3">ACCIONES</th>}
                </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {cargando ? (
                 <tr>
-                  <td colSpan="7" className="p-8 text-center text-slate-500">
+                  <td colSpan={esVisualizador ? 6 : 7} className="p-8 text-center text-slate-500">
                     <div className="animate-pulse">Cargando recorridos...</div>
                   </td>
                 </tr>
               ) : recorridos.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="p-8 text-center text-slate-500">
+                  <td colSpan={esVisualizador ? 6 : 7} className="p-8 text-center text-slate-500">
                     📭 No hay recorridos registrados en esta fecha
                     <p className="text-xs mt-2 text-slate-600">
                       Sugerencia: Verifica que los recorridos se estén registrando correctamente al guardar estados de habitaciones.
@@ -246,15 +246,17 @@ const RecorridosList = () => {
                           {rec.camas_libres} libres
                         </p>
                       </td>
-                      <td className="p-3">
-                        <button
-                          onClick={() => borrarRecorrido(rec.id, operadorCompleto, fecha)}
-                          className="bg-red-600/20 hover:bg-red-600/30 text-red-400 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
-                          title="Borrar recorrido (solo registro, no afecta datos de ocupación)"
-                        >
-                          🗑️ Borrar
-                        </button>
-                      </td>
+                      {!esVisualizador && (
+                        <td className="p-3">
+                          <button
+                            onClick={() => borrarRecorrido(rec.id, operadorCompleto, fecha)}
+                            className="bg-red-600/20 hover:bg-red-600/30 text-red-400 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+                            title="Borrar recorrido (solo registro, no afecta datos de ocupación)"
+                          >
+                            🗑️ Borrar
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
