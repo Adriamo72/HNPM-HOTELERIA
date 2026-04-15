@@ -826,7 +826,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             </div>
             {ultimaActualizacion && (
               <div className="text-xs uppercase text-slate-400 tracking-[0.12em]">
-                Última actualización: {ultimaActualizacion.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                Última actualización: {ultimaActualizacion.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }).toUpperCase()} {ultimaActualizacion.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })} hs
               </div>
             )}
           </div>
