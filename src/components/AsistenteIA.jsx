@@ -153,7 +153,7 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
         return `${labelServicio} no tiene camas activas.`;
       }
       if (/libre|disponible/.test(n)) {
-        return `${labelServicio} tiene **${stats.libres}** cama${stats.libres !== 1 ? 's' : ''} libre${stats.libres !== 1 ? 's' : ''} (${stats.ocupadas} ocupadas de ${stats.total} totales).`;
+        return `${labelServicio} tiene **${stats.libres}** cama${stats.libres !== 1 ? 's' : ''} libre${stats.libres !== 1 ? 's' : ''} (${stats.ocupadasReales} ocupadas de ${stats.total} totales).`;
       }
       if (/ocupad|usad/.test(n)) {
         return `${labelServicio} tiene **${stats.ocupadasReales}** cama${stats.ocupadasReales !== 1 ? 's' : ''} ocupada${stats.ocupadasReales !== 1 ? 's' : ''} con pacientes (${stats.aislamiento} bloqueadas por aislamiento).`;
@@ -161,7 +161,7 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
       if (/bloquead|aislamient/.test(n)) {
         return `${labelServicio} tiene **${stats.aislamiento}** cama${stats.aislamiento !== 1 ? 's' : ''} bloqueadas por aislamiento.`;
       }
-      return `${labelServicio} tiene **${stats.total}** camas en total (${stats.ocupadas} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
+      return `${labelServicio} tiene **${stats.total}** camas en total (${stats.ocupadasReales} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
     }
 
     // Resumen del servicio
