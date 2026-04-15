@@ -154,6 +154,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   setGuardando(true);
   
   const fecha = new Date().toISOString().split('T')[0];
+  const timestampActual = new Date().toISOString();
   
   try {
     // Un solo upsert con todos los registros en paralelo
@@ -166,12 +167,12 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       observaciones: ocupaciones[hab.id]?.aislamiento ? AISLAMIENTO_TOKEN : null,
       informacion_ampliatoria: hab.informacion_ampliatoria,  // PRESERVAR DATOS DE ADMIN
       actualizado_por: perfilUsuario?.dni,
-      actualizado_en: new Date().toISOString()
+      actualizado_en: timestampActual
     }));
 
     const [{ error: upsertError }] = await Promise.all([
       supabase.from('ocupacion_habitaciones').upsert(payload, { onConflict: 'habitacion_id,fecha' }),
-      guardarLogRecorrido()
+      guardarLogRecorrido(timestampActual)
     ]);
     
     if (upsertError) throw upsertError;
@@ -186,7 +187,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   }
 };
 
-  const guardarLogRecorrido = async () => {
+  const guardarLogRecorrido = async (timestampSincronizado) => {
   if (!piso) return;
   
   const totalCamasPiso = totalCamas;
@@ -201,7 +202,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     nombre_hist: perfilUsuario.nombre,
     camas_ocupadas: totalOcupadasPiso,
     camas_libres: camasLibres,
-    fecha_registro: new Date().toISOString()
+    fecha_registro: timestampSincronizado
   };
   
   try {

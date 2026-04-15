@@ -177,10 +177,6 @@ const RecorridosList = () => {
             <p className="text-[10px] text-green-400 uppercase font-bold">Ocupación Prom.</p>
             <p className="text-2xl font-bold text-white">{estadisticas.promedioOcupacion}%</p>
           </div>
-          <div className="bg-yellow-900/20 rounded-xl p-3 text-center border border-yellow-800/30">
-            <p className="text-[10px] text-yellow-400 uppercase font-bold">Camas Ocupadas</p>
-            <p className="text-2xl font-bold text-white">{estadisticas.totalCamasOcupadas}</p>
-          </div>
         </div>
       )}
 
