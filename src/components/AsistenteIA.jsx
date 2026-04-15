@@ -40,6 +40,24 @@ const encontrarPisoPorNumero = (pisos, texto) => {
   return null;
 };
 
+const encontrarServicios = (texto, ocupacion) => {
+  const n = norm(texto);
+  const servicios = new Set();
+  
+  // Extraer servicios de informacion_ampliatoria
+  Object.values(ocupacion).forEach(o => {
+    if (o.informacion_ampliatoria) {
+      servicios.add(o.informacion_ampliatoria.toLowerCase());
+    }
+  });
+  
+  // Buscar coincidencias exactas o parciales
+  const serviciosArray = Array.from(servicios);
+  const matches = serviciosArray.filter(s => n.includes(s) || s.includes(n));
+  
+  return matches.length > 0 ? matches : null;
+};
+
 const calcularStats = (ocupaciones) => {
   let total = 0, ocupadas = 0, ocupadasReales = 0, aislamiento = 0;
 
@@ -76,6 +94,9 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
 
   // Detectar si menciona un piso
   const piso = encontrarPisoPorNumero(pisos, texto);
+  
+  // Detectar si menciona un servicio
+  const servicios = encontrarServicios(texto, ocupacion);
 
   // Filtrar habitaciones por piso si se menciona
   const habs = piso
@@ -85,6 +106,84 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
   const getOcup = (h) => ocupacion[h.id];
   const label = piso ? `en **${piso.nombre_piso}**` : 'en todo el hospital';
   const labelInicio = piso ? `**${piso.nombre_piso}**` : '**Todo el hospital**';
+
+  // =========================================================
+  // SCOPE: SERVICIO (prioridad si se menciona servicio específico)
+  // =========================================================
+  if (servicios && servicios.length > 0) {
+    const labelServicio = servicios.length === 1 ? `**${servicios[0]}**` : `**${servicios.join(' + ')}**`;
+    
+    // Filtrar ocupaciones por servicio
+    const ocuServicio = Object.values(ocupacion).filter(o => 
+      o.informacion_ampliatoria && servicios.some(s => 
+        norm(o.informacion_ampliatoria) === norm(s)
+      )
+    );
+    
+    // Filtrar habitaciones por servicio
+    const habServicio = habitaciones.filter(h => {
+      const o = getOcup(h);
+      return o && o.informacion_ampliatoria && servicios.some(s => 
+        norm(o.informacion_ampliatoria) === norm(s)
+      );
+    });
+
+    // Habitaciones del servicio
+    if (/habitaci[oó]n|habitaciones/.test(n)) {
+      if (/activa|paciente/.test(n)) {
+        const count = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
+        return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} activa${count !== 1 ? 's' : ''} con pacientes.`;
+      }
+      if (/reparaci[oó]n/.test(n)) {
+        const count = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
+        return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} en reparación.`;
+      }
+      if (/otros|oficina|guardia|sala/.test(n)) {
+        const count = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
+        return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} de tipo "Otros".`;
+      }
+      const count = habServicio.length;
+      return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} registradas.`;
+    }
+
+    // Camas del servicio
+    if (/cama/.test(n)) {
+      const stats = calcularStats(ocuServicio);
+      if (!stats || stats.total === 0) {
+        return `${labelServicio} no tiene camas activas.`;
+      }
+      if (/libre|disponible/.test(n)) {
+        return `${labelServicio} tiene **${stats.libres}** cama${stats.libres !== 1 ? 's' : ''} libre${stats.libres !== 1 ? 's' : ''} (${stats.ocupadas} ocupadas de ${stats.total} totales).`;
+      }
+      if (/ocupad|usad/.test(n)) {
+        return `${labelServicio} tiene **${stats.ocupadasReales}** cama${stats.ocupadasReales !== 1 ? 's' : ''} ocupada${stats.ocupadasReales !== 1 ? 's' : ''} con pacientes (${stats.aislamiento} bloqueadas por aislamiento).`;
+      }
+      if (/bloquead|aislamient/.test(n)) {
+        return `${labelServicio} tiene **${stats.aislamiento}** cama${stats.aislamiento !== 1 ? 's' : ''} bloqueadas por aislamiento.`;
+      }
+      return `${labelServicio} tiene **${stats.total}** camas en total (${stats.ocupadas} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
+    }
+
+    // Resumen del servicio
+    {
+      const activas = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
+      const reparacion = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
+      const otros = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
+      const stats = calcularStats(ocuServicio);
+      
+      return (
+        `${labelServicio} — Resumen:\n` +
+        `• **${stats.total}** camas totales\n` +
+        `• **${stats.ocupadasReales}** camas ocupadas reales\n` +
+        `• **${stats.aislamiento}** camas bloqueadas por aislamiento\n` +
+        `• **${stats.libres}** camas disponibles\n` +
+        `• **${stats.pct}%** de ocupación\n` +
+        `• **${activas}** habitaciones activas\n` +
+        `• **${reparacion}** en reparación\n` +
+        `• **${otros}** de tipo "Otros"`
+      );
+    }
+  }
 
   // Habitaciones activas
   if (/habitaci[oó]n|habitaciones/.test(n) && /activa|paciente/.test(n)) {
@@ -140,7 +239,7 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     );
   }
 
-  return 'No entendí la pregunta. Podés preguntarme por ejemplo:\n• ¿Cuántas habitaciones hay en el 6to piso?\n• ¿Cuántas camas libres hay?\n• ¿Cuál es el porcentaje de ocupación?\n• Resumen general del hospital';
+  return 'No entendí la pregunta. Podés preguntarme por ejemplo:\n• ¿Cuántas habitaciones hay en el 6to piso?\n• ¿Cuántas camas libres hay?\n• ¿Cuál es el porcentaje de ocupación?\n• Resumen general del hospital\n• ¿Cuántas habitaciones tiene pediatría?\n• ¿Cuántas camas ocupadas tiene cardiología?\n• ¿Cuántas camas libres tiene clínica I?\n• ¿Cuántas camas bloqueadas tiene clínica II?\n• ¿Cuántas oficinas hay en el hospital?\n• ¿Cuántas salas de guardia hay?';
 }
 
 // ==================== Componente principal ====================
