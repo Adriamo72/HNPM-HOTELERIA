@@ -150,6 +150,9 @@ function calcularStats(ocuList) {
 
 // ==================== Motor de respuestas ====================
 function responder(texto, { pisos, habitaciones, ocupacion }) {
+  console.log('Debug responder function called with text:', texto);
+  console.log('Debug responder - pisos count:', pisos?.length, 'habitaciones count:', habitaciones?.length, 'ocupacion count:', Object.keys(ocupacion || {}).length);
+  
   if (!pisos.length || !habitaciones.length) {
     return 'Todavía estoy cargando los datos. Intentá en un momento.';
   }
