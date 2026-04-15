@@ -260,11 +260,16 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
 
     return (
       `${labelInicio} - Resumen:\n` +
-      `* **${total}** camas totales\n` +
-      `* **${ocupadasReales}** camas ocupadas con pacientes\n` +
-      `* **${aislamiento}** camas no utilizadas por aislamiento\n` +
-      `* **${pct}%** de ocupación práctica\n` +
-      `* **${libres}** camas disponibles global:\n${detalleDisponibles}\n` +
+      `TOTAL DE CAMAS HNPM\n` +
+      `${total}\n\n` +
+      `CAMAS OCUPADAS POR PACIENTES\n` +
+      `${ocupadasReales}\n\n` +
+      `CAMAS NO UTILIZADAS POR AISLACIÓN\n` +
+      `${aislamiento}\n\n` +
+      `OCUPACIÓN PRACTICA\n` +
+      `${pct}%\n\n` +
+      `CAMAS DISPONIBLES\n` +
+      `${libres}\n\n` +
       `* **${scope.length}** habitaciones en total\n` +
       `* **${activas}** habitaciones activas\n` +
       `* **${activasConPacientes}** activas con pacientes\n` +

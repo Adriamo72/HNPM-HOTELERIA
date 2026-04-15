@@ -771,11 +771,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center md:order-2 flex-1 md:flex-none">
           <div className="flex gap-6 justify-center flex-wrap">
             <div>
-              <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL CAMAS HNPM</p>
+              <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL DE CAMAS HNPM</p>
               <p className="text-2xl font-black text-green-400">{estadisticasGlobales.totalCamas}</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">CAMAS OCUPADAS REAL HNPM</p>
+              <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">CAMAS OCUPADAS POR PACIENTES</p>
               <p className="text-2xl font-black text-yellow-400">{estadisticasGlobales.camasOcupadasReales}</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
@@ -783,11 +783,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
               <p className="text-2xl font-black text-red-500">{estadisticasGlobales.camasNoUtilizadasPorAislamiento}</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">OCUPACIÓN GLOBAL PRACTICA</p>
+              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">OCUPACIÓN PRACTICA</p>
               <p className="text-2xl font-black text-blue-400">{estadisticasGlobales.porcentajePractico.toFixed(0)}%</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES GLOBAL</p>
+              <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES</p>
               <p className="text-2xl font-black text-emerald-300">{estadisticasGlobales.camasDisponibles}</p>
             </div>
           </div>
@@ -812,15 +812,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div className="flex flex-col gap-2 text-sm">
               <div className="flex gap-4 flex-wrap">
-                <span className="text-green-400">Camas en este piso: {estadisticas.totalCamas}</span>
-                <span className="text-yellow-400">Ocupadas Reales: {estadisticas.camasOcupadasReales}</span>
-                <span className="text-red-500">Camas Bloqueadas por Aislamiento: {estadisticas.camasBloqueadasAislamiento}</span>
-                <span className="text-emerald-300">Disponibles: {estadisticas.camasDisponibles}</span>
-                <span className="text-blue-400">{estadisticas.porcentajePractico.toFixed(1)}% ocupación práctica</span>
+                <span className="text-green-400">Camas en piso: {estadisticas.totalCamas}</span>
+                <span className="text-yellow-400">Camas ocupadas con pacientes: {estadisticas.camasOcupadasReales}</span>
+                <span className="text-red-500">Camas bloqueadas por aislamiento: {estadisticas.camasBloqueadasAislamiento}</span>
+                <span className="text-emerald-300">Disponibles en piso: {estadisticas.camasDisponibles}</span>
+                <span className="text-blue-400">Ocupación práctica: {estadisticas.porcentajePractico.toFixed(1)}%</span>
               </div>
               {estadisticas.habitacionesActivas > 0 && (
                 <div className="text-sm text-red-500">
-                  {estadisticas.habitacionesAisladas} habitaciones aisladas de {estadisticas.habitacionesActivas} activas para pacientes
+                  {estadisticas.habitacionesAisladas} habitaciones aisladas de {estadisticas.habitacionesActivas} activas para internación
                 </div>
               )}
             </div>
