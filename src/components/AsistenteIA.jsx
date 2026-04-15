@@ -437,24 +437,19 @@ const SUGERENCIAS = [
 
 // ==================== Componente principal ====================
 const AsistenteIA = ({ pisos }) => {
-  const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [abierto, setAbierto] = useState(false);
-  const [mensajes, setMensajes] = useState([
-    {
-      tipo: 'bot',
-      texto: '¡Hola! Soy tu asistente de ocupación. Podés preguntarme sobre habitaciones, camas o porcentaje de ocupación por piso o del hospital en general.',
-    },
-  ]);
+  const [mensajes, setMensajes] = useState([]);
   const [input, setInput] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [ocupacion, setOcupacion] = useState({});
   const [datosListos, setDatosListos] = useState(false);
   const mensajesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Cargar habitaciones especiales y ocupación al abrir por primera vez
+  // Cargar habitaciones especiales al abrir
   useEffect(() => {
-    if (abierto && !datosListos) {
+    if (abierto && habitacionesEspeciales.length === 0) {
       cargarHabitacionesEspeciales();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
