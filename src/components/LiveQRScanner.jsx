@@ -17,7 +17,7 @@ const LiveQRScanner = ({ onScanSuccess, onScanError }) => {
         // Configuración para cámara trasera
         const config = {
           fps: 10,
-          qrbox: { width: 280, height: 280 },
+          qrbox: { width: 350, height: 350 },
           aspectRatio: 1.0,
           showTorchButtonIfSupported: true,
           showZoomSliderIfSupported: true,
@@ -67,7 +67,7 @@ const LiveQRScanner = ({ onScanSuccess, onScanError }) => {
       <div 
         id={containerId} 
         className="bg-black rounded-2xl overflow-hidden"
-        style={{ minHeight: '350px', width: '100%' }}
+        style={{ minHeight: '420px', width: '100%' }}
       ></div>
       
       {!isScanning && !error && (
