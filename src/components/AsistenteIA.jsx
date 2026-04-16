@@ -359,7 +359,12 @@ const AsistenteIA = ({ pisos }) => {
 
     const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion });
     setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
-  }, [cargando, pisos, habitaciones, ocupacion]);
+    
+    // Reproducir respuesta por voz automáticamente
+    setTimeout(() => {
+      speak(respuesta.replace(/\*\*/g, '').replace(/·/g, ''));
+    }, 500);
+  }, [cargando, pisos, habitaciones, ocupacion, speak]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
