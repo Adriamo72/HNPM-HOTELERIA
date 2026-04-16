@@ -979,7 +979,7 @@ const eliminarVisualizador = async (visId, usuario) => {
     }
     
     const qrUrl = `${window.location.origin}/auth/${token}`;
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrUrl)}`;
     const nombreArchivo = `Credencial_${personal.jerarquia}_${personal.apellido}_${personal.nombre}.png`;
     
     // Abrir ventana con la credencial
@@ -1049,7 +1049,7 @@ const eliminarVisualizador = async (visId, usuario) => {
             
             .lado-qr {
               flex-shrink: 0;
-              width: 28mm;
+              width: 34mm;
               text-align: center;
             }
             
@@ -1061,8 +1061,8 @@ const eliminarVisualizador = async (visId, usuario) => {
             }
             
             .qr-container img {
-              width: 24mm;
-              height: 24mm;
+              width: 30mm;
+              height: 30mm;
               display: block;
             }
             
