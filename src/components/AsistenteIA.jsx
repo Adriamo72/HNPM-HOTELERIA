@@ -364,7 +364,7 @@ const AsistenteIA = ({ pisos }) => {
     setTimeout(() => {
       speak(respuesta.replace(/\*\*/g, '').replace(/·/g, ''));
     }, 500);
-  }, [cargando, pisos, habitaciones, ocupacion, speak]);
+  }, [cargando, pisos, habitaciones, ocupacion]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -384,6 +384,35 @@ const AsistenteIA = ({ pisos }) => {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [abierto]);
+
+  // Text-to-speech function
+  const speak = useCallback((text) => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      // Cancelar cualquier speech en curso
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'es-ES';
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 0.8;
+      
+      utterance.onstart = () => {
+        setIsSpeaking(true);
+      };
+      
+      utterance.onend = () => {
+        setIsSpeaking(false);
+      };
+      
+      utterance.onerror = (event) => {
+        console.error('Speech synthesis error:', event);
+        setIsSpeaking(false);
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    }
+  }, []);
 
   // Inicializar speech recognition
   useEffect(() => {
@@ -424,35 +453,6 @@ const AsistenteIA = ({ pisos }) => {
       recognitionRef.current = recognition;
     }
   }, [enviarPregunta]);
-
-  // Text-to-speech function
-  const speak = (text) => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      // Cancelar cualquier speech en curso
-      window.speechSynthesis.cancel();
-      
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'es-ES';
-      utterance.rate = 0.9;
-      utterance.pitch = 1;
-      utterance.volume = 0.8;
-      
-      utterance.onstart = () => {
-        setIsSpeaking(true);
-      };
-      
-      utterance.onend = () => {
-        setIsSpeaking(false);
-      };
-      
-      utterance.onerror = (event) => {
-        console.error('Speech synthesis error:', event);
-        setIsSpeaking(false);
-      };
-      
-      window.speechSynthesis.speak(utterance);
-    }
-  };
 
   // Voice input handler
   const startListening = () => {
