@@ -364,7 +364,7 @@ const AsistenteIA = ({ pisos }) => {
     setTimeout(() => {
       speak(respuesta.replace(/\*\*/g, '').replace(/·/g, ''));
     }, 500);
-  }, [cargando, pisos, habitaciones, ocupacion]);
+  }, [cargando, pisos, habitaciones, ocupacion, speak]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
