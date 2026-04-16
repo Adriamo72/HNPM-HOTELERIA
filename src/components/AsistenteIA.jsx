@@ -1,4 +1,4 @@
-// components/AsistenteIA.jsx - Versión limpia y simple
+// components/AsistenteIA.jsx - Versión con voz
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -290,8 +290,11 @@ const AsistenteIA = ({ pisos }) => {
   const [habitaciones, setHabitaciones] = useState([]);
   const [ocupacion, setOcupacion] = useState({});
   const [datosListos, setDatosListos] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const mensajesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   // Cargar datos al abrir
   useEffect(() => {
@@ -342,8 +345,7 @@ const AsistenteIA = ({ pisos }) => {
     }
   };
 
-  const enviarPregunta = (texto) => {
-    const textoInput = texto || input;
+  const enviarPregunta = (textoInput) => {
     if (!textoInput.trim()) return;
 
     const pregunta = { tipo: 'user', texto: textoInput };
@@ -377,6 +379,111 @@ const AsistenteIA = ({ pisos }) => {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [abierto]);
+
+  // Inicializar speech recognition
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'es-ES';
+      
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+      
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+      
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(transcript);
+        // Enviar automáticamente después de reconocer
+        setTimeout(() => enviarPregunta(transcript), 500);
+      };
+      
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          setMensajes(prev => [...prev, { 
+            tipo: 'bot', 
+            texto: 'No se pudo acceder al micrófono. Por favor, permití el acceso al micrófono en tu navegador.' 
+          }]);
+        }
+      };
+      
+      recognitionRef.current = recognition;
+    }
+  }, []);
+
+  // Text-to-speech function
+  const speak = (text) => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      // Cancelar cualquier speech en curso
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'es-ES';
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 0.8;
+      
+      utterance.onstart = () => {
+        setIsSpeaking(true);
+      };
+      
+      utterance.onend = () => {
+        setIsSpeaking(false);
+      };
+      
+      utterance.onerror = (event) => {
+        console.error('Speech synthesis error:', event);
+        setIsSpeaking(false);
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // Voice input handler
+  const startListening = () => {
+    if (recognitionRef.current && !isListening) {
+      recognitionRef.current.start();
+    }
+  };
+
+  // Stop listening
+  const stopListening = () => {
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+    }
+  };
+
+  // Enhanced enviarPregunta to include voice response
+  const enviarPreguntaConVoz = (textoInput) => {
+    if (!textoInput.trim()) return;
+
+    const pregunta = { tipo: 'user', texto: textoInput };
+    setMensajes(prev => [...prev, pregunta]);
+    setInput('');
+
+    if (cargando) {
+      const respuesta = 'Cargando datos, esperá un momento...';
+      setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
+      speak(respuesta);
+      return;
+    }
+
+    const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion });
+    setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
+    
+    // Speak the response
+    speak(respuesta.replace(/\*\*/g, '').replace(/·/g, ''));
+  };
 
   return (
     <>
@@ -475,14 +582,44 @@ const AsistenteIA = ({ pisos }) => {
               placeholder="Preguntame sobre las habitaciones..."
               className="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500 transition-colors"
             />
+            
+            {/* Voice control buttons */}
             <button
-              onClick={() => enviarPregunta()}
-              disabled={!input.trim()}
-              className="bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl px-3 py-2 transition-colors"
+              onClick={isListening ? stopListening : startListening}
+              disabled={!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)}
+              className={`p-2 rounded-xl transition-colors ${
+                isListening 
+                  ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse' 
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed'
+              }`}
+              title={isListening ? 'Detener grabación' : 'Hablar para preguntar'}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
+              {isListening ? (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3 3H5a3 3 0 01-3-3V5a3 3 0 013-3h14a3 3 0 013 3v6a3 3 0 01-3 3h-1" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3 3H5a3 3 0 01-3-3V5a3 3 0 013-3h14a3 3 0 013 3v6a3 3 0 01-3 3h-1" />
+                </svg>
+              )}
+            </button>
+            
+            <button
+              onClick={() => enviarPreguntaConVoz(input)}
+              disabled={!input.trim() || isSpeaking}
+              className="bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl px-3 py-2 transition-colors"
+              title="Enviar y escuchar respuesta"
+            >
+              {isSpeaking ? (
+                <svg className="w-4 h-4 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 0112.728 0" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              )}
             </button>
           </div>
         </div>
