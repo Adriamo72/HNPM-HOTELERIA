@@ -1,5 +1,5 @@
 // components/AsistenteIA.jsx - Versión con voz
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
 // ==================== Funciones auxiliares ====================
@@ -345,7 +345,7 @@ const AsistenteIA = ({ pisos }) => {
     }
   };
 
-  const enviarPregunta = (textoInput) => {
+  const enviarPregunta = useCallback((textoInput) => {
     if (!textoInput.trim()) return;
 
     const pregunta = { tipo: 'user', texto: textoInput };
@@ -359,7 +359,7 @@ const AsistenteIA = ({ pisos }) => {
 
     const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion });
     setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
-  };
+  }, [cargando, pisos, habitaciones, ocupacion]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
