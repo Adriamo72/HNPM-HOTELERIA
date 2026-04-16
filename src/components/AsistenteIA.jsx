@@ -418,7 +418,7 @@ const AsistenteIA = ({ pisos }) => {
       
       recognitionRef.current = recognition;
     }
-  }, []);
+  }, [enviarPregunta]);
 
   // Text-to-speech function
   const speak = (text) => {
