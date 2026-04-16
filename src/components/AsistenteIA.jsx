@@ -345,18 +345,6 @@ const AsistenteIA = ({ pisos }) => {
     }
   };
 
-  // Auto-scroll
-  useEffect(() => {
-    mensajesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [mensajes]);
-
-  // Focus input al abrir
-  useEffect(() => {
-    if (abierto) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [abierto]);
-
   // Text-to-speech function
   const speak = useCallback((text) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -385,6 +373,46 @@ const AsistenteIA = ({ pisos }) => {
       window.speechSynthesis.speak(utterance);
     }
   }, []);
+
+  const enviarPregunta = useCallback((textoInput) => {
+    if (!textoInput.trim()) return;
+
+    const pregunta = { tipo: 'user', texto: textoInput };
+    setMensajes(prev => [...prev, pregunta]);
+    setInput('');
+
+    if (cargando) {
+      setMensajes(prev => [...prev, { tipo: 'bot', texto: 'Cargando datos, esperá un momento...' }]);
+      return;
+    }
+
+    const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion });
+    setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
+    
+    // Reproducir respuesta por voz automáticamente
+    setTimeout(() => {
+      speak(respuesta.replace(/\*\*/g, '').replace(/·/g, ''));
+    }, 500);
+  }, [cargando, pisos, habitaciones, ocupacion, speak]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      enviarPregunta();
+    }
+  };
+
+  // Auto-scroll
+  useEffect(() => {
+    mensajesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [mensajes]);
+
+  // Focus input al abrir
+  useEffect(() => {
+    if (abierto) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [abierto]);
 
   // Inicializar speech recognition
   useEffect(() => {
@@ -425,6 +453,20 @@ const AsistenteIA = ({ pisos }) => {
       recognitionRef.current = recognition;
     }
   }, [enviarPregunta]);
+
+  // Voice input handler
+  const startListening = () => {
+    if (recognitionRef.current && !isListening) {
+      recognitionRef.current.start();
+    }
+  };
+
+  // Stop listening
+  const stopListening = () => {
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+    }
+  };
 
   // Enhanced enviarPregunta to include voice response
   const enviarPreguntaConVoz = (textoInput) => {
