@@ -345,34 +345,6 @@ const AsistenteIA = ({ pisos }) => {
     }
   };
 
-  const enviarPregunta = useCallback((textoInput) => {
-    if (!textoInput.trim()) return;
-
-    const pregunta = { tipo: 'user', texto: textoInput };
-    setMensajes(prev => [...prev, pregunta]);
-    setInput('');
-
-    if (cargando) {
-      setMensajes(prev => [...prev, { tipo: 'bot', texto: 'Cargando datos, esperá un momento...' }]);
-      return;
-    }
-
-    const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion });
-    setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
-    
-    // Reproducir respuesta por voz automáticamente
-    setTimeout(() => {
-      speak(respuesta.replace(/\*\*/g, '').replace(/·/g, ''));
-    }, 500);
-  }, [cargando, pisos, habitaciones, ocupacion, speak]);
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      enviarPregunta();
-    }
-  };
-
   // Auto-scroll
   useEffect(() => {
     mensajesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -453,20 +425,6 @@ const AsistenteIA = ({ pisos }) => {
       recognitionRef.current = recognition;
     }
   }, [enviarPregunta]);
-
-  // Voice input handler
-  const startListening = () => {
-    if (recognitionRef.current && !isListening) {
-      recognitionRef.current.start();
-    }
-  };
-
-  // Stop listening
-  const stopListening = () => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
-    }
-  };
 
   // Enhanced enviarPregunta to include voice response
   const enviarPreguntaConVoz = (textoInput) => {
@@ -584,7 +542,7 @@ const AsistenteIA = ({ pisos }) => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Preguntame sobre las habitaciones..."
+              placeholder="Pregúntame sobre las habitaciones..."
               className="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500 transition-colors"
             />
             
