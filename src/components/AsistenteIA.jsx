@@ -207,16 +207,43 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
       if (!stats || stats.total === 0) {
         return `${labelServicio} no tiene camas activas.`;
       }
+      
+      // Respuesta concisa según el tipo
+      let respuestaConcisa = '';
       if (/libre|disponible/.test(n)) {
-        return `${labelServicio} tiene **${stats.libres}** cama${stats.libres !== 1 ? 's' : ''} libre${stats.libres !== 1 ? 's' : ''} (${stats.ocupadasReales} ocupadas de ${stats.total} totales).`;
+        respuestaConcisa = `${labelServicio} tiene **${stats.libres}** cama${stats.libres !== 1 ? 's' : ''} libre${stats.libres !== 1 ? 's' : ''} (${stats.ocupadasReales} ocupadas de ${stats.total} totales).`;
+      } else if (/ocupad|usad/.test(n)) {
+        respuestaConcisa = `${labelServicio} tiene **${stats.ocupadasReales}** cama${stats.ocupadasReales !== 1 ? 's' : ''} ocupada${stats.ocupadasReales !== 1 ? 's' : ''} con pacientes (${stats.aislamiento} bloqueadas por aislamiento).`;
+      } else if (/bloquead|aislamient/.test(n)) {
+        respuestaConcisa = `${labelServicio} tiene **${stats.aislamiento}** cama${stats.aislamiento !== 1 ? 's' : ''} bloqueadas por aislamiento.`;
+      } else {
+        respuestaConcisa = `${labelServicio} tiene **${stats.total}** camas en total (${stats.ocupadasReales} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
       }
-      if (/ocupad|usad/.test(n)) {
-        return `${labelServicio} tiene **${stats.ocupadasReales}** cama${stats.ocupadasReales !== 1 ? 's' : ''} ocupada${stats.ocupadasReales !== 1 ? 's' : ''} con pacientes (${stats.aislamiento} bloqueadas por aislamiento).`;
+      
+      // Si pide detalle, mostrar desglose por habitación
+      if (/detallar|detalle/.test(n)) {
+        let detalleCamas = '';
+        habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'activa').forEach(h => {
+          const o = getOcup(h);
+          if (o) {
+            const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
+            detalleCamas += `• **Habitación ${h.nombre}**: ${o.total_camas} totales, ${o.camas_ocupadas} ocupadas, ${camasLibres} libres`;
+            if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
+              detalleCamas += ' (camas bloqueadas por aislamiento)';
+            }
+            detalleCamas += '\n';
+          }
+        });
+        
+        return respuestaConcisa + '\n\n**Detalle por habitación:**\n' + detalleCamas;
       }
-      if (/bloquead|aislamient/.test(n)) {
-        return `${labelServicio} tiene **${stats.aislamiento}** cama${stats.aislamiento !== 1 ? 's' : ''} bloqueadas por aislamiento.`;
+      
+      // Si hay camas, ofrecer detalle
+      if (stats.total > 0) {
+        return respuestaConcisa + '\n\n¿Quieres el detalle de camas por habitación?';
       }
-      return `${labelServicio} tiene **${stats.total}** camas en total (${stats.ocupadasReales} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
+      
+      return respuestaConcisa;
     }
 
     // Resumen del servicio
@@ -235,18 +262,31 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
         }
       });
       
-      return (
-        `${labelServicio} — Resumen:\n` +
-        `• **${stats.total}** camas totales\n` +
-        `• **${stats.ocupadasReales}** camas ocupadas reales\n` +
-        `• **${totalPacientes}** pacientes internados\n` +
-        `• **${stats.aislamiento}** camas bloqueadas por aislamiento\n` +
-        `• **${stats.libres}** camas disponibles\n` +
-        `• **${stats.pct}%** de ocupación\n` +
-        `• **${activas}** habitaciones activas\n` +
-        `• **${reparacion}** en reparación\n` +
-        `• **${otros}** de tipo "Otros"`
-      );
+      // Respuesta concisa
+      const respuestaConcisa = `${labelServicio} tiene **${stats.total}** camas asignadas, las cuales están ocupadas por **${totalPacientes}** pacientes.`;
+      
+      // Si pide detalle, mostrar resumen completo
+      if (/detallar|detalle/.test(n)) {
+        return (
+          `${labelServicio} — Resumen:\n` +
+          `• **${stats.total}** camas totales\n` +
+          `• **${stats.ocupadasReales}** camas ocupadas reales\n` +
+          `• **${totalPacientes}** pacientes internados\n` +
+          `• **${stats.aislamiento}** camas bloqueadas por aislamiento\n` +
+          `• **${stats.libres}** camas disponibles\n` +
+          `• **${stats.pct}%** de ocupación\n` +
+          `• **${activas}** habitaciones activas\n` +
+          `• **${reparacion}** en reparación\n` +
+          `• **${otros}** de tipo "Otros"`
+        );
+      }
+      
+      // Si hay camas, ofrecer detalle
+      if (stats.total > 0) {
+        return respuestaConcisa + '\n\n¿Quieres el resumen completo del servicio?';
+      }
+      
+      return respuestaConcisa;
     }
   }
 
@@ -260,40 +300,48 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
       
       if (habitacion) {
         const o = getOcup(habitacion);
-        let respuesta = `**Habitación ${habitacion.nombre}**: `;
+        let respuestaConcisa = `**Habitación ${habitacion.nombre}**: `;
         
         if (o) {
           if (o.tipo_habitacion === 'activa') {
-            const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
-            respuesta += `**${o.total_camas}** camas totales, **${o.camas_ocupadas}** ocupadas, **${camasLibres}** libres`;
+            respuestaConcisa += `**${o.total_camas}** camas totales, **${o.camas_ocupadas}** ocupadas, **${Math.max(0, o.total_camas - o.camas_ocupadas)}** libres`;
             
-            // Detalles adicionales
-            if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
-              respuesta += ` (camas bloqueadas por aislamiento)`;
-            }
-            if (o.informacion_ampliatoria) {
-              respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
-            }
-            
-            // Detalle de pacientes
-            if (o.camas_ocupadas > 0) {
-              respuesta += ` - **${o.camas_ocupadas}** paciente${o.camas_ocupadas !== 1 ? 's' : ''} internados`;
+            // Si pide detalle, mostrar información completa
+            if (/detallar|detalle/.test(n)) {
+              respuestaConcisa += '\n\n**Estado:** ';
+              if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
+                respuestaConcisa += 'Camas bloqueadas por aislamiento. ';
+              }
+              respuestaConcisa += `${o.camas_ocupadas} paciente${o.camas_ocupadas !== 1 ? 's' : ''} internados.`;
+              
+              if (o.informacion_ampliatoria) {
+                respuestaConcisa += `\n**Servicio:** ${o.informacion_ampliatoria}`;
+              }
             }
           } else if (o.tipo_habitacion === 'reparacion') {
-            respuesta += `En reparación`;
-            if (o.informacion_ampliatoria) {
-              respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
+            respuestaConcisa += `En reparación`;
+            if (/detallar|detalle/.test(n)) {
+              if (o.informacion_ampliatoria) {
+                respuestaConcisa += `\n\n**Servicio:** ${o.informacion_ampliatoria}`;
+              }
             }
           } else if (o.tipo_habitacion === 'otros') {
-            respuesta += `**${o.tipo_habitacion}**`;
-            if (o.informacion_ampliatoria) {
-              respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
+            respuestaConcisa += `**${o.tipo_habitacion}**`;
+            if (/detallar|detalle/.test(n)) {
+              if (o.informacion_ampliatoria) {
+                respuestaConcisa += `\n\n**Servicio:** ${o.informacion_ampliatoria}`;
+              }
             }
           } else {
-            respuesta += `Sin datos recientes`;
+            respuestaConcisa += `Sin datos recientes`;
           }
           
-          return respuesta;
+          // Si no pide detalle y hay info adicional, ofrecer detalle
+          if (!/detallar|detalle/.test(n) && o && (o.tipo_habitacion !== 'otros' || o.informacion_ampliatoria)) {
+            respuestaConcisa += '\n\n¿Quieres el detalle completo?';
+          }
+          
+          return respuestaConcisa;
         } else {
           return `No se encontró la habitación ${numHabitacion} en el ${piso ? piso.nombre_piso : 'hospital'}.`;
         }
@@ -310,7 +358,37 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     if (!stats || stats.total === 0) {
       return `No hay camas activas ${label}.`;
     }
-    return `${labelInicio} hay **${stats.total}** camas en habitaciones activas (${stats.ocupadas} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
+    
+    // Respuesta concisa
+    const respuestaConcisa = `${labelInicio} hay **${stats.total}** camas en habitaciones activas (${stats.ocupadas} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
+    
+    // Si pide detalle, mostrar desglose por habitación
+    if (/detallar|detalle/.test(n)) {
+      let detalleCamas = '';
+      habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa').forEach(h => {
+        const o = getOcup(h);
+        if (o) {
+          const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
+          detalleCamas += `• **Habitación ${h.nombre}**: ${o.total_camas} totales, ${o.camas_ocupadas} ocupadas, ${camasLibres} libres`;
+          if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
+            detalleCamas += ' (camas bloqueadas por aislamiento)';
+          }
+          if (o.informacion_ampliatoria) {
+            detalleCamas += ` - Servicio: **${o.informacion_ampliatoria}**`;
+          }
+          detalleCamas += '\n';
+        }
+      });
+      
+      return respuestaConcisa + '\n\n**Detalle:**\n' + detalleCamas;
+    }
+    
+    // Si hay camas, ofrecer detalle
+    if (stats.total > 0) {
+      return respuestaConcisa + '\n\n¿Quieres el detalle de camas por habitación?';
+    }
+    
+    return respuestaConcisa;
   }
 
   // Pacientes
@@ -320,14 +398,26 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
       return `No hay pacientes ${label}.`;
     }
     
-    // Detalle de pacientes por habitación activa
-    let detallePacientes = '';
-    habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa' && getOcup(h)?.camas_ocupadas > 0).forEach(h => {
-      const o = getOcup(h);
-      detallePacientes += `• **Habitación ${h.nombre}**: ${o.camas_ocupadas} paciente${o.camas_ocupadas !== 1 ? 's' : ''}\n`;
-    });
+    // Respuesta concisa
+    const respuestaConcisa = `${labelInicio} hay **${stats.ocupadasReales}** paciente${stats.ocupadasReales !== 1 ? 's' : ''} internado${stats.ocupadasReales !== 1 ? 's' : ''} de ${stats.total} camas totales.`;
     
-    return `${labelInicio} hay **${stats.ocupadasReales}** paciente${stats.ocupadasReales !== 1 ? 's' : ''} internado${stats.ocupadasReales !== 1 ? 's' : ''} de ${stats.total} camas totales.${detallePacientes ? '\n' + detallePacientes : ''}`;
+    // Si pide detalle, mostrar desglose
+    if (/detallar|detalle/.test(n)) {
+      let detallePacientes = '';
+      habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa' && getOcup(h)?.camas_ocupadas > 0).forEach(h => {
+        const o = getOcup(h);
+        detallePacientes += `• **Habitación ${h.nombre}**: ${o.camas_ocupadas} paciente${o.camas_ocupadas !== 1 ? 's' : ''}\n`;
+      });
+      
+      return respuestaConcisa + '\n\n**Detalle:**\n' + detallePacientes;
+    }
+    
+    // Si hay pacientes, ofrecer detalle
+    if (stats.ocupadasReales > 0) {
+      return respuestaConcisa + '\n\n¿Quieres el detalle de pacientes por habitación?';
+    }
+    
+    return respuestaConcisa;
   }
 
   // Total habitaciones
