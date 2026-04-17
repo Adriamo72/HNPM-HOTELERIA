@@ -131,16 +131,71 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     // Habitaciones del servicio
     if (/habitaci[oó]n|habitaciones/.test(n)) {
       if (/activa|paciente/.test(n)) {
-        const count = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
-        return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} activa${count !== 1 ? 's' : ''} con pacientes.`;
+        const activas = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'activa');
+        let respuesta = `${labelServicio} tiene **${activas.length}** habitación${activas.length !== 1 ? 'es' : ''} activa${activas.length !== 1 ? 's' : ''} con pacientes.\n`;
+        
+        // Agregar detalles de cada habitación activa
+        activas.forEach(h => {
+          const o = getOcup(h);
+          if (o) {
+            respuesta += `• **Habitación ${h.nombre}**: `;
+            if (o.tipo_habitacion === 'activa') {
+              const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
+              respuesta += `**${o.total_camas}** camas totales, **${o.camas_ocupadas}** ocupadas, **${camasLibres}** libres`;
+              
+              // Detalles adicionales
+              if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
+                respuesta += ` (camas bloqueadas por aislamiento)`;
+              }
+              if (o.informacion_ampliatoria) {
+                respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
+              }
+            } else if (o.tipo_habitacion === 'reparacion') {
+              respuesta += `En reparación`;
+              if (o.informacion_ampliatoria) {
+                respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
+              }
+            } else if (o.tipo_habitacion === 'otros') {
+              respuesta += `Tipo: **${o.tipo_habitacion}**`;
+              if (o.informacion_ampliatoria) {
+                respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
+              }
+            }
+            respuesta += '\n';
+          }
+        });
+        
+        return respuesta;
       }
       if (/reparaci[oó]n/.test(n)) {
         const count = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
-        return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} en reparación.`;
+        let respuesta = `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} en reparación.\n`;
+        
+        // Agregar detalles de cada habitación en reparación
+        habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').forEach(h => {
+          respuesta += `• **Habitación ${h.nombre}**: En reparación`;
+          if (h.informacion_ampliatoria) {
+            respuesta += ` - Servicio: **${h.informacion_ampliatoria}**`;
+          }
+          respuesta += '\n';
+        });
+        
+        return respuesta;
       }
       if (/otros|oficina|guardia|sala/.test(n)) {
         const count = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
-        return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} de tipo "Otros".`;
+        let respuesta = `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} de tipo "Otros".\n`;
+        
+        // Agregar detalles de cada habitación de tipo "Otros"
+        habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'otros').forEach(h => {
+          respuesta += `• **Habitación ${h.nombre}**: **${h.tipo_habitacion}**`;
+          if (h.informacion_ampliatoria) {
+            respuesta += ` - Servicio: **${h.informacion_ampliatoria}**`;
+          }
+          respuesta += '\n';
+        });
+        
+        return respuesta;
       }
       const count = habServicio.length;
       return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} registradas.`;
@@ -171,10 +226,20 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
       const otros = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
       const stats = calcularStats(ocuServicio);
       
+      // Contar pacientes por servicio
+      let totalPacientes = 0;
+      habServicio.forEach(h => {
+        const o = getOcup(h);
+        if (o && o.tipo_habitacion === 'activa' && o.camas_ocupadas > 0) {
+          totalPacientes += o.camas_ocupadas;
+        }
+      });
+      
       return (
         `${labelServicio} — Resumen:\n` +
         `• **${stats.total}** camas totales\n` +
         `• **${stats.ocupadasReales}** camas ocupadas reales\n` +
+        `• **${totalPacientes}** pacientes internados\n` +
         `• **${stats.aislamiento}** camas bloqueadas por aislamiento\n` +
         `• **${stats.libres}** camas disponibles\n` +
         `• **${stats.pct}%** de ocupación\n` +
@@ -186,9 +251,57 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
   }
 
   // Habitaciones activas
-  if (/habitaci[oó]n|habitaciones/.test(n) && /activa|paciente/.test(n)) {
-    const count = habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
-    return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} activa${count !== 1 ? 's' : ''} con pacientes.`;
+  if (/habitaci[oó]n|habitaciones/.test(n)) {
+    // Buscar número de habitación específico si se menciona
+    const habitacionMatch = n.match(/habitaci[oó]n\s*(\d+)/);
+    if (habitacionMatch) {
+      const numHabitacion = parseInt(habitacionMatch[1]);
+      const habitacion = habs.find(h => h.nombre.includes(numHabitacion.toString()));
+      
+      if (habitacion) {
+        const o = getOcup(habitacion);
+        let respuesta = `**Habitación ${habitacion.nombre}**: `;
+        
+        if (o) {
+          if (o.tipo_habitacion === 'activa') {
+            const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
+            respuesta += `**${o.total_camas}** camas totales, **${o.camas_ocupadas}** ocupadas, **${camasLibres}** libres`;
+            
+            // Detalles adicionales
+            if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
+              respuesta += ` (camas bloqueadas por aislamiento)`;
+            }
+            if (o.informacion_ampliatoria) {
+              respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
+            }
+            
+            // Detalle de pacientes
+            if (o.camas_ocupadas > 0) {
+              respuesta += ` - **${o.camas_ocupadas}** paciente${o.camas_ocupadas !== 1 ? 's' : ''} internados`;
+            }
+          } else if (o.tipo_habitacion === 'reparacion') {
+            respuesta += `En reparación`;
+            if (o.informacion_ampliatoria) {
+              respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
+            }
+          } else if (o.tipo_habitacion === 'otros') {
+            respuesta += `**${o.tipo_habitacion}**`;
+            if (o.informacion_ampliatoria) {
+              respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
+            }
+          } else {
+            respuesta += `Sin datos recientes`;
+          }
+          
+          return respuesta;
+        } else {
+          return `No se encontró la habitación ${numHabitacion} en el ${piso ? piso.nombre_piso : 'hospital'}.`;
+        }
+      } else {
+        const count = habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
+        return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} activa${count !== 1 ? 's' : ''} con pacientes.`;
+      }
+    }
   }
 
   // Camas totales
@@ -206,7 +319,15 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     if (!stats || stats.total === 0) {
       return `No hay pacientes ${label}.`;
     }
-    return `${labelInicio} hay **${stats.ocupadasReales}** paciente${stats.ocupadasReales !== 1 ? 's' : ''} internado${stats.ocupadasReales !== 1 ? 's' : ''} de ${stats.total} camas totales.`;
+    
+    // Detalle de pacientes por habitación activa
+    let detallePacientes = '';
+    habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa' && getOcup(h)?.camas_ocupadas > 0).forEach(h => {
+      const o = getOcup(h);
+      detallePacientes += `• **Habitación ${h.nombre}**: ${o.camas_ocupadas} paciente${o.camas_ocupadas !== 1 ? 's' : ''}\n`;
+    });
+    
+    return `${labelInicio} hay **${stats.ocupadasReales}** paciente${stats.ocupadasReales !== 1 ? 's' : ''} internado${stats.ocupadasReales !== 1 ? 's' : ''} de ${stats.total} camas totales.${detallePacientes ? '\n' + detallePacientes : ''}`;
   }
 
   // Total habitaciones
