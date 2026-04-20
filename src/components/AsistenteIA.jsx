@@ -134,7 +134,12 @@ function responder(texto, { pisos, habitaciones, ocupacion, contextoAnterior }) 
   const n = norm(texto);
 
   // Detectar si es una respuesta de confirmación para detalles
+  console.log('DEBUG: Contexto anterior:', contextoAnterior);
+  console.log('DEBUG: Texto actual:', n);
+  console.log('DEBUG: Es respuesta de confirmación:', contextoAnterior && (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar')));
+  
   if (contextoAnterior && (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar'))) {
+    console.log('DEBUG: Entrando a lógica de detalles');
     // Si el usuario confirma que quiere detalles, proporcionarlos
     if (contextoAnterior.tipo === 'servicio') {
       const servicios = encontrarServicios(contextoAnterior.texto, ocupacion);
@@ -752,20 +757,35 @@ const AsistenteIA = ({ pisos }) => {
       return;
     }
 
+    // Guardar contexto para futuras respuestas (antes de generar respuesta)
+    const n = norm(textoInput);
+    console.log('DEBUG: Guardando contexto para:', textoInput);
+    console.log('DEBUG: Es respuesta de confirmación:', (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar')));
+    console.log('DEBUG: Es servicio:', encontrarServicios(textoInput, ocupacion));
+    console.log('DEBUG: Es pacientes:', /paciente|pacientes/.test(n));
+    console.log('DEBUG: Es camas:', /cama/.test(n));
+    
+    // Si es una respuesta de confirmación, no limpiar el contexto
+    if (!(n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar'))) {
+      if (encontrarServicios(textoInput, ocupacion)) {
+        console.log('DEBUG: Guardando contexto de servicio');
+        setContextoAnterior({ tipo: 'servicio', texto: textoInput });
+      } else if (/paciente|pacientes/.test(n)) {
+        console.log('DEBUG: Guardando contexto de pacientes');
+        setContextoAnterior({ tipo: 'pacientes', texto: textoInput });
+      } else if (/cama/.test(n)) {
+        console.log('DEBUG: Guardando contexto de camas');
+        setContextoAnterior({ tipo: 'camas', texto: textoInput });
+      } else {
+        console.log('DEBUG: Limpiando contexto');
+        setContextoAnterior(null);
+      }
+    } else {
+      console.log('DEBUG: Manteniendo contexto existente para respuesta de confirmación');
+    }
+
     const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion, contextoAnterior });
     setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
-    
-    // Guardar contexto para futuras respuestas
-    const n = norm(textoInput);
-    if (encontrarServicios(textoInput, ocupacion)) {
-      setContextoAnterior({ tipo: 'servicio', texto: textoInput });
-    } else if (/paciente|pacientes/.test(n)) {
-      setContextoAnterior({ tipo: 'pacientes', texto: textoInput });
-    } else if (/cama/.test(n)) {
-      setContextoAnterior({ tipo: 'camas', texto: textoInput });
-    } else {
-      setContextoAnterior(null);
-    }
     
     // Reproducir respuesta por voz automáticamente
     setTimeout(() => {
