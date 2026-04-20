@@ -755,8 +755,12 @@ const AsistenteIA = ({ pisos }) => {
     // Guardar contexto para futuras respuestas (antes de generar respuesta)
     const n = norm(textoInput);
     
-    // Si es una respuesta de confirmación, no limpiar el contexto
-    if (!(n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar'))) {
+    // Si es una respuesta de confirmación, mantener el contexto existente
+    if (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar')) {
+      // No hacer nada, mantener el contexto existente
+      console.log('DEBUG: Manteniendo contexto para respuesta de confirmación');
+    } else {
+      // Si no es confirmación, actualizar contexto según la consulta
       if (encontrarServicios(textoInput, ocupacion)) {
         setContextoAnterior({ tipo: 'servicio', texto: textoInput });
       } else if (/paciente|pacientes/.test(n)) {
