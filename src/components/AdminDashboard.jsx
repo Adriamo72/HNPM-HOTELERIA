@@ -2817,7 +2817,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                           {nombreCompleto}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          {new Date(rechazo.createdAt).toLocaleString('es-AR')}
+                          📅 {new Date(rechazo.createdAt).toLocaleDateString('es-AR')} 🕐 {new Date(rechazo.createdAt).toLocaleTimeString('es-AR')}
                         </p>
                       </div>
                       <div className="flex items-start gap-2">
