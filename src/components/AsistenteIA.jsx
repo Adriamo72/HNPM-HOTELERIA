@@ -51,9 +51,50 @@ const encontrarServicios = (texto, ocupacion) => {
     }
   });
   
-  // Buscar coincidencias exactas o parciales
+  // Buscar coincidencias exactas o parciales - mejorar lógica
   const serviciosArray = Array.from(servicios);
-  const matches = serviciosArray.filter(s => n.includes(s) || s.includes(n));
+  const matches = serviciosArray.filter(s => {
+    // Coincidencia exacta
+    if (n.includes(s) || s.includes(n)) return true;
+    
+    // Coincidencia con palabras clave comunes - normalizar ambos lados
+    const palabrasClave = ['pediatria', 'pediatría', 'clinica', 'clínica', 'traumatologia', 'traumatología', 'cardiologia', 'cardiología', 'cirugia', 'cirugía'];
+    const servicioNormalizado = norm(s);
+    
+    // Buscar coincidencias con palabras clave
+    for (const palabra of palabrasClave) {
+      if (n.includes(palabra) && servicioNormalizado.includes(palabra)) return true;
+    }
+    
+    // Coincidencia más flexible para pediatria
+    if (n.includes('pediatri') || n.includes('pediatr')) {
+      if (servicioNormalizado.includes('pediatri') || servicioNormalizado.includes('pediatr')) return true;
+    }
+    
+    // Coincidencia más flexible para otros servicios
+    if (n.includes('clinic') || n.includes('clín')) {
+      if (servicioNormalizado.includes('clinic') || servicioNormalizado.includes('clín')) return true;
+    }
+    
+    if (n.includes('traumatolog') || n.includes('traumatol')) {
+      if (servicioNormalizado.includes('traumatolog') || servicioNormalizado.includes('traumatol')) return true;
+    }
+    
+    if (n.includes('cardiolog') || n.includes('cardiol')) {
+      if (servicioNormalizado.includes('cardiolog') || servicioNormalizado.includes('cardiol')) return true;
+    }
+    
+    if (n.includes('cirug') || n.includes('ciru')) {
+      if (servicioNormalizado.includes('cirug') || servicioNormalizado.includes('ciru')) return true;
+    }
+    
+    return false;
+  });
+  
+  // Debug logging
+  console.log('DEBUG: Texto buscado:', n);
+  console.log('DEBUG: Servicios encontrados:', serviciosArray);
+  console.log('DEBUG: Matches:', matches);
   
   return matches.length > 0 ? matches : null;
 };
