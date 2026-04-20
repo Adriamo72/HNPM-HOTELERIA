@@ -126,12 +126,125 @@ const calcularStats = (ocupaciones) => {
 };
 
 // ==================== Motor de respuestas ====================
-function responder(texto, { pisos, habitaciones, ocupacion }) {
+function responder(texto, { pisos, habitaciones, ocupacion, contextoAnterior }) {
   if (!pisos.length || !habitaciones.length) {
     return 'Todavía estoy cargando los datos. Intentá en un momento.';
   }
 
   const n = norm(texto);
+
+  // Detectar si es una respuesta de confirmación para detalles
+  if (contextoAnterior && (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar'))) {
+    // Si el usuario confirma que quiere detalles, proporcionarlos
+    if (contextoAnterior.tipo === 'servicio') {
+      const servicios = encontrarServicios(contextoAnterior.texto, ocupacion);
+      if (servicios && servicios.length > 0) {
+        const labelServicio = servicios.length === 1 ? `**${servicios[0]}**` : `**${servicios.join(' + ')}**`;
+        
+        // Filtrar ocupaciones por servicio
+        const ocuServicio = Object.values(ocupacion).filter(o => 
+          o.informacion_ampliatoria && servicios.some(s => 
+            norm(o.informacion_ampliatoria) === norm(s)
+          )
+        );
+        
+        // Filtrar habitaciones por servicio
+        const habServicio = habitaciones.filter(h => {
+          const o = ocupacion[h.id];
+          return o && o.informacion_ampliatoria && servicios.some(s => 
+            norm(o.informacion_ampliatoria) === norm(s)
+          );
+        });
+
+        // Proporcionar resumen completo del servicio
+        const activas = habServicio.filter(h => ocupacion[h.id]?.tipo_habitacion === 'activa').length;
+        const reparacion = habServicio.filter(h => ocupacion[h.id]?.tipo_habitacion === 'reparacion').length;
+        const otros = habServicio.filter(h => ocupacion[h.id]?.tipo_habitacion === 'otros').length;
+        const stats = calcularStats(ocuServicio);
+        
+        // Contar pacientes por servicio
+        let totalPacientes = 0;
+        habServicio.forEach(h => {
+          const o = ocupacion[h.id];
+          if (o && o.tipo_habitacion === 'activa' && o.camas_ocupadas > 0) {
+            totalPacientes += o.camas_ocupadas;
+          }
+        });
+        
+        // Detalle de habitaciones
+        let detalleHabitaciones = '';
+        habServicio.filter(h => ocupacion[h.id]?.tipo_habitacion === 'activa').forEach(h => {
+          const o = ocupacion[h.id];
+          if (o) {
+            const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
+            detalleHabitaciones += `• **Habitación ${h.nombre}**: ${o.total_camas} totales, ${o.camas_ocupadas} ocupadas, ${camasLibres} libres`;
+            if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
+              detalleHabitaciones += ' (camas bloqueadas por aislamiento)';
+            }
+            detalleHabitaciones += '\n';
+          }
+        });
+        
+        return (
+          `${labelServicio} — Resumen:\n` +
+          `• **${stats.total}** camas totales\n` +
+          `• **${stats.ocupadasReales}** camas ocupadas reales\n` +
+          `• **${totalPacientes}** pacientes internados\n` +
+          `• **${stats.aislamiento}** camas bloqueadas por aislamiento\n` +
+          `• **${stats.libres}** camas disponibles\n` +
+          `• **${stats.pct}%** de ocupación\n` +
+          `• **${activas}** habitaciones activas\n` +
+          `• **${reparacion}** en reparación\n` +
+          `• **${otros}** de tipo "Otros"\n\n` +
+          `**Detalle por habitación:**\n${detalleHabitaciones}`
+        );
+      }
+    }
+    
+    if (contextoAnterior.tipo === 'pacientes') {
+      const piso = encontrarPisoPorNumero(pisos, contextoAnterior.texto);
+      const habs = piso
+        ? habitaciones.filter(h => String(h.piso_id) === String(piso.id))
+        : habitaciones;
+      
+      const stats = calcularStats(habs.map(h => ocupacion[h.id]).filter(Boolean));
+      let detallePacientes = '';
+      habs.filter(h => ocupacion[h.id]?.tipo_habitacion === 'activa' && ocupacion[h.id]?.camas_ocupadas > 0).forEach(h => {
+        const o = ocupacion[h.id];
+        detallePacientes += `• **Habitación ${h.nombre}**: ${o.camas_ocupadas} paciente${o.camas_ocupadas !== 1 ? 's' : ''}\n`;
+      });
+      
+      const labelInicio = piso ? `**${piso.nombre_piso}**` : '**Todo el hospital**';
+      return `${labelInicio} hay **${stats.ocupadasReales}** paciente${stats.ocupadasReales !== 1 ? 's' : ''} internado${stats.ocupadasReales !== 1 ? 's' : ''} de ${stats.total} camas totales.\n\n**Detalle:**\n${detallePacientes}`;
+    }
+    
+    if (contextoAnterior.tipo === 'camas') {
+      const piso = encontrarPisoPorNumero(pisos, contextoAnterior.texto);
+      const habs = piso
+        ? habitaciones.filter(h => String(h.piso_id) === String(piso.id))
+        : habitaciones;
+      
+      const stats = calcularStats(habs.map(h => ocupacion[h.id]).filter(Boolean));
+      let detalleCamas = '';
+      habs.filter(h => ocupacion[h.id]?.tipo_habitacion === 'activa').forEach(h => {
+        const o = ocupacion[h.id];
+        if (o) {
+          const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
+          detalleCamas += `• **Habitación ${h.nombre}**: ${o.total_camas} totales, ${o.camas_ocupadas} ocupadas, ${camasLibres} libres`;
+          if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
+            detalleCamas += ' (camas bloqueadas por aislamiento)';
+          }
+          if (o.informacion_ampliatoria) {
+            detalleCamas += ` - Servicio: **${o.informacion_ampliatoria}**`;
+          }
+          detalleCamas += '\n';
+        }
+      });
+      
+      const labelInicio = piso ? `**${piso.nombre_piso}**` : '**Todo el hospital**';
+      return `${labelInicio} hay **${stats.total}** camas en habitaciones activas (${stats.ocupadas} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).\n\n**Detalle:**\n${detalleCamas}`;
+    }
+  }
 
   // Detectar si menciona un piso
   const piso = encontrarPisoPorNumero(pisos, texto);
@@ -544,6 +657,7 @@ const AsistenteIA = ({ pisos }) => {
   const [datosListos, setDatosListos] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [contextoAnterior, setContextoAnterior] = useState(null);
   const mensajesEndRef = useRef(null);
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -638,14 +752,26 @@ const AsistenteIA = ({ pisos }) => {
       return;
     }
 
-    const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion });
+    const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion, contextoAnterior });
     setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
+    
+    // Guardar contexto para futuras respuestas
+    const n = norm(textoInput);
+    if (encontrarServicios(textoInput, ocupacion)) {
+      setContextoAnterior({ tipo: 'servicio', texto: textoInput });
+    } else if (/paciente|pacientes/.test(n)) {
+      setContextoAnterior({ tipo: 'pacientes', texto: textoInput });
+    } else if (/cama/.test(n)) {
+      setContextoAnterior({ tipo: 'camas', texto: textoInput });
+    } else {
+      setContextoAnterior(null);
+    }
     
     // Reproducir respuesta por voz automáticamente
     setTimeout(() => {
       speak(respuesta.replace(/\*\*/g, '').replace(/·/g, ''));
     }, 500);
-  }, [cargando, pisos, habitaciones, ocupacion, speak]);
+  }, [cargando, pisos, habitaciones, ocupacion, speak, contextoAnterior]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
