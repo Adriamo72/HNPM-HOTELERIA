@@ -134,12 +134,7 @@ function responder(texto, { pisos, habitaciones, ocupacion, contextoAnterior }) 
   const n = norm(texto);
 
   // Detectar si es una respuesta de confirmación para detalles
-  console.log('DEBUG: Contexto anterior:', contextoAnterior);
-  console.log('DEBUG: Texto actual:', n);
-  console.log('DEBUG: Es respuesta de confirmación:', contextoAnterior && (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar')));
-  
   if (contextoAnterior && (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar'))) {
-    console.log('DEBUG: Entrando a lógica de detalles');
     // Si el usuario confirma que quiere detalles, proporcionarlos
     if (contextoAnterior.tipo === 'servicio') {
       const servicios = encontrarServicios(contextoAnterior.texto, ocupacion);
@@ -648,7 +643,7 @@ function responder(texto, { pisos, habitaciones, ocupacion, contextoAnterior }) 
     );
   }
 
-  return 'No entendí la pregunta. Podés preguntarme por ejemplo:\n• ¿Cuántas habitaciones hay en el 6to piso?\n• ¿Cuántas camas libres hay?\n• ¿Cuál es el porcentaje de ocupación?\n• Resumen general del hospital\n• ¿Cuántas habitaciones tiene pediatría?\n• ¿Cuántas camas ocupadas tiene cardiología?\n• ¿Cuántas camas libres tiene clínica I?\n• ¿Cuántas camas bloqueadas tiene clínica II?\n• ¿Cuántas oficinas hay en el hospital?\n• ¿Cuántas salas de guardia hay?';
+  return 'No entendí la pregunta. Podés preguntarme:\n\n• **Estados generales:** ¿Cuántas habitaciones/camas hay? ¿Cuál es el porcentaje de ocupación?\n• **Por piso:** ¿Cuántas habitaciones en el 6to piso? ¿Cuántos pacientes en el 4to?\n• **Por servicio:** ¿Cuántas camas tiene pediatría? ¿Cuántos pacientes en cardiología?\n• **Detalles:** ¿Cuántas camas libres/ocupadas? ¿Cuántas bloqueadas por aislamiento?\n• **Específico:** ¿Qué estado tiene la habitación 344? ¿Cuál es el servicio de la habitación 301?\n\nSi te ofrezco detalles y respondés "si", te daré la información completa.';
 }
 
 // ==================== Componente principal ====================
@@ -759,29 +754,18 @@ const AsistenteIA = ({ pisos }) => {
 
     // Guardar contexto para futuras respuestas (antes de generar respuesta)
     const n = norm(textoInput);
-    console.log('DEBUG: Guardando contexto para:', textoInput);
-    console.log('DEBUG: Es respuesta de confirmación:', (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar')));
-    console.log('DEBUG: Es servicio:', encontrarServicios(textoInput, ocupacion));
-    console.log('DEBUG: Es pacientes:', /paciente|pacientes/.test(n));
-    console.log('DEBUG: Es camas:', /cama/.test(n));
     
     // Si es una respuesta de confirmación, no limpiar el contexto
     if (!(n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar'))) {
       if (encontrarServicios(textoInput, ocupacion)) {
-        console.log('DEBUG: Guardando contexto de servicio');
         setContextoAnterior({ tipo: 'servicio', texto: textoInput });
       } else if (/paciente|pacientes/.test(n)) {
-        console.log('DEBUG: Guardando contexto de pacientes');
         setContextoAnterior({ tipo: 'pacientes', texto: textoInput });
       } else if (/cama/.test(n)) {
-        console.log('DEBUG: Guardando contexto de camas');
         setContextoAnterior({ tipo: 'camas', texto: textoInput });
       } else {
-        console.log('DEBUG: Limpiando contexto');
         setContextoAnterior(null);
       }
-    } else {
-      console.log('DEBUG: Manteniendo contexto existente para respuesta de confirmación');
     }
 
     const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion, contextoAnterior });
