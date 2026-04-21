@@ -26,6 +26,8 @@ const VisualizadorDashboard = () => {
   const [cargandoRechazos, setCargandoRechazos] = useState(false);
   const [errorRechazos, setErrorRechazos] = useState('');
   const [rechazosEliminando, setRechazosEliminando] = useState([]);
+  const [habitaciones, setHabitaciones] = useState([]);
+  const [ocupacion, setOcupacion] = useState({});
 
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STORAGE_RECHAZOS_LEIDOS = 'rechazos_pacientes_leidos_visualizador';
@@ -244,12 +246,19 @@ const VisualizadorDashboard = () => {
     
     try {
       // Cargar pisos y habitaciones en paralelo
-      const [resPisos, resHabs] = await Promise.all([
+      const [resPisos, resHabs, resHabitaciones, resOcupacion] = await Promise.all([
         supabase.from('pisos').select('*').order('nombre_piso'),
         supabase.from('habitaciones_especiales').select('*').order('nombre'),
+        supabase.from('habitaciones').select('*').order('nombre'),
+        supabase.from('ocupacion').select('*').order('habitacion_id'),
       ]);
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
+      setHabitaciones(resHabitaciones.data || []);
+      setOcupacion(resOcupacion.data?.reduce((acc, curr) => {
+        acc[curr.habitacion_id] = curr;
+        return acc;
+      }, {}) || {});
       
       // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
       if (resPisos.data && resPisos.data.length > 0) {
@@ -370,6 +379,100 @@ const VisualizadorDashboard = () => {
 
   const rechazosNoLeidos = rechazosPacientes.filter(r => !rechazosLeidos.includes(r.id)).length;
 
+  // Helper functions for room statistics
+  const calcularEstadosHabitaciones = () => {
+    if (!habitaciones.length || !Object.keys(ocupacion).length) {
+      return {
+        internacion: 0,
+        reparacion: 0,
+        otros: 0,
+        total: 0
+      };
+    }
+
+    const stats = {
+      internacion: 0,
+      reparacion: 0,
+      otros: 0,
+      total: 0
+    };
+
+    habitaciones.forEach(habitacion => {
+      const ocu = ocupacion[habitacion.id];
+      if (ocu) {
+        stats.total++;
+        if (ocu.tipo_habitacion === 'activa') {
+          stats.internacion++;
+        } else if (ocu.tipo_habitacion === 'reparacion') {
+          stats.reparacion++;
+        } else if (ocu.tipo_habitacion === 'otros') {
+          stats.otros++;
+        }
+      }
+    });
+
+    return stats;
+  };
+
+  const generarPDFHabitaciones = () => {
+    // Importar jsPDF dinámicamente
+    import('jspdf').then((jsPDF) => {
+      const doc = new jsPDF.default();
+      
+      // Configuración de página
+      doc.setFontSize(16);
+      doc.text('Reporte de Estados de Habitaciones', 20, 20);
+      
+      doc.setFontSize(12);
+      const fecha = new Date().toLocaleDateString('es-AR');
+      doc.text(`Fecha: ${fecha}`, 20, 30);
+      
+      // Preparar datos para la tabla
+      const datosTabla = habitaciones.map(habitacion => {
+        const ocu = ocupacion[habitacion.id];
+        const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+        
+        return [
+          piso?.nombre_piso || 'Sin piso',
+          habitacion.nombre || 'Sin nombre',
+          ocu ? String(ocu.camas_ocupadas || 0) : '0',
+          ocu ? String(ocu.total_camas || 0) : '0',
+          ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+          ocu?.informacion_ampliatoria || 'Sin novedades'
+        ];
+      });
+      
+      // Agregar tabla
+      doc.autoTable({
+        head: [['PISO', 'HABITACIÓN', 'CAMAS OCUPADAS', 'CAPACIDAD DE CAMAS', 'AISLACIÓN', 'NOVEDADES']],
+        body: datosTabla,
+        startY: 40,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2
+        },
+        headStyles: {
+          fillColor: [59, 130, 246],
+          textColor: 255
+        },
+        columnStyles: {
+          0: { cellWidth: 25 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 45 }
+        }
+      });
+      
+      // Guardar PDF
+      doc.save(`estados_habitaciones_${new Date().toISOString().split('T')[0]}.pdf`);
+    }).catch(err => {
+      console.error('Error al generar PDF:', err);
+      mostrarSplash('Error al generar PDF');
+    });
+  };
+
   useEffect(() => {
     const actualizarBadgePwa = async () => {
       try {
@@ -398,7 +501,13 @@ const VisualizadorDashboard = () => {
           onClick={() => setActiveTab('croquis')} 
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'croquis' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
-          Pisos
+          Hotelería
+        </button>
+        <button 
+          onClick={() => setActiveTab('estados')} 
+          className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'estados' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Estados
         </button>
         <button 
           onClick={() => setActiveTab('recorridos')} 
@@ -482,6 +591,114 @@ const VisualizadorDashboard = () => {
               <p className="text-slate-400">Selecciona un piso para ver su plano</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Panel ESTADOS */}
+      {activeTab === 'estados' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
+              ESTADOS DE HABITACIONES
+            </h2>
+            <button
+              onClick={generarPDFHabitaciones}
+              className="bg-blue-600 hover:bg-blue-500 text-white transition-colors text-sm flex items-center gap-2 px-4 py-2 rounded-xl"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Descargar PDF
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* HABITACIONES DE INTERNACION */}
+            <div className="bg-green-900/20 border border-green-800/30 rounded-2xl p-6">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-green-400 uppercase tracking-wider mb-2">
+                  HABITACIONES DE INTERNACIÓN
+                </h3>
+                <div className="text-4xl font-bold text-green-300 mb-1">
+                  {calcularEstadosHabitaciones().internacion}
+                </div>
+                <p className="text-sm text-green-500">
+                  habitaciones activas
+                </p>
+              </div>
+            </div>
+
+            {/* HABITACIONES EN REPARACION */}
+            <div className="bg-yellow-900/20 border border-yellow-800/30 rounded-2xl p-6">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-yellow-400 uppercase tracking-wider mb-2">
+                  HABITACIONES EN REPARACIÓN
+                </h3>
+                <div className="text-4xl font-bold text-yellow-300 mb-1">
+                  {calcularEstadosHabitaciones().reparacion}
+                </div>
+                <p className="text-sm text-yellow-500">
+                  habitaciones en mantenimiento
+                </p>
+              </div>
+            </div>
+
+            {/* HABITACIONES OTRAS */}
+            <div className="bg-purple-900/20 border border-purple-800/30 rounded-2xl p-6">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-purple-400 uppercase tracking-wider mb-2">
+                  HABITACIONES OTRAS
+                </h3>
+                <div className="text-4xl font-bold text-purple-300 mb-1">
+                  {calcularEstadosHabitaciones().otros}
+                </div>
+                <p className="text-sm text-purple-500">
+                  habitaciones con estado especial
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Resumen General */}
+          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+            <div className="text-center">
+              <h3 className="text-xl font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                TOTAL DE HABITACIONES HNPM
+              </h3>
+              <div className="text-5xl font-bold text-slate-200 mb-2">
+                {calcularEstadosHabitaciones().total}
+              </div>
+              <p className="text-sm text-slate-400">
+                habitaciones registradas en el sistema
+              </p>
+            </div>
+          </div>
+
+          {/* Información General */}
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-slate-400 font-semibold">HABITACIONES ACTIVAS:</span>
+                <span className="text-slate-200 ml-2">{calcularEstadosHabitaciones().internacion}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-semibold">HABITACIONES EN MANTENIMIENTO:</span>
+                <span className="text-slate-200 ml-2">{calcularEstadosHabitaciones().reparacion}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-semibold">HABITACIONES ESPECIALES:</span>
+                <span className="text-slate-200 ml-2">{calcularEstadosHabitaciones().otros}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-semibold">PORCENTAJE ACTIVAS:</span>
+                <span className="text-slate-200 ml-2">
+                  {calcularEstadosHabitaciones().total > 0 
+                    ? Math.round((calcularEstadosHabitaciones().internacion / calcularEstadosHabitaciones().total) * 100)
+                    : 0}%
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

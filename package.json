@@ -11,6 +11,8 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.3.1",
     "html5-qrcode": "^2.3.8",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "loader": "^2.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
