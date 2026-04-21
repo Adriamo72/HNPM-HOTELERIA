@@ -383,15 +383,17 @@ const VisualizadorDashboard = () => {
   const filtrarHabitacionesPorTipo = (tipo) => {
     return habitaciones.filter(habitacion => {
       const ocu = ocupacion[habitacion.id];
-      if (!ocu) return false;
       
       switch (tipo) {
         case 'ocupacion':
-          return ocu.camas_ocupadas > 0;
+          // Solo habitaciones de internación que estén ocupadas
+          return ocu && ocu.camas_ocupadas > 0 && ocu.tipo_habitacion === 'activa';
         case 'internacion':
+          return ocu && ocu.tipo_habitacion === 'activa';
         case 'reparacion':
+          return ocu && ocu.tipo_habitacion === 'reparacion';
         case 'otros':
-          return ocu.tipo_habitacion === tipo;
+          return ocu && ocu.tipo_habitacion && ocu.tipo_habitacion !== 'activa' && ocu.tipo_habitacion !== 'reparacion';
         default:
           return false;
       }
