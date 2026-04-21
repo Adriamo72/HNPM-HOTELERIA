@@ -28,6 +28,7 @@ const VisualizadorDashboard = () => {
   const [rechazosEliminando, setRechazosEliminando] = useState([]);
   const [habitaciones, setHabitaciones] = useState([]);
   const [ocupacion, setOcupacion] = useState({});
+  const [activeEstadosTab, setActiveEstadosTab] = useState('internacion');
 
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STORAGE_RECHAZOS_LEIDOS = 'rechazos_pacientes_leidos_visualizador';
@@ -379,39 +380,22 @@ const VisualizadorDashboard = () => {
 
   const rechazosNoLeidos = rechazosPacientes.filter(r => !rechazosLeidos.includes(r.id)).length;
 
-  // Helper functions for room statistics
-  const calcularEstadosHabitaciones = () => {
-    if (!habitaciones.length || !Object.keys(ocupacion).length) {
-      return {
-        internacion: 0,
-        reparacion: 0,
-        otros: 0,
-        total: 0
-      };
-    }
-
-    const stats = {
-      internacion: 0,
-      reparacion: 0,
-      otros: 0,
-      total: 0
-    };
-
-    habitaciones.forEach(habitacion => {
+  const filtrarHabitacionesPorTipo = (tipo) => {
+    return habitaciones.filter(habitacion => {
       const ocu = ocupacion[habitacion.id];
-      if (ocu) {
-        stats.total++;
-        if (ocu.tipo_habitacion === 'activa') {
-          stats.internacion++;
-        } else if (ocu.tipo_habitacion === 'reparacion') {
-          stats.reparacion++;
-        } else if (ocu.tipo_habitacion === 'otros') {
-          stats.otros++;
-        }
+      if (!ocu) return false;
+      
+      switch (tipo) {
+        case 'ocupacion':
+          return ocu.camas_ocupadas > 0;
+        case 'internacion':
+        case 'reparacion':
+        case 'otros':
+          return ocu.tipo_habitacion === tipo;
+        default:
+          return false;
       }
     });
-
-    return stats;
   };
 
   const generarPDFHabitaciones = () => {
@@ -427,26 +411,88 @@ const VisualizadorDashboard = () => {
       const fecha = new Date().toLocaleDateString('es-AR');
       doc.text(`Fecha: ${fecha}`, 20, 30);
       
-      // Preparar datos para la tabla
-      const datosTabla = habitaciones.map(habitacion => {
-        const ocu = ocupacion[habitacion.id];
-        const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-        
-        return [
-          piso?.nombre_piso || 'Sin piso',
-          habitacion.nombre || 'Sin nombre',
-          ocu ? String(ocu.camas_ocupadas || 0) : '0',
-          ocu ? String(ocu.total_camas || 0) : '0',
-          ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
-          ocu?.informacion_ampliatoria || 'Sin novedades'
-        ];
-      });
+      // Preparar datos para la tabla según la pestaña activa
+      let datosTabla = [];
+      let titulo = '';
+      
+      switch(activeEstadosTab) {
+        case 'internacion':
+          titulo = 'Habitaciones de Internación';
+          datosTabla = filtrarHabitacionesPorTipo('internacion').map(habitacion => {
+            const ocu = ocupacion[habitacion.id];
+            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+            
+            return [
+              piso?.nombre_piso || 'Sin piso',
+              habitacion.nombre || 'Sin nombre',
+              ocu ? String(ocu.camas_ocupadas || 0) : '0',
+              ocu ? String(ocu.total_camas || 0) : '0',
+              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+              ocu?.informacion_ampliatoria || 'Sin novedades'
+            ];
+          });
+          break;
+        case 'reparacion':
+          titulo = 'Habitaciones en Reparación';
+          datosTabla = filtrarHabitacionesPorTipo('reparacion').map(habitacion => {
+            const ocu = ocupacion[habitacion.id];
+            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+            
+            return [
+              piso?.nombre_piso || 'Sin piso',
+              habitacion.nombre || 'Sin nombre',
+              ocu ? String(ocu.camas_ocupadas || 0) : '0',
+              ocu ? String(ocu.total_camas || 0) : '0',
+              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+              ocu?.informacion_ampliatoria || 'Sin novedades'
+            ];
+          });
+          break;
+        case 'otros':
+          titulo = 'Habitaciones Otras';
+          datosTabla = filtrarHabitacionesPorTipo('otros').map(habitacion => {
+            const ocu = ocupacion[habitacion.id];
+            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+            
+            return [
+              piso?.nombre_piso || 'Sin piso',
+              habitacion.nombre || 'Sin nombre',
+              ocu ? String(ocu.camas_ocupadas || 0) : '0',
+              ocu ? String(ocu.total_camas || 0) : '0',
+              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+              ocu?.informacion_ampliatoria || 'Sin novedades'
+            ];
+          });
+          break;
+        case 'ocupacion':
+          titulo = 'Habitaciones Ocupadas';
+          datosTabla = filtrarHabitacionesPorTipo('ocupacion').map(habitacion => {
+            const ocu = ocupacion[habitacion.id];
+            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+            
+            return [
+              piso?.nombre_piso || 'Sin piso',
+              habitacion.nombre || 'Sin nombre',
+              ocu ? String(ocu.camas_ocupadas || 0) : '0',
+              ocu ? String(ocu.total_camas || 0) : '0',
+              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+              ocu?.informacion_ampliatoria || 'Sin novedades'
+            ];
+          });
+          break;
+        default:
+          titulo = 'Habitaciones';
+          datosTabla = [];
+          break;
+      }
+      
+      doc.text(titulo, 20, 40);
       
       // Agregar tabla
       doc.autoTable({
         head: [['PISO', 'HABITACIÓN', 'CAMAS OCUPADAS', 'CAPACIDAD DE CAMAS', 'AISLACIÓN', 'NOVEDADES']],
         body: datosTabla,
-        startY: 40,
+        startY: 50,
         styles: {
           fontSize: 8,
           cellPadding: 2
@@ -612,91 +658,80 @@ const VisualizadorDashboard = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* HABITACIONES DE INTERNACION */}
-            <div className="bg-green-900/20 border border-green-800/30 rounded-2xl p-6">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-green-400 uppercase tracking-wider mb-2">
-                  HABITACIONES DE INTERNACIÓN
-                </h3>
-                <div className="text-4xl font-bold text-green-300 mb-1">
-                  {calcularEstadosHabitaciones().internacion}
-                </div>
-                <p className="text-sm text-green-500">
-                  habitaciones activas
-                </p>
-              </div>
-            </div>
-
-            {/* HABITACIONES EN REPARACION */}
-            <div className="bg-yellow-900/20 border border-yellow-800/30 rounded-2xl p-6">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-yellow-400 uppercase tracking-wider mb-2">
-                  HABITACIONES EN REPARACIÓN
-                </h3>
-                <div className="text-4xl font-bold text-yellow-300 mb-1">
-                  {calcularEstadosHabitaciones().reparacion}
-                </div>
-                <p className="text-sm text-yellow-500">
-                  habitaciones en mantenimiento
-                </p>
-              </div>
-            </div>
-
-            {/* HABITACIONES OTRAS */}
-            <div className="bg-purple-900/20 border border-purple-800/30 rounded-2xl p-6">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-purple-400 uppercase tracking-wider mb-2">
-                  HABITACIONES OTRAS
-                </h3>
-                <div className="text-4xl font-bold text-purple-300 mb-1">
-                  {calcularEstadosHabitaciones().otros}
-                </div>
-                <p className="text-sm text-purple-500">
-                  habitaciones con estado especial
-                </p>
-              </div>
-            </div>
+          {/* Sub-tabs inside ESTADOS */}
+          <div className="flex gap-1 mb-6 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full">
+            <button 
+              onClick={() => setActiveEstadosTab('internacion')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'internacion' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Internación
+            </button>
+            <button 
+              onClick={() => setActiveEstadosTab('reparacion')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'reparacion' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Reparación
+            </button>
+            <button 
+              onClick={() => setActiveEstadosTab('otros')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'otros' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Otras
+            </button>
+            <button 
+              onClick={() => setActiveEstadosTab('ocupacion')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'ocupacion' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Ocupación
+            </button>
           </div>
 
-          {/* Resumen General */}
+          {/* Table content based on active sub-tab */}
           <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-            <div className="text-center">
-              <h3 className="text-xl font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                TOTAL DE HABITACIONES HNPM
-              </h3>
-              <div className="text-5xl font-bold text-slate-200 mb-2">
-                {calcularEstadosHabitaciones().total}
-              </div>
-              <p className="text-sm text-slate-400">
-                habitaciones registradas en el sistema
-              </p>
-            </div>
-          </div>
-
-          {/* Información General */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-slate-400 font-semibold">HABITACIONES ACTIVAS:</span>
-                <span className="text-slate-200 ml-2">{calcularEstadosHabitaciones().internacion}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-semibold">HABITACIONES EN MANTENIMIENTO:</span>
-                <span className="text-slate-200 ml-2">{calcularEstadosHabitaciones().reparacion}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-semibold">HABITACIONES ESPECIALES:</span>
-                <span className="text-slate-200 ml-2">{calcularEstadosHabitaciones().otros}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-semibold">PORCENTAJE ACTIVAS:</span>
-                <span className="text-slate-200 ml-2">
-                  {calcularEstadosHabitaciones().total > 0 
-                    ? Math.round((calcularEstadosHabitaciones().internacion / calcularEstadosHabitaciones().total) * 100)
-                    : 0}%
-                </span>
-              </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">PISO</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">HABITACIÓN</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">CAMAS OCUPADAS</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">CAPACIDAD CAMAS</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">AISLACIÓN</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">NOVEDADES</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtrarHabitacionesPorTipo(activeEstadosTab).map(habitacion => {
+                    const ocu = ocupacion[habitacion.id];
+                    const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+                    
+                    return (
+                      <tr key={habitacion.id} className="border-b border-slate-800 hover:bg-slate-800/50">
+                        <td className="px-4 py-3 text-slate-200">{piso?.nombre_piso || 'Sin piso'}</td>
+                        <td className="px-4 py-3 text-slate-200">{habitacion.nombre || 'Sin nombre'}</td>
+                        <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.camas_ocupadas || 0) : '0'}</td>
+                        <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.total_camas || 0) : '0'}</td>
+                        <td className="px-4 py-3 text-slate-200">
+                          {ocu?.observaciones?.includes('AISLAMIENTO') ? (
+                            <span className="text-red-400 font-semibold">SI</span>
+                          ) : (
+                            <span className="text-green-400">NO</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={ocu?.informacion_ampliatoria || 'Sin novedades'}>
+                          {ocu?.informacion_ampliatoria || 'Sin novedades'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              
+              {filtrarHabitacionesPorTipo(activeEstadosTab).length === 0 && (
+                <div className="text-center py-8 text-slate-400">
+                  No hay habitaciones para mostrar en esta categoría
+                </div>
+              )}
             </div>
           </div>
         </div>
