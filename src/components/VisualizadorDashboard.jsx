@@ -29,6 +29,7 @@ const VisualizadorDashboard = () => {
   const [habitaciones, setHabitaciones] = useState([]);
   const [ocupacion, setOcupacion] = useState({});
   const [activeEstadosTab, setActiveEstadosTab] = useState('internacion');
+  const [filterColumn, setFilterColumn] = useState('');
 
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STORAGE_RECHAZOS_LEIDOS = 'rechazos_pacientes_leidos_visualizador';
@@ -247,15 +248,15 @@ const VisualizadorDashboard = () => {
     
     try {
       // Cargar pisos y habitaciones en paralelo
-      const [resPisos, resHabs, resHabitaciones, resOcupacion] = await Promise.all([
+      const [resPisos, resHabs, resOcupacion] = await Promise.all([
         supabase.from('pisos').select('*').order('nombre_piso'),
         supabase.from('habitaciones_especiales').select('*').order('nombre'),
-        supabase.from('habitaciones').select('*').order('nombre'),
-        supabase.from('ocupacion').select('*').order('habitacion_id'),
+        supabase.from('ocupacion_habitaciones').select('*').order('habitacion_id'),
       ]);
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
-      setHabitaciones(resHabitaciones.data || []);
+      // Usar habitaciones_especiales como habitaciones principales
+      setHabitaciones(resHabs.data || []);
       setOcupacion(resOcupacion.data?.reduce((acc, curr) => {
         acc[curr.habitacion_id] = curr;
         return acc;
@@ -382,7 +383,7 @@ const VisualizadorDashboard = () => {
 
   const filtrarHabitacionesPorTipo = (tipo) => {
     return habitaciones.filter(habitacion => {
-      const ocu = ocupacion[habitacion.id];
+      const ocu = ocupacion[String(habitacion.id)];
       
       switch (tipo) {
         case 'ocupacion':
@@ -416,6 +417,13 @@ const VisualizadorDashboard = () => {
       // Preparar datos para la tabla según la pestaña activa
       let datosTabla = [];
       let titulo = '';
+      let headers = ['PISO', 'HABITACIÓN'];
+      
+      // Determinar columnas según el tipo de pestaña
+      if (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') {
+        headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN');
+      }
+      headers.push('NOVEDADES');
       
       switch(activeEstadosTab) {
         case 'internacion':
@@ -443,9 +451,6 @@ const VisualizadorDashboard = () => {
             return [
               piso?.nombre_piso || 'Sin piso',
               habitacion.nombre || 'Sin nombre',
-              ocu ? String(ocu.camas_ocupadas || 0) : '0',
-              ocu ? String(ocu.total_camas || 0) : '0',
-              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
               ocu?.informacion_ampliatoria || 'Sin novedades'
             ];
           });
@@ -459,9 +464,6 @@ const VisualizadorDashboard = () => {
             return [
               piso?.nombre_piso || 'Sin piso',
               habitacion.nombre || 'Sin nombre',
-              ocu ? String(ocu.camas_ocupadas || 0) : '0',
-              ocu ? String(ocu.total_camas || 0) : '0',
-              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
               ocu?.informacion_ampliatoria || 'Sin novedades'
             ];
           });
@@ -492,7 +494,7 @@ const VisualizadorDashboard = () => {
       
       // Agregar tabla
       doc.autoTable({
-        head: [['PISO', 'HABITACIÓN', 'CAMAS OCUPADAS', 'CAPACIDAD DE CAMAS', 'AISLACIÓN', 'NOVEDADES']],
+        head: headers,
         body: datosTabla,
         startY: 50,
         styles: {
@@ -688,40 +690,209 @@ const VisualizadorDashboard = () => {
             </button>
           </div>
 
+          {/* Resúmenes totales entre botones y tabla */}
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              {activeEstadosTab === 'internacion' && (
+                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Internación</div>
+                  <div className="text-2xl font-bold text-green-400">
+                    {filtrarHabitacionesPorTipo('internacion').length}
+                  </div>
+                  <div className="text-xs text-slate-500">Total de habitaciones</div>
+                </div>
+              )}
+              
+              {activeEstadosTab === 'reparacion' && (
+                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Reparación</div>
+                  <div className="text-2xl font-bold text-orange-400">
+                    {filtrarHabitacionesPorTipo('reparacion').length}
+                  </div>
+                  <div className="text-xs text-slate-500">Total de habitaciones en reparación</div>
+                </div>
+              )}
+              
+              {activeEstadosTab === 'otros' && (
+                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Otros fines</div>
+                  <div className="text-2xl font-bold text-purple-400">
+                    {filtrarHabitacionesPorTipo('otros').length}
+                  </div>
+                  <div className="text-xs text-slate-500">Total de habitaciones para otros fines</div>
+                </div>
+              )}
+              
+              {activeEstadosTab === 'ocupacion' && (
+                <>
+                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Habitaciones ocupadas</div>
+                    <div className="text-2xl font-bold text-blue-400">
+                      {filtrarHabitacionesPorTipo('ocupacion').length}
+                    </div>
+                    <div className="text-xs text-slate-500">Total de habitaciones ocupadas</div>
+                  </div>
+                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas ocupadas</div>
+                    <div className="text-2xl font-bold text-blue-400">
+                      {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
+                        const ocu = ocupacion[hab.id];
+                        return total + (ocu?.camas_ocupadas || 0);
+                      }, 0)}
+                    </div>
+                    <div className="text-xs text-slate-500">Total de camas ocupadas</div>
+                  </div>
+                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas bloqueadas por patologías</div>
+                    <div className="text-2xl font-bold text-red-400">
+                      {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
+                        const ocu = ocupacion[hab.id];
+                        return total + (ocu?.observaciones?.includes('AISLAMIENTO') ? (ocu?.camas_ocupadas || 0) : 0);
+                      }, 0)}
+                    </div>
+                    <div className="text-xs text-slate-500">Total de camas bloqueadas por patologías</div>
+                  </div>
+                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas disponibles</div>
+                    <div className="text-2xl font-bold text-green-400">
+                      {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
+                        const ocu = ocupacion[hab.id];
+                        return total + ((ocu?.total_camas || 0) - (ocu?.camas_ocupadas || 0));
+                      }, 0)}
+                    </div>
+                    <div className="text-xs text-slate-500">Total de camas disponibles</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
           {/* Table content based on active sub-tab */}
           <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">PISO</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">HABITACIÓN</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">CAMAS OCUPADAS</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">CAPACIDAD CAMAS</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">AISLACIÓN</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">NOVEDADES</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      PISO
+                      {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar piso..."
+                            value={filterColumn === 'piso' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('piso')}
+                          />
+                        </div>
+                      )}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      HABITACIÓN
+                      {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar habitación..."
+                            value={filterColumn === 'habitacion' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('habitacion')}
+                          />
+                        </div>
+                      )}
+                    </th>
+                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        CAMAS OCUPADAS
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar..."
+                            value={filterColumn === 'camas_ocupadas' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('camas_ocupadas')}
+                          />
+                        </div>
+                      </th>
+                    )}
+                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        CAPACIDAD CAMAS
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar..."
+                            value={filterColumn === 'total_camas' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('total_camas')}
+                          />
+                        </div>
+                      </th>
+                    )}
+                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        AISLACIÓN
+                        <div className="mt-1">
+                          <select
+                            value={filterColumn === 'aislacion' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('aislacion')}
+                          >
+                            <option value="">Todos</option>
+                            <option value="SI">SI</option>
+                            <option value="NO">NO</option>
+                          </select>
+                        </div>
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      NOVEDADES
+                      {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar..."
+                            value={filterColumn === 'novedades' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('novedades')}
+                          />
+                        </div>
+                      )}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtrarHabitacionesPorTipo(activeEstadosTab).map(habitacion => {
-                    const ocu = ocupacion[habitacion.id];
+                    const ocu = ocupacion[String(habitacion.id)];
                     const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
                     
                     return (
                       <tr key={habitacion.id} className="border-b border-slate-800 hover:bg-slate-800/50">
                         <td className="px-4 py-3 text-slate-200">{piso?.nombre_piso || 'Sin piso'}</td>
                         <td className="px-4 py-3 text-slate-200">{habitacion.nombre || 'Sin nombre'}</td>
-                        <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.camas_ocupadas || 0) : '0'}</td>
-                        <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.total_camas || 0) : '0'}</td>
-                        <td className="px-4 py-3 text-slate-200">
-                          {ocu?.observaciones?.includes('AISLAMIENTO') ? (
-                            <span className="text-red-400 font-semibold">SI</span>
-                          ) : (
-                            <span className="text-green-400">NO</span>
-                          )}
-                        </td>
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                          <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.camas_ocupadas || 0) : '0'}</td>
+                        )}
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                          <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.total_camas || 0) : '0'}</td>
+                        )}
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                          <td className="px-4 py-3 text-slate-200">
+                            {ocu?.observaciones?.includes('AISLAMIENTO') ? (
+                              <span className="text-red-400 font-semibold">SI</span>
+                            ) : (
+                              <span className="text-green-400">NO</span>
+                            )}
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={ocu?.informacion_ampliatoria || 'Sin novedades'}>
-                          {ocu?.informacion_ampliatoria || 'Sin novedades'}
+                          {(activeEstadosTab === 'internacion' || activeEstadosTab === 'otros' || activeEstadosTab === 'ocupacion') ? (ocu?.informacion_ampliatoria || 'Sin novedades') : 'Sin novedad'}
                         </td>
                       </tr>
                     );

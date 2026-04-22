@@ -9,7 +9,11 @@ import AsistenteIA from './AsistenteIA';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
-    const [personal, setPersonal] = useState([]);
+  const [activeEstadosTab, setActiveEstadosTab] = useState('internacion');
+  const [filterColumn, setFilterColumn] = useState('');
+  const [habitaciones, setHabitaciones] = useState([]);
+  const [ocupacion, setOcupacion] = useState({});
+  const [personal, setPersonal] = useState([]);
   const [pisos, setPisos] = useState([]);
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [admins, setAdmins] = useState([]);
@@ -108,8 +112,10 @@ const AdminDashboard = () => {
             supabase.from('personal').select('*').order('apellido'),
           ]);
           setPisos(resPisos.data || []);
+          // Usar habitaciones_especiales como habitaciones principales
           setHabitacionesEspeciales(resHabs.data || []);
-          setPersonal(resPers.data || []);
+          setHabitaciones(resHabs.data || []);
+          await cargarEstadoHabitaciones(resHabs.data || []);
           // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
           if (resPisos.data && resPisos.data.length > 0) {
             setPisoSeleccionado(prev => {
@@ -256,6 +262,7 @@ const AdminDashboard = () => {
       }
     });
 
+    // Actualizar habitacionStatus para la funcionalidad existente
     const next = {};
     habitaciones.forEach(hab => {
       const estado = estadoPorHabitacion[hab.id];
@@ -271,6 +278,15 @@ const AdminDashboard = () => {
       ...prev,
       ...next
     }));
+
+    // Actualizar ocupacion para la funcionalidad ESTADOS
+    const ocupacionMap = {};
+    (data || []).forEach(e => {
+      if (!ocupacionMap[String(e.habitacion_id)]) {
+        ocupacionMap[String(e.habitacion_id)] = e;
+      }
+    });
+    setOcupacion(ocupacionMap);
   } catch (error) {
     console.error('Error cargando estado de habitaciones:', error);
   }
@@ -1595,6 +1611,149 @@ const eliminarVisualizador = async (visId, usuario) => {
     return fecha.toLocaleDateString('es-AR', opciones);
   };
 
+  // ==================== FUNCIONES PARA ESTADOS ====================
+  const filtrarHabitacionesPorTipo = (tipo) => {
+    return habitaciones.filter(habitacion => {
+      const ocu = ocupacion[String(habitacion.id)];
+      
+      switch (tipo) {
+        case 'ocupacion':
+          // Solo habitaciones de internación que estén ocupadas
+          return ocu && ocu.camas_ocupadas > 0 && ocu.tipo_habitacion === 'activa';
+        case 'internacion':
+          return ocu && ocu.tipo_habitacion === 'activa';
+        case 'reparacion':
+          return ocu && ocu.tipo_habitacion === 'reparacion';
+        case 'otros':
+          return ocu && ocu.tipo_habitacion && ocu.tipo_habitacion !== 'activa' && ocu.tipo_habitacion !== 'reparacion';
+        default:
+          return false;
+      }
+    });
+  };
+
+  const generarPDFHabitaciones = () => {
+    // Importar jsPDF dinámicamente
+    import('jspdf').then((jsPDF) => {
+      const doc = new jsPDF.default();
+      
+      // Configuración de página
+      doc.setFontSize(16);
+      doc.text('Reporte de Estados de Habitaciones', 20, 20);
+      
+      doc.setFontSize(12);
+      const fecha = new Date().toLocaleDateString('es-AR');
+      doc.text(`Fecha: ${fecha}`, 20, 30);
+      
+      // Preparar datos para la tabla según la pestaña activa
+      let datosTabla = [];
+      let titulo = '';
+      let headers = ['PISO', 'HABITACIÓN'];
+      
+      // Determinar columnas según el tipo de pestaña
+      if (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') {
+        headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN');
+      }
+      headers.push('NOVEDADES');
+      
+      switch(activeEstadosTab) {
+        case 'internacion':
+          titulo = 'Habitaciones de Internación';
+          datosTabla = filtrarHabitacionesPorTipo('internacion').map(habitacion => {
+            const ocu = ocupacion[String(habitacion.id)];
+            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+            
+            return [
+              piso?.nombre_piso || 'Sin piso',
+              habitacion.nombre || 'Sin nombre',
+              ocu ? String(ocu.camas_ocupadas || 0) : '0',
+              ocu ? String(ocu.total_camas || 0) : '0',
+              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+              ocu?.informacion_ampliatoria || 'Sin novedades'
+            ];
+          });
+          break;
+        case 'reparacion':
+          titulo = 'Habitaciones en Reparación';
+          datosTabla = filtrarHabitacionesPorTipo('reparacion').map(habitacion => {
+            const ocu = ocupacion[String(habitacion.id)];
+            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+            
+            return [
+              piso?.nombre_piso || 'Sin piso',
+              habitacion.nombre || 'Sin nombre',
+              ocu?.informacion_ampliatoria || 'Sin novedades'
+            ];
+          });
+          break;
+        case 'otros':
+          titulo = 'Habitaciones Otras';
+          datosTabla = filtrarHabitacionesPorTipo('otros').map(habitacion => {
+            const ocu = ocupacion[String(habitacion.id)];
+            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+            
+            return [
+              piso?.nombre_piso || 'Sin piso',
+              habitacion.nombre || 'Sin nombre',
+              ocu?.informacion_ampliatoria || 'Sin novedades'
+            ];
+          });
+          break;
+        case 'ocupacion':
+          titulo = 'Habitaciones Ocupadas';
+          datosTabla = filtrarHabitacionesPorTipo('ocupacion').map(habitacion => {
+            const ocu = ocupacion[String(habitacion.id)];
+            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+            
+            return [
+              piso?.nombre_piso || 'Sin piso',
+              habitacion.nombre || 'Sin nombre',
+              ocu ? String(ocu.camas_ocupadas || 0) : '0',
+              ocu ? String(ocu.total_camas || 0) : '0',
+              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+              ocu?.informacion_ampliatoria || 'Sin novedades'
+            ];
+          });
+          break;
+        default:
+          titulo = 'Habitaciones';
+          datosTabla = [];
+          break;
+      }
+      
+      doc.text(titulo, 20, 40);
+      
+      // Agregar tabla
+      doc.autoTable({
+        head: [headers],
+        body: datosTabla,
+        startY: 50,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2
+        },
+        headStyles: {
+          fillColor: [59, 130, 246],
+          textColor: 255
+        },
+        columnStyles: {
+          0: { cellWidth: 25 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 45 }
+        }
+      });
+      
+      // Guardar PDF
+      doc.save(`estados_habitaciones_${new Date().toISOString().split('T')[0]}.pdf`);
+    }).catch(err => {
+      console.error('Error al generar PDF:', err);
+      mostrarSplash('Error al generar PDF');
+    });
+  };
+
   // ==================== RENDER ====================
   return (
     <div className="p-6 md:p-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
@@ -1617,6 +1776,12 @@ const eliminarVisualizador = async (visId, usuario) => {
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Monitor
+        </button>
+        <button 
+          onClick={() => setActiveTab('estados')} 
+          className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'estados' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Estados
         </button>
         <button 
           onClick={() => setActiveTab('admin')} 
@@ -1716,6 +1881,272 @@ const eliminarVisualizador = async (visId, usuario) => {
             </p>
           </div>
           <RecorridosList />
+        </div>
+      )}
+
+      {/* Panel ESTADOS */}
+      {activeTab === 'estados' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
+              ESTADOS DE HABITACIONES
+            </h2>
+            <button
+              onClick={generarPDFHabitaciones}
+              className="bg-blue-600 hover:bg-blue-500 text-white transition-colors text-sm flex items-center gap-2 px-4 py-2 rounded-xl"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Descargar PDF
+            </button>
+          </div>
+
+          {/* Sub-tabs inside ESTADOS */}
+          <div className="flex gap-1 mb-6 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full">
+            <button 
+              onClick={() => setActiveEstadosTab('internacion')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'internacion' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Internación
+            </button>
+            <button 
+              onClick={() => setActiveEstadosTab('reparacion')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'reparacion' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Reparación
+            </button>
+            <button 
+              onClick={() => setActiveEstadosTab('otros')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'otros' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Otras
+            </button>
+            <button 
+              onClick={() => setActiveEstadosTab('ocupacion')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'ocupacion' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Ocupación
+            </button>
+          </div>
+
+          {/* Resúmenes totales entre botones y tabla */}
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              {activeEstadosTab === 'internacion' && (
+                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Internación</div>
+                  <div className="text-2xl font-bold text-green-400">
+                    {filtrarHabitacionesPorTipo('internacion').length}
+                  </div>
+                  <div className="text-xs text-slate-500">Total de habitaciones</div>
+                </div>
+              )}
+              
+              {activeEstadosTab === 'reparacion' && (
+                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Reparación</div>
+                  <div className="text-2xl font-bold text-orange-400">
+                    {filtrarHabitacionesPorTipo('reparacion').length}
+                  </div>
+                  <div className="text-xs text-slate-500">Total de habitaciones en reparación</div>
+                </div>
+              )}
+              
+              {activeEstadosTab === 'otros' && (
+                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Otros fines</div>
+                  <div className="text-2xl font-bold text-purple-400">
+                    {filtrarHabitacionesPorTipo('otros').length}
+                  </div>
+                  <div className="text-xs text-slate-500">Total de habitaciones para otros fines</div>
+                </div>
+              )}
+              
+              {activeEstadosTab === 'ocupacion' && (
+                <>
+                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Habitaciones ocupadas</div>
+                    <div className="text-2xl font-bold text-blue-400">
+                      {filtrarHabitacionesPorTipo('ocupacion').length}
+                    </div>
+                    <div className="text-xs text-slate-500">Total de habitaciones ocupadas</div>
+                  </div>
+                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas ocupadas</div>
+                    <div className="text-2xl font-bold text-blue-400">
+                      {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
+                        const ocu = ocupacion[String(hab.id)];
+                        return total + (ocu?.camas_ocupadas || 0);
+                      }, 0)}
+                    </div>
+                    <div className="text-xs text-slate-500">Total de camas ocupadas</div>
+                  </div>
+                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas bloqueadas por patologías</div>
+                    <div className="text-2xl font-bold text-red-400">
+                      {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
+                        const ocu = ocupacion[String(hab.id)];
+                        return total + (ocu?.observaciones?.includes('AISLAMIENTO') ? (ocu?.camas_ocupadas || 0) : 0);
+                      }, 0)}
+                    </div>
+                    <div className="text-xs text-slate-500">Total de camas bloqueadas por patologías</div>
+                  </div>
+                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
+                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas disponibles</div>
+                    <div className="text-2xl font-bold text-green-400">
+                      {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
+                        const ocu = ocupacion[String(hab.id)];
+                        return total + ((ocu?.total_camas || 0) - (ocu?.camas_ocupadas || 0));
+                      }, 0)}
+                    </div>
+                    <div className="text-xs text-slate-500">Total de camas disponibles</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Table content based on active sub-tab */}
+          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      PISO
+                      {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar piso..."
+                            value={filterColumn === 'piso' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('piso')}
+                          />
+                        </div>
+                      )}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      HABITACIÓN
+                      {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar habitación..."
+                            value={filterColumn === 'habitacion' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('habitacion')}
+                          />
+                        </div>
+                      )}
+                    </th>
+                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        CAMAS OCUPADAS
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar..."
+                            value={filterColumn === 'camas_ocupadas' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('camas_ocupadas')}
+                          />
+                        </div>
+                      </th>
+                    )}
+                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        CAPACIDAD CAMAS
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar..."
+                            value={filterColumn === 'total_camas' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('total_camas')}
+                          />
+                        </div>
+                      </th>
+                    )}
+                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        AISLACIÓN
+                        <div className="mt-1">
+                          <select
+                            value={filterColumn === 'aislacion' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('aislacion')}
+                          >
+                            <option value="">Todos</option>
+                            <option value="SI">SI</option>
+                            <option value="NO">NO</option>
+                          </select>
+                        </div>
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      NOVEDADES
+                      {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar..."
+                            value={filterColumn === 'novedades' ? filterColumn : ''}
+                            onChange={(e) => setFilterColumn(e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                            onFocus={() => setFilterColumn('novedades')}
+                          />
+                        </div>
+                      )}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtrarHabitacionesPorTipo(activeEstadosTab).map(habitacion => {
+                    const ocu = ocupacion[String(habitacion.id)];
+                    const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+                    
+                    return (
+                      <tr key={habitacion.id} className="border-b border-slate-800 hover:bg-slate-800/50">
+                        <td className="px-4 py-3 text-slate-200">{piso?.nombre_piso || 'Sin piso'}</td>
+                        <td className="px-4 py-3 text-slate-200">{habitacion.nombre || 'Sin nombre'}</td>
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                          <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.camas_ocupadas || 0) : '0'}</td>
+                        )}
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                          <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.total_camas || 0) : '0'}</td>
+                        )}
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                          <td className="px-4 py-3 text-slate-200">
+                            {ocu?.observaciones?.includes('AISLAMIENTO') ? (
+                              <span className="text-red-400 font-semibold">SI</span>
+                            ) : (
+                              <span className="text-green-400">NO</span>
+                            )}
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={ocu?.informacion_ampliatoria || 'Sin novedades'}>
+                          {(activeEstadosTab === 'internacion' || activeEstadosTab === 'otros' || activeEstadosTab === 'ocupacion') ? (ocu?.informacion_ampliatoria || 'Sin novedades') : 'Sin novedad'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              
+              {filtrarHabitacionesPorTipo(activeEstadosTab).length === 0 && (
+                <div className="text-center py-8 text-slate-400">
+                  No hay habitaciones para mostrar en esta categoría
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
