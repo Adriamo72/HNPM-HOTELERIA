@@ -1683,7 +1683,6 @@ const eliminarVisualizador = async (visId, usuario) => {
         case 'reparacion':
           titulo = 'Habitaciones en Reparación';
           datosTabla = filtrarHabitacionesPorTipo('reparacion').map(habitacion => {
-            const ocu = ocupacion[String(habitacion.id)];
             const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
             
             return [
