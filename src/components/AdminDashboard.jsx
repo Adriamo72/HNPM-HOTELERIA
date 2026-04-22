@@ -1614,7 +1614,7 @@ const eliminarVisualizador = async (visId, usuario) => {
 
   // ==================== FUNCIONES PARA ESTADOS ====================
   const filtrarHabitacionesPorTipo = (tipo) => {
-    return habitaciones.filter(habitacion => {
+    const resultado = habitaciones.filter(habitacion => {
       const ocu = ocupacion[String(habitacion.id)];
       
       switch (tipo) {
@@ -1631,6 +1631,38 @@ const eliminarVisualizador = async (visId, usuario) => {
           return false;
       }
     });
+    
+    // Debug para OTROS - identificar habitaciones faltantes
+    if (tipo === 'otros') {
+      console.log('=== DEBUG: Investigando habitaciones OTROS faltantes ===');
+      console.log('Habitaciones OTROS en ESTADOS:', resultado.length);
+      console.log('Total habitaciones en habitaciones_especiales:', habitaciones.length);
+      
+      // Lista de habitaciones OTROS esperadas por piso (según conteo visual del usuario)
+      const expectedOtros = {
+        'PISO 6': ['621', '623', '625', '627', '629', '631', '633', '635', '602', '604', '606', '608', '610', '612', '616', '620', '622', '626', '628', '630', '632', '634', '636'],
+        'PISO 5': ['535', '520', '522', '524', '526', '528', '530', '532', '534', '536'],
+        'PISO 4': ['427', '435', '437', '430', '432'],
+        'PISO 3': ['319', '321', '335', '347', '349', '302', '304', '318', '346', '366']
+      };
+      
+      // Verificar cuáles de las habitaciones esperadas están en habitaciones_especiales
+      const habitacionNames = habitaciones.map(h => h.nombre);
+      const faltantes = [];
+      
+      Object.entries(expectedOtros).forEach(([piso, habitacionesExpected]) => {
+        habitacionesExpected.forEach(nombre => {
+          if (!habitacionNames.includes(nombre)) {
+            faltantes.push({ piso, nombre });
+          }
+        });
+      });
+      
+      console.log('Habitaciones OTROS faltantes en habitaciones_especiales:', faltantes);
+      console.log('Habitaciones OTROS encontradas en ESTADOS:', resultado.map(h => ({ nombre: h.nombre, piso: pisos.find(p => p.id === h.piso_id)?.nombre_piso })));
+    }
+    
+    return resultado;
   };
 
   const generarPDFHabitaciones = () => {
