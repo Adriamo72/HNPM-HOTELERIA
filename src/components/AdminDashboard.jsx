@@ -1614,7 +1614,7 @@ const eliminarVisualizador = async (visId, usuario) => {
 
   // ==================== FUNCIONES PARA ESTADOS ====================
   const filtrarHabitacionesPorTipo = (tipo) => {
-    const resultado = habitaciones.filter(habitacion => {
+    return habitaciones.filter(habitacion => {
       const ocu = ocupacion[String(habitacion.id)];
       
       switch (tipo) {
@@ -1631,34 +1631,6 @@ const eliminarVisualizador = async (visId, usuario) => {
           return false;
       }
     });
-    
-    // Debug para OTROS - investigar discrepancia BD vs App
-    if (tipo === 'otros') {
-      console.log('=== DEBUG: Investigando discrepancia OTROS ===');
-      console.log('Base de datos (esperado): 51 habitaciones OTROS');
-      console.log('Aplicación (mostrado):', resultado.length, 'habitaciones OTROS');
-      console.log('Total habitaciones cargadas:', habitaciones.length);
-      console.log('Total ocupación cargada:', Object.keys(ocupacion).length);
-      
-      // Contar cuántos registros OTROS hay en ocupación
-      const otrosEnOcupacion = Object.values(ocupacion).filter(ocu => ocu.tipo_habitacion === 'otros');
-      console.log('Registros OTROS en ocupación:', otrosEnOcupacion.length);
-      
-      // Verificar habitaciones OTROS que no tienen habitación correspondiente
-      const habitacionIds = new Set(habitaciones.map(h => String(h.id)));
-      const otrosSinHabitacion = otrosEnOcupacion.filter(ocu => !habitacionIds.has(String(ocu.habitacion_id)));
-      console.log('OTROS sin habitación correspondiente:', otrosSinHabitacion.length);
-      
-      if (otrosSinHabitacion.length > 0) {
-        console.log('Detalles de OTROS sin habitación:', otrosSinHabitacion.map(ocu => ({
-          habitacion_id: ocu.habitacion_id,
-          piso_id: ocu.piso_id,
-          observaciones: ocu.observaciones
-        })));
-      }
-    }
-    
-    return resultado;
   };
 
   const generarPDFHabitaciones = () => {
