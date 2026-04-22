@@ -306,6 +306,25 @@ const AdminDashboard = () => {
     const otrosEnOcupacionMap = Object.values(ocupacionMap).filter(e => e.tipo_habitacion === 'otros');
     console.log('Registros OTROS en ocupacionMap final:', otrosEnOcupacionMap.length);
     
+    // Identificar qué habitación tiene registros OTROS duplicados
+    const otrosPorHabitacion = {};
+    otrosEnData.forEach(e => {
+      const key = String(e.habitacion_id);
+      if (!otrosPorHabitacion[key]) {
+        otrosPorHabitacion[key] = [];
+      }
+      otrosPorHabitacion[key].push(e);
+    });
+    
+    const duplicados = Object.entries(otrosPorHabitacion).filter(([habitacionId, registros]) => registros.length > 1);
+    if (duplicados.length > 0) {
+      console.log('Habitaciones con registros OTROS duplicados:', duplicados.map(([id, regs]) => ({
+        habitacion_id: id,
+        cantidad: regs.length,
+        detalles: regs.map(r => ({ id: r.id, fecha: r.fecha, observaciones: r.observaciones }))
+      })));
+    }
+    
     setOcupacion(ocupacionMap);
   } catch (error) {
     console.error('Error cargando estado de habitaciones:', error);
