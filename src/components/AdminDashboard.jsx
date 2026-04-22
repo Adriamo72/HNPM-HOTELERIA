@@ -13,7 +13,6 @@ const AdminDashboard = () => {
   const [filterColumn, setFilterColumn] = useState('');
   const [habitaciones, setHabitaciones] = useState([]);
   const [ocupacion, setOcupacion] = useState({});
-  const [personal, setPersonal] = useState([]);
   const [pisos, setPisos] = useState([]);
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [admins, setAdmins] = useState([]);
@@ -106,10 +105,9 @@ const AdminDashboard = () => {
     if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(true);
       try {
         if (tipo === 'croquis' || tipo === 'todos') {
-          const [resPisos, resHabs, resPers] = await Promise.all([
+          const [resPisos, resHabs] = await Promise.all([
             supabase.from('pisos').select('*').order('nombre_piso'),
             supabase.from('habitaciones_especiales').select('*').order('nombre'),
-            supabase.from('personal').select('*').order('apellido'),
           ]);
           setPisos(resPisos.data || []);
           // Usar habitaciones_especiales como habitaciones principales
