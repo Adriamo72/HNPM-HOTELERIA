@@ -247,6 +247,9 @@ const AdminDashboard = () => {
   if (!habitaciones.length) return;
 
   try {
+    console.log('=== DEBUG: cargarEstadoHabitaciones ===');
+    console.log('Habitaciones a procesar:', habitaciones.length);
+    
     const { data, error } = await supabase
       .from('ocupacion_habitaciones')
       .select('*')
@@ -256,6 +259,17 @@ const AdminDashboard = () => {
 
     if (error) throw error;
 
+    console.log('Total registros obtenidos de ocupacion_habitaciones:', data?.length || 0);
+    
+    // Contar registros OTROS en los datos obtenidos
+    const otrosEnData = (data || []).filter(e => e.tipo_habitacion === 'otros');
+    console.log('Registros OTROS en data obtenida:', otrosEnData.length);
+    
+    // Verificar si hay registros OTROS que no tienen habitación correspondiente
+    const habitacionIds = new Set(habitaciones.map(h => h.id));
+    const otrosSinHabitacion = otrosEnData.filter(e => !habitacionIds.has(e.habitacion_id));
+    console.log('Registros OTROS sin habitación correspondiente en esta carga:', otrosSinHabitacion.length);
+    
     const estadoPorHabitacion = {};
     (data || []).forEach(e => {
       if (!estadoPorHabitacion[e.habitacion_id]) {
@@ -287,6 +301,11 @@ const AdminDashboard = () => {
         ocupacionMap[String(e.habitacion_id)] = e;
       }
     });
+    
+    // Contar cuántos OTROS hay en el mapa final
+    const otrosEnOcupacionMap = Object.values(ocupacionMap).filter(e => e.tipo_habitacion === 'otros');
+    console.log('Registros OTROS en ocupacionMap final:', otrosEnOcupacionMap.length);
+    
     setOcupacion(ocupacionMap);
   } catch (error) {
     console.error('Error cargando estado de habitaciones:', error);
