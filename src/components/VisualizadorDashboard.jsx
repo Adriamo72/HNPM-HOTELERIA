@@ -402,9 +402,13 @@ const VisualizadorDashboard = () => {
   };
 
   const generarPDFHabitaciones = () => {
-    // Importar jsPDF dinámicamente
-    import('jspdf').then((jsPDF) => {
+    // Importar jsPDF y autoTable dinámicamente
+    Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable')
+    ]).then(([jsPDF, autoTable]) => {
       const doc = new jsPDF.default();
+      autoTable.default(doc);
       
       // Configuración de página
       doc.setFontSize(16);
@@ -445,18 +449,18 @@ const VisualizadorDashboard = () => {
         case 'reparacion':
           titulo = 'Habitaciones en Reparación';
           datosTabla = filtrarHabitacionesPorTipo('reparacion').map(habitacion => {
-            const ocu = ocupacion[habitacion.id];
+            const ocu = ocupacion[String(habitacion.id)];
             const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
             
             return [
               piso?.nombre_piso || 'Sin piso',
               habitacion.nombre || 'Sin nombre',
-              ocu?.informacion_ampliatoria || 'Sin novedades'
+              ocu?.observaciones || 'Sin novedades'
             ];
           });
           break;
         case 'otros':
-          titulo = 'Habitaciones Otras';
+          titulo = 'Habitaciones Otros';
           datosTabla = filtrarHabitacionesPorTipo('otros').map(habitacion => {
             const ocu = ocupacion[habitacion.id];
             const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
@@ -464,7 +468,7 @@ const VisualizadorDashboard = () => {
             return [
               piso?.nombre_piso || 'Sin piso',
               habitacion.nombre || 'Sin nombre',
-              ocu?.informacion_ampliatoria || 'Sin novedades'
+              ocu?.observaciones || 'Sin novedades'
             ];
           });
           break;
@@ -680,7 +684,7 @@ const VisualizadorDashboard = () => {
               onClick={() => setActiveEstadosTab('otros')} 
               className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'otros' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
-              Otras
+              Otros
             </button>
             <button 
               onClick={() => setActiveEstadosTab('ocupacion')} 
@@ -891,8 +895,17 @@ const VisualizadorDashboard = () => {
                             )}
                           </td>
                         )}
-                        <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={ocu?.informacion_ampliatoria || 'Sin novedades'}>
-                          {(activeEstadosTab === 'internacion' || activeEstadosTab === 'otros' || activeEstadosTab === 'ocupacion') ? (ocu?.informacion_ampliatoria || 'Sin novedades') : 'Sin novedad'}
+                        <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={
+                          activeEstadosTab === 'otros' 
+                            ? (ocu?.observaciones || 'Sin novedades')
+                            : (ocu?.informacion_ampliatoria || 'Sin novedades')
+                        }>
+                          {activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion' 
+                            ? (ocu?.informacion_ampliatoria || 'Sin novedades')
+                            : activeEstadosTab === 'otros'
+                              ? (ocu?.observaciones || 'Sin novedades')
+                              : 'Sin novedad'
+                          }
                         </td>
                       </tr>
                     );
