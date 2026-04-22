@@ -1693,7 +1693,7 @@ const eliminarVisualizador = async (visId, usuario) => {
           });
           break;
         case 'otros':
-          titulo = 'Habitaciones Otras';
+          titulo = 'Habitaciones OTROS';
           datosTabla = filtrarHabitacionesPorTipo('otros').map(habitacion => {
             const ocu = ocupacion[String(habitacion.id)];
             const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
@@ -1926,7 +1926,7 @@ const eliminarVisualizador = async (visId, usuario) => {
               onClick={() => setActiveEstadosTab('otros')} 
               className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'otros' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
-              Otras
+              OTROS
             </button>
             <button 
               onClick={() => setActiveEstadosTab('ocupacion')} 
@@ -1961,11 +1961,11 @@ const eliminarVisualizador = async (visId, usuario) => {
               
               {activeEstadosTab === 'otros' && (
                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Otros fines</div>
+                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">OTROS</div>
                   <div className="text-2xl font-bold text-purple-400">
                     {filtrarHabitacionesPorTipo('otros').length}
                   </div>
-                  <div className="text-xs text-slate-500">Total de habitaciones para otros fines</div>
+                  <div className="text-xs text-slate-500">Total de habitaciones OTROS</div>
                 </div>
               )}
               
