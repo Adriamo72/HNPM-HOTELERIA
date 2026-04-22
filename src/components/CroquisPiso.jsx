@@ -316,16 +316,18 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     if (!habitaciones.length || !pisoId) return;
     
     try {
-      console.log('=== DEBUG: CroquisPiso cargarOcupacion ===');
-      console.log('Piso ID:', pisoId);
-      console.log('Habitaciones totales:', habitaciones.length);
-      console.log('Fecha seleccionada:', fechaSeleccionada);
-      
       const hoy = new Date().toISOString().split('T')[0];
+      
+      // Limitar a 7 días hacia atrás para el histórico
+      const fechaLimite = new Date();
+      fechaLimite.setDate(fechaLimite.getDate() - 7);
+      const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
+      
       let query = supabase
         .from('ocupacion_habitaciones')
         .select('*')
-        .in('habitacion_id', habitaciones.map(h => h.id));
+        .in('habitacion_id', habitaciones.map(h => h.id))
+        .gte('fecha', fechaLimiteStr); // Solo registros de últimos 7 días
 
       if (fechaSeleccionada === hoy) {
         query = query.order('fecha', { ascending: false }).order('actualizado_en', { ascending: false });
@@ -337,38 +339,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
 
       if (error) throw error;
 
-      console.log('Total registros obtenidos en CroquisPiso:', data?.length || 0);
-      
-      // Contar registros OTROS
-      const otrosEnData = (data || []).filter(occ => occ.tipo_habitacion === 'otros');
-      console.log('Registros OTROS en CroquisPiso:', otrosEnData.length);
-      
-      // Mostrar detalles de habitaciones OTROS
-      if (otrosEnData.length > 0) {
-        const otrosDetalles = otrosEnData.map(occ => {
-          const habitacion = habitaciones.find(h => h.id === occ.habitacion_id);
-          return {
-            habitacion_id: occ.habitacion_id,
-            nombre_habitacion: habitacion?.nombre || 'Sin nombre',
-            piso_id: occ.piso_id,
-            tipo_habitacion: occ.tipo_habitacion,
-            observaciones: occ.observaciones,
-            fecha: occ.fecha
-          };
-        });
-        console.log('Detalles habitaciones OTROS en CroquisPiso:', otrosDetalles);
-      }
-
       const ocupMap = {};
       (data || []).forEach(occ => {
         if (!ocupMap[occ.habitacion_id]) {
           ocupMap[occ.habitacion_id] = occ;
         }
       });
-      
-      // Contar OTROS en el mapa final
-      const otrosEnMap = Object.values(ocupMap).filter(occ => occ.tipo_habitacion === 'otros');
-      console.log('Habitaciones OTROS únicas en mapa CroquisPiso:', otrosEnMap.length);
       
       setOcupacion(ocupMap);
     } catch (error) {

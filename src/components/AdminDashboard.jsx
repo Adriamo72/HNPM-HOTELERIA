@@ -247,9 +247,6 @@ const AdminDashboard = () => {
   if (!habitaciones.length) return;
 
   try {
-    console.log('=== DEBUG: cargarEstadoHabitaciones ===');
-    console.log('Habitaciones a procesar:', habitaciones.length);
-    
     const { data, error } = await supabase
       .from('ocupacion_habitaciones')
       .select('*')
@@ -259,17 +256,6 @@ const AdminDashboard = () => {
 
     if (error) throw error;
 
-    console.log('Total registros obtenidos de ocupacion_habitaciones:', data?.length || 0);
-    
-    // Contar registros OTROS en los datos obtenidos
-    const otrosEnData = (data || []).filter(e => e.tipo_habitacion === 'otros');
-    console.log('Registros OTROS en data obtenida:', otrosEnData.length);
-    
-    // Verificar si hay registros OTROS que no tienen habitación correspondiente
-    const habitacionIds = new Set(habitaciones.map(h => h.id));
-    const otrosSinHabitacion = otrosEnData.filter(e => !habitacionIds.has(e.habitacion_id));
-    console.log('Registros OTROS sin habitación correspondiente en esta carga:', otrosSinHabitacion.length);
-    
     const estadoPorHabitacion = {};
     (data || []).forEach(e => {
       if (!estadoPorHabitacion[e.habitacion_id]) {
@@ -302,29 +288,6 @@ const AdminDashboard = () => {
       }
     });
     
-    // Contar cuántos OTROS hay en el mapa final
-    const otrosEnOcupacionMap = Object.values(ocupacionMap).filter(e => e.tipo_habitacion === 'otros');
-    console.log('Registros OTROS en ocupacionMap final:', otrosEnOcupacionMap.length);
-    
-    // Identificar qué habitación tiene registros OTROS duplicados
-    const otrosPorHabitacion = {};
-    otrosEnData.forEach(e => {
-      const key = String(e.habitacion_id);
-      if (!otrosPorHabitacion[key]) {
-        otrosPorHabitacion[key] = [];
-      }
-      otrosPorHabitacion[key].push(e);
-    });
-    
-    const duplicados = Object.entries(otrosPorHabitacion).filter(([habitacionId, registros]) => registros.length > 1);
-    if (duplicados.length > 0) {
-      console.log('Habitaciones con registros OTROS duplicados:', duplicados.map(([id, regs]) => ({
-        habitacion_id: id,
-        cantidad: regs.length,
-        detalles: regs.map(r => ({ id: r.id, fecha: r.fecha, observaciones: r.observaciones }))
-      })));
-    }
-    
     setOcupacion(ocupacionMap);
   } catch (error) {
     console.error('Error cargando estado de habitaciones:', error);
@@ -338,9 +301,10 @@ const AdminDashboard = () => {
   const fecha = new Date().toISOString().split('T')[0];
 
   try {
+    // Buscar registro existente para esta habitación y fecha
     const { data: existing, error: fetchError } = await supabase
       .from('ocupacion_habitaciones')
-      .select('id')
+      .select('*')
       .eq('habitacion_id', habId)
       .eq('fecha', fecha)
       .maybeSingle();
@@ -355,7 +319,7 @@ const AdminDashboard = () => {
       totalCamas = Number(config.camas) || 0;
       camasOcupadas = Number(config.camas_ocupadas) || 0;
       observaciones = null;
-      informacionAmpliatoria = config.informacion_ampliatoria;  // MANTENER VALOR EXISTENTE
+      informacionAmpliatoria = config.informacion_ampliatoria || '';
     } else if (config.tipo === 'EN REPARACION') {
       totalCamas = 1;
       camasOcupadas = 0;
@@ -375,37 +339,41 @@ const AdminDashboard = () => {
       total_camas: totalCamas,
       camas_ocupadas: camasOcupadas,
       observaciones: observaciones,
-      informacion_ampliatoria: informacionAmpliatoria,  // NUEVO
+      informacion_ampliatoria: informacionAmpliatoria,
       actualizado_por: null,
       actualizado_en: new Date().toISOString()
     };
 
-    let error;
     if (existing?.id) {
+      // Actualizar registro existente
       const { error: updateError } = await supabase
         .from('ocupacion_habitaciones')
         .update(payload)
         .eq('id', existing.id);
-      error = updateError;
+      if (updateError) throw updateError;
+      
+      mostrarSplash('Estado actualizado correctamente');
     } else {
+      // Crear nuevo registro solo si no existe
       const { error: insertError } = await supabase
         .from('ocupacion_habitaciones')
         .insert(payload);
-      error = insertError;
+      if (insertError) throw insertError;
+      
+      mostrarSplash('Estado guardado correctamente');
     }
 
-    if (error) {
-      console.error('Error guardando estado de habitación:', error);
-      mostrarSplash('Error al guardar estado');
-      return;
-    }
+    // Limpiar registros antiguos (más de 7 días) para esta habitación
+    await limpiarHistorialAntiguo(habId);
 
-    mostrarSplash('✅ Estado guardado correctamente');
+// ...
+    // Cerrar el panel de edición
     setHabitacionesAbiertas(prev => ({
       ...prev,
       [habId]: false
     }));
     
+    // Actualizar estado local
     const habitacion = habitacionesEspeciales.find(h => h.id === habId);
     setHabitacionStatus(prev => ({
       ...prev,
@@ -418,10 +386,37 @@ const AdminDashboard = () => {
       }
     }));
     
+    // Recargar datos para actualizar la vista
     if (habitacion) await cargarEstadoHabitaciones([habitacion]);
+    
   } catch (error) {
     console.error('Error guardando estado de habitación:', error);
-    mostrarSplash('❌ Error al guardar estado');
+    mostrarSplash('Error al guardar estado');
+  }
+};
+
+// Nueva función para limpiar historial antiguo (más de 7 días)
+const limpiarHistorialAntiguo = async (habitacionId = null) => {
+  try {
+    const fechaLimite = new Date();
+    fechaLimite.setDate(fechaLimite.getDate() - 7); // 7 días atrás
+    const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
+
+    let query = supabase
+      .from('ocupacion_habitaciones')
+      .delete()
+      .lt('fecha', fechaLimiteStr);
+
+    if (habitacionId) {
+      query = query.eq('habitacion_id', habitacionId);
+    }
+
+    const { error } = await query;
+    if (error) throw error;
+
+    console.log(`Historial antiguo eliminado (antes de ${fechaLimiteStr})`);
+  } catch (error) {
+    console.error('Error limpiando historial antiguo:', error);
   }
 };
 
@@ -1652,7 +1647,7 @@ const eliminarVisualizador = async (visId, usuario) => {
 
   // ==================== FUNCIONES PARA ESTADOS ====================
   const filtrarHabitacionesPorTipo = (tipo) => {
-    const resultado = habitaciones.filter(habitacion => {
+    return habitaciones.filter(habitacion => {
       const ocu = ocupacion[String(habitacion.id)];
       
       switch (tipo) {
@@ -1669,38 +1664,6 @@ const eliminarVisualizador = async (visId, usuario) => {
           return false;
       }
     });
-    
-    // Debug para OTROS - identificar habitaciones faltantes
-    if (tipo === 'otros') {
-      console.log('=== DEBUG: Investigando habitaciones OTROS faltantes ===');
-      console.log('Habitaciones OTROS en ESTADOS:', resultado.length);
-      console.log('Total habitaciones en habitaciones_especiales:', habitaciones.length);
-      
-      // Lista de habitaciones OTROS esperadas por piso (según conteo visual del usuario)
-      const expectedOtros = {
-        'PISO 6': ['621', '623', '625', '627', '629', '631', '633', '635', '602', '604', '606', '608', '610', '612', '616', '620', '622', '626', '628', '630', '632', '634', '636'],
-        'PISO 5': ['535', '520', '522', '524', '526', '528', '530', '532', '534', '536'],
-        'PISO 4': ['427', '435', '437', '430', '432'],
-        'PISO 3': ['319', '321', '335', '347', '349', '302', '304', '318', '346', '366']
-      };
-      
-      // Verificar cuáles de las habitaciones esperadas están en habitaciones_especiales
-      const habitacionNames = habitaciones.map(h => h.nombre);
-      const faltantes = [];
-      
-      Object.entries(expectedOtros).forEach(([piso, habitacionesExpected]) => {
-        habitacionesExpected.forEach(nombre => {
-          if (!habitacionNames.includes(nombre)) {
-            faltantes.push({ piso, nombre });
-          }
-        });
-      });
-      
-      console.log('Habitaciones OTROS faltantes en habitaciones_especiales:', faltantes);
-      console.log('Habitaciones OTROS encontradas en ESTADOS:', resultado.map(h => ({ nombre: h.nombre, piso: pisos.find(p => p.id === h.piso_id)?.nombre_piso })));
-    }
-    
-    return resultado;
   };
 
   const generarPDFHabitaciones = () => {
