@@ -83,7 +83,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
             id: hab.id,
             nombre: hab.nombre,
             total_camas: ocupReciente.total_camas,  // Respetar valor 0 si está configurado
-            informacion_ampliatoria: (ocupReciente.observaciones || '').trim()
+            observaciones: (ocupReciente.observaciones || '').trim()
           });
           ocupState[hab.id] = {
             camas_ocupadas: ocupReciente.camas_ocupadas || 0,
@@ -164,8 +164,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       tipo_habitacion: 'activa',
       total_camas: hab.total_camas,
       camas_ocupadas: ocupaciones[hab.id]?.camas_ocupadas || 0,
-      observaciones: ocupaciones[hab.id]?.aislamiento ? AISLAMIENTO_TOKEN : null,
-      informacion_ampliatoria: hab.informacion_ampliatoria,  // PRESERVAR DATOS DE ADMIN
+      observaciones: ocupaciones[hab.id]?.aislamiento ? AISLAMIENTO_TOKEN : hab.observaciones || null,
       actualizado_por: perfilUsuario?.dni,
       actualizado_en: timestampActual
     }));
@@ -376,14 +375,13 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
               <div className="flex justify-between items-center mb-3">
                 <div>
                   <span className="text-lg font-bold text-white">{hab.nombre}</span>
-                  {!!hab.informacion_ampliatoria && (
-                    <span className="text-xs text-slate-400 ml-2">{hab.informacion_ampliatoria}</span>
+                  {!!hab.observaciones && (
+                    <span className="text-xs text-slate-400 ml-2">{hab.observaciones}</span>
                   )}
                 </div>
                 <button
-                  type="button"
                   onClick={() => togglearAislamiento(hab.id)}
-                  className={`px-2 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                     aislamientoActivo
                       ? 'bg-red-600/30 border-red-500 text-red-200'
                       : 'bg-slate-700/60 border-slate-500 text-slate-200'
