@@ -76,7 +76,7 @@ const AdminDashboard = () => {
   const formatearResumenHabitacion = (config) => {
   if (config.tipo === 'INTERNACION') {
     const camas = Number(config.camas) || 0;
-    const info = config.informacion_ampliatoria ? ` · ${config.informacion_ampliatoria}` : '';
+    const info = config.observaciones ? ` · ${config.observaciones}` : '';
     if (camas === 0) {
       return `INTERNACIÓN (SIN CAMAS${info})`;
     }
@@ -272,7 +272,7 @@ const AdminDashboard = () => {
         camas: estado?.total_camas?.toString() || '0',
         texto: estado?.observaciones || '',
         camas_ocupadas: estado?.camas_ocupadas || 0,
-        informacion_ampliatoria: estado?.informacion_ampliatoria || ''  // NUEVO CAMPO
+        // informacion_ampliatoria eliminado - ahora usa observaciones
       };
     });
     setHabitacionStatus(prev => ({
@@ -313,23 +313,19 @@ const AdminDashboard = () => {
     let totalCamas = 1;
     let camasOcupadas = 0;
     let observaciones = null;
-    let informacionAmpliatoria = null;
     
     if (config.tipo === 'INTERNACION') {
       totalCamas = Number(config.camas) || 0;
       camasOcupadas = Number(config.camas_ocupadas) || 0;
-      observaciones = null;
-      informacionAmpliatoria = config.informacion_ampliatoria || '';
+      observaciones = config.observaciones || '';
     } else if (config.tipo === 'EN REPARACION') {
       totalCamas = 1;
       camasOcupadas = 0;
-      observaciones = null;
-      informacionAmpliatoria = null;
+      observaciones = config.observaciones || null;
     } else if (config.tipo === 'OTROS') {
       totalCamas = 1;
       camasOcupadas = 0;
       observaciones = config.texto || null;
-      informacionAmpliatoria = null;
     }
 
     const payload = {
@@ -339,7 +335,7 @@ const AdminDashboard = () => {
       total_camas: totalCamas,
       camas_ocupadas: camasOcupadas,
       observaciones: observaciones,
-      informacion_ampliatoria: informacionAmpliatoria,
+      // informacion_ampliatoria eliminado - ahora usa observaciones
       actualizado_por: null,
       actualizado_en: new Date().toISOString()
     };
@@ -382,7 +378,7 @@ const AdminDashboard = () => {
         camas: config.tipo === 'INTERNACION' ? totalCamas.toString() : '1',
         texto: config.tipo === 'OTROS' ? config.texto : '',
         camas_ocupadas: config.tipo === 'INTERNACION' ? camasOcupadas.toString() : '0',
-        informacion_ampliatoria: config.tipo === 'INTERNACION' ? (informacionAmpliatoria || '') : ''
+        // informacion_ampliatoria eliminado - ahora usa observaciones
       }
     }));
     
@@ -1691,7 +1687,7 @@ const eliminarVisualizador = async (visId, usuario) => {
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
             ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
-            ocu?.informacion_ampliatoria || 'Sin novedades'
+            ocu?.observaciones || 'Sin novedades'
           ];
         });
         break;
@@ -1699,11 +1695,12 @@ const eliminarVisualizador = async (visId, usuario) => {
         titulo = 'Habitaciones en Reparación';
         datosTabla = filtrarHabitacionesPorTipo('reparacion').map(habitacion => {
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+          const ocu = ocupacion[String(habitacion.id)] || { observaciones: 'Sin novedad' };
           
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
-            'Sin novedad'
+            ocu.observaciones || 'Sin novedad'
           ];
         });
         break;
@@ -1732,7 +1729,7 @@ const eliminarVisualizador = async (visId, usuario) => {
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
             ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
-            ocu?.informacion_ampliatoria || 'Sin novedades'
+            ocu?.observaciones || 'Sin novedades'
           ];
         });
         break;
@@ -2174,10 +2171,10 @@ const eliminarVisualizador = async (visId, usuario) => {
                         <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={
                           activeEstadosTab === 'otros' 
                             ? (ocu?.observaciones || 'Sin novedades')
-                            : (ocu?.informacion_ampliatoria || 'Sin novedades')
+                            : (ocu?.observaciones || 'Sin novedades')
                         }>
                           {activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion' 
-                            ? (ocu?.informacion_ampliatoria || 'Sin novedades')
+                            ? (ocu?.observaciones || 'Sin novedades')
                             : activeEstadosTab === 'otros'
                               ? (ocu?.observaciones || 'Sin novedades')
                               : 'Sin novedad'
@@ -2812,8 +2809,8 @@ const eliminarVisualizador = async (visId, usuario) => {
                                         <div>
                                           <input
                                             type="text"
-                                            value={config.informacion_ampliatoria || ''}
-                                            onChange={(e) => actualizarHabitacionStatus(hab.id, 'informacion_ampliatoria', e.target.value)}
+                                            value={config.observaciones || ''}
+                                            onChange={(e) => actualizarHabitacionStatus(hab.id, 'observaciones', e.target.value)}
                                             className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 mt-2"
                                             placeholder="Especialidad / Servicio (Ej: Pediatría, Clínica I, UTI)"
                                           />
@@ -2828,6 +2825,16 @@ const eliminarVisualizador = async (visId, usuario) => {
                                       onChange={(e) => actualizarHabitacionStatus(hab.id, 'texto', e.target.value)}
                                       placeholder="Oficina, guardia, médico interno..."
                                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-slate-500"
+                                    />
+                                  )}
+
+                                  {config.tipo === 'EN REPARACION' && (
+                                    <input
+                                      type="text"
+                                      value={config.observaciones || ''}
+                                      onChange={(e) => actualizarHabitacionStatus(hab.id, 'observaciones', e.target.value)}
+                                      placeholder="Motivo de reparación (Ej: Mantenimiento, Refacción, etc.)"
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-amber-500"
                                     />
                                   )}
 

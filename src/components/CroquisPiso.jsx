@@ -627,7 +627,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
         const horaFormateada = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
         
-        const infoAmpliatoria = ocup.informacion_ampliatoria || 'Sin especialidad';
+        const infoAmpliatoria = ocup.observaciones || 'Sin especialidad';
         
         let titleText = '';
         if (totalCamas === 0) {
@@ -1035,8 +1035,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Habitación</p>
                 <h4 className="text-white font-bold text-lg">
                   {tooltipHabitacion.hab.nombre}
-                  {tooltipHabitacion.ocup?.tipo_habitacion === 'activa' && tooltipHabitacion.ocup?.informacion_ampliatoria
-                    ? ` - ${tooltipHabitacion.ocup.informacion_ampliatoria}`
+                  {tooltipHabitacion.ocup?.tipo_habitacion === 'activa' && tooltipHabitacion.ocup?.observaciones
+                    ? ` - ${tooltipHabitacion.ocup.observaciones}`
                     : ''}
                 </h4>
               </div>

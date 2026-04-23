@@ -426,7 +426,7 @@ const VisualizadorDashboard = () => {
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
             ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
-            ocu?.informacion_ampliatoria || 'Sin novedades'
+            ocu?.observaciones || 'Sin novedades'
           ];
         });
         break;
@@ -467,7 +467,7 @@ const VisualizadorDashboard = () => {
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
             ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
-            ocu?.informacion_ampliatoria || 'Sin novedades'
+            ocu?.observaciones || 'Sin novedades'
           ];
         });
         break;
@@ -900,10 +900,10 @@ const VisualizadorDashboard = () => {
                         <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={
                           activeEstadosTab === 'otros' 
                             ? (ocu?.observaciones || 'Sin novedades')
-                            : (ocu?.informacion_ampliatoria || 'Sin novedades')
+                            : (ocu?.observaciones || 'Sin novedades')
                         }>
                           {activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion' 
-                            ? (ocu?.informacion_ampliatoria || 'Sin novedades')
+                            ? (ocu?.observaciones || 'Sin novedades')
                             : activeEstadosTab === 'otros'
                               ? (ocu?.observaciones || 'Sin novedades')
                               : 'Sin novedad'
