@@ -1741,12 +1741,16 @@ const eliminarVisualizador = async (visId, usuario) => {
         titulo = 'Habitaciones en Reparación';
         datosTabla = filtrarHabitacionesPorTipo('reparacion').map(habitacion => {
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-          const ocu = ocupacion[String(habitacion.id)] || { observaciones: 'Sin novedad' };
+          const ocu = ocupacion[String(habitacion.id)];
+          const status = habitacionStatus[habitacion.id];
+          
+          // Priorizar: 1) datos de ocupación, 2) estado local, 3) 'Sin novedad'
+          const observaciones = ocu?.observaciones || status?.observaciones || 'Sin novedad';
           
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
-            ocu.observaciones || 'Sin novedad'
+            observaciones
           ];
         });
         break;
