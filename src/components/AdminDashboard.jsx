@@ -8,6 +8,10 @@ import RecorridosList from './RecorridosList';
 import AsistenteIA from './AsistenteIA';
 
 const AdminDashboard = () => {
+  // Obtener perfil del usuario desde localStorage
+  const sesion = JSON.parse(localStorage.getItem('sesion_hnpm') || '{}');
+  const perfilUsuario = sesion.usuario || null;
+
   const [activeTab, setActiveTab] = useState('croquis');
   const [activeEstadosTab, setActiveEstadosTab] = useState('internacion');
   const [filters, setFilters] = useState({
@@ -240,7 +244,8 @@ const AdminDashboard = () => {
     });
   }, [habitacionesEspeciales]);
 
-  const actualizarHabitacionStatus = (habId, field, value) => {
+  const actualizarHabitacionStatus = async (habId, field, value) => {
+    // Actualizar estado local primero
     setHabitacionStatus(prev => ({
       ...prev,
       [habId]: {
@@ -248,6 +253,23 @@ const AdminDashboard = () => {
         [field]: value
       }
     }));
+
+    // Si se actualizan observaciones de una habitación EN REPARACION, guardar en base de datos
+    if (field === 'observaciones' && habitacionStatus[habId]?.tipo === 'EN REPARACION') {
+      const fecha = new Date().toISOString().split('T')[0];
+      const payload = {
+        habitacion_id: habId,
+        fecha,
+        tipo_habitacion: 'reparacion',
+        total_camas: 1,
+        camas_ocupadas: 0,
+        observaciones: value || null,
+        actualizado_por: perfilUsuario?.dni,
+        actualizado_en: new Date().toISOString()
+      };
+
+      await supabase.from('ocupacion_habitaciones').upsert(payload);
+    }
   };
 
   const cargarEstadoHabitaciones = async (habitaciones = []) => {
