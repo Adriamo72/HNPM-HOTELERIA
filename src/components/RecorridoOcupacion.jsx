@@ -57,7 +57,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       const habitacionIds = habitacionesData.map(h => h.id);
       const { data: ocupacionesData, error: ocupError } = await supabase
         .from('ocupacion_habitaciones')
-        .select('habitacion_id, tipo_habitacion, total_camas, camas_ocupadas, observaciones, informacion_ampliatoria, fecha, actualizado_en')
+        .select('habitacion_id, tipo_habitacion, total_camas, camas_ocupadas, observaciones, fecha, actualizado_en')
         .in('habitacion_id', habitacionIds)
         .order('fecha', { ascending: false })
         .order('actualizado_en', { ascending: false });
@@ -83,7 +83,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
             id: hab.id,
             nombre: hab.nombre,
             total_camas: ocupReciente.total_camas,  // Respetar valor 0 si está configurado
-            informacion_ampliatoria: (ocupReciente.informacion_ampliatoria || '').trim()
+            informacion_ampliatoria: (ocupReciente.observaciones || '').trim()
           });
           ocupState[hab.id] = {
             camas_ocupadas: ocupReciente.camas_ocupadas || 0,
