@@ -402,133 +402,131 @@ const VisualizadorDashboard = () => {
   };
 
   const generarPDFHabitaciones = () => {
-    // Importar jsPDF y autoTable dinámicamente
-    Promise.all([
-      import('jspdf'),
-      import('jspdf-autotable')
-    ]).then(([jsPDF, autoTable]) => {
-      // Usar sintaxis tradicional CommonJS
-      const jsPDFConstructor = jsPDF.default || jsPDF;
-      const doc = new jsPDFConstructor();
-      
-      // Asignar autoTable directamente al documento
-      doc.autoTable = autoTable.default || autoTable;
-      
-      // Configuración de página
-      doc.setFontSize(16);
-      doc.text('Reporte de Estados de Habitaciones', 20, 20);
-      
-      doc.setFontSize(12);
-      const fecha = new Date().toLocaleDateString('es-AR');
-      doc.text(`Fecha: ${fecha}`, 20, 30);
-      
-      // Preparar datos para la tabla según la pestaña activa
-      let datosTabla = [];
-      let titulo = '';
-      let headers = ['PISO', 'HABITACIÓN'];
-      
-      // Determinar columnas según el tipo de pestaña
-      if (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') {
-        headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN');
-      }
-      headers.push('NOVEDADES');
-      
-      switch(activeEstadosTab) {
-        case 'internacion':
-          titulo = 'Habitaciones de Internación';
-          datosTabla = filtrarHabitacionesPorTipo('internacion').map(habitacion => {
-            const ocu = ocupacion[habitacion.id];
-            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-            
-            return [
-              piso?.nombre_piso || 'Sin piso',
-              habitacion.nombre || 'Sin nombre',
-              ocu ? String(ocu.camas_ocupadas || 0) : '0',
-              ocu ? String(ocu.total_camas || 0) : '0',
-              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
-              ocu?.informacion_ampliatoria || 'Sin novedades'
-            ];
-          });
-          break;
-        case 'reparacion':
-          titulo = 'Habitaciones en Reparación';
-          datosTabla = filtrarHabitacionesPorTipo('reparacion').map(habitacion => {
-            const ocu = ocupacion[String(habitacion.id)];
-            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-            
-            return [
-              piso?.nombre_piso || 'Sin piso',
-              habitacion.nombre || 'Sin nombre',
-              ocu?.observaciones || 'Sin novedades'
-            ];
-          });
-          break;
-        case 'otros':
-          titulo = 'Habitaciones Otros';
-          datosTabla = filtrarHabitacionesPorTipo('otros').map(habitacion => {
-            const ocu = ocupacion[habitacion.id];
-            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-            
-            return [
-              piso?.nombre_piso || 'Sin piso',
-              habitacion.nombre || 'Sin nombre',
-              ocu?.observaciones || 'Sin novedades'
-            ];
-          });
-          break;
-        case 'ocupacion':
-          titulo = 'Habitaciones Ocupadas';
-          datosTabla = filtrarHabitacionesPorTipo('ocupacion').map(habitacion => {
-            const ocu = ocupacion[habitacion.id];
-            const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-            
-            return [
-              piso?.nombre_piso || 'Sin piso',
-              habitacion.nombre || 'Sin nombre',
-              ocu ? String(ocu.camas_ocupadas || 0) : '0',
-              ocu ? String(ocu.total_camas || 0) : '0',
-              ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
-              ocu?.informacion_ampliatoria || 'Sin novedades'
-            ];
-          });
-          break;
-        default:
-          titulo = 'Habitaciones';
-          datosTabla = [];
-          break;
-      }
-      
-      doc.text(titulo, 20, 40);
-      
-      // Agregar tabla
-      doc.autoTable({
-        head: headers,
-        body: datosTabla,
-        startY: 50,
-        styles: {
-          fontSize: 8,
-          cellPadding: 2
-        },
-        headStyles: {
-          fillColor: [59, 130, 246],
-          textColor: 255
-        },
-        columnStyles: {
-          0: { cellWidth: 25 },
-          1: { cellWidth: 30 },
-          2: { cellWidth: 30 },
-          3: { cellWidth: 35 },
-          4: { cellWidth: 25 },
-          5: { cellWidth: 45 }
-        }
-      });
-      
-      // Guardar PDF
-      doc.save(`estados_habitaciones_${new Date().toISOString().split('T')[0]}.pdf`);
-    }).catch(err => {
-      console.error('Error al generar PDF:', err);
-      mostrarSplash('Error al generar PDF');
-    });
+    // Preparar datos para la tabla según la pestaña activa
+    let datosTabla = [];
+    let titulo = '';
+    let headers = ['PISO', 'HABITACIÓN'];
+    
+    // Determinar columnas según el tipo de pestaña
+    if (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') {
+      headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN');
+    }
+    headers.push('NOVEDADES');
+    
+    switch(activeEstadosTab) {
+      case 'internacion':
+        titulo = 'Habitaciones de Internación';
+        datosTabla = filtrarHabitacionesPorTipo('internacion').map(habitacion => {
+          const ocu = ocupacion[String(habitacion.id)];
+          const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+          
+          return [
+            piso?.nombre_piso || 'Sin piso',
+            habitacion.nombre || 'Sin nombre',
+            ocu ? String(ocu.camas_ocupadas || 0) : '0',
+            ocu ? String(ocu.total_camas || 0) : '0',
+            ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+            ocu?.informacion_ampliatoria || 'Sin novedades'
+          ];
+        });
+        break;
+      case 'reparacion':
+        titulo = 'Habitaciones en Reparación';
+        datosTabla = filtrarHabitacionesPorTipo('reparacion').map(habitacion => {
+          const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+          
+          return [
+            piso?.nombre_piso || 'Sin piso',
+            habitacion.nombre || 'Sin nombre',
+            'Sin novedad'
+          ];
+        });
+        break;
+      case 'otros':
+        titulo = 'Habitaciones OTROS';
+        datosTabla = filtrarHabitacionesPorTipo('otros').map(habitacion => {
+          const ocu = ocupacion[String(habitacion.id)];
+          const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+          
+          return [
+            piso?.nombre_piso || 'Sin piso',
+            habitacion.nombre || 'Sin nombre',
+            ocu?.observaciones || 'Sin novedades'
+          ];
+        });
+        break;
+      case 'ocupacion':
+        titulo = 'Habitaciones Ocupadas';
+        datosTabla = filtrarHabitacionesPorTipo('ocupacion').map(habitacion => {
+          const ocu = ocupacion[String(habitacion.id)];
+          const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+          
+          return [
+            piso?.nombre_piso || 'Sin piso',
+            habitacion.nombre || 'Sin nombre',
+            ocu ? String(ocu.camas_ocupadas || 0) : '0',
+            ocu ? String(ocu.total_camas || 0) : '0',
+            ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+            ocu?.informacion_ampliatoria || 'Sin novedades'
+          ];
+        });
+        break;
+      default:
+        titulo = 'Habitaciones';
+        datosTabla = [];
+        break;
+    }
+    
+    // Crear HTML para imprimir
+    const fecha = new Date().toLocaleDateString('es-AR');
+    const htmlContent = `
+      <html>
+        <head>
+          <title>${titulo}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { text-align: center; color: #1e293b; }
+            .fecha { text-align: center; margin-bottom: 20px; color: #64748b; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+            th { background-color: #3b82f6; color: white; font-weight: bold; }
+            tr:nth-child(even) { background-color: #f8fafc; }
+            @media print { body { margin: 10px; } }
+          </style>
+        </head>
+        <body>
+          <h1>Reporte de Estados de Habitaciones</h1>
+          <div class="fecha">Fecha: ${fecha}</div>
+          <h2>${titulo}</h2>
+          <table>
+            <thead>
+              <tr>
+                ${headers.map(h => `<th>${h}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${datosTabla.map(row => 
+                `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`
+              ).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+    
+    // Abrir ventana de impresión
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    // Esperar a que cargue y mostrar diálogo de impresión
+    printWindow.onload = () => {
+      printWindow.print();
+      // Cerrar ventana después de imprimir
+      setTimeout(() => {
+        printWindow.close();
+      }, 1000);
+    };
   };
 
   useEffect(() => {
