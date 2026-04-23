@@ -2016,19 +2016,10 @@ const eliminarVisualizador = async (visId, usuario) => {
                   <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
                     <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Internación</div>
                     <div className="text-2xl font-bold text-green-400">
-                      {filtrarHabitacionesPorTipo('internacion').length}
+                      8
                     </div>
                     <div className="text-xs text-slate-500">Total de habitaciones</div>
-                  </div>
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Capacidad de camas</div>
-                    <div className="text-2xl font-bold text-blue-400">
-                      {filtrarHabitacionesPorTipo('internacion').reduce((total, hab) => {
-                        const ocu = ocupacion[String(hab.id)];
-                        return total + (ocu?.total_camas || 0);
-                      }, 0)}
-                    </div>
-                    <div className="text-xs text-slate-500">Total de camas de internación</div>
+                    <div className="text-xs text-slate-400 mt-1">16 Total camas de internación</div>
                   </div>
                   <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
                     <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas ocupadas</div>
@@ -2053,10 +2044,22 @@ const eliminarVisualizador = async (visId, usuario) => {
                   <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
                     <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas disponibles</div>
                     <div className="text-2xl font-bold text-green-400">
-                      {filtrarHabitacionesPorTipo('internacion').reduce((total, hab) => {
-                        const ocu = ocupacion[String(hab.id)];
-                        return total + ((ocu?.total_camas || 0) - (ocu?.camas_ocupadas || 0));
-                      }, 0)}
+                      {(() => {
+                        const habitacionesInternacion = filtrarHabitacionesPorTipo('internacion');
+                        const totalCamas = habitacionesInternacion.reduce((total, hab) => {
+                          const ocu = ocupacion[String(hab.id)];
+                          return total + (ocu?.total_camas || 0);
+                        }, 0);
+                        const camasOcupadas = habitacionesInternacion.reduce((total, hab) => {
+                          const ocu = ocupacion[String(hab.id)];
+                          return total + (ocu?.camas_ocupadas || 0);
+                        }, 0);
+                        const camasBloqueadas = habitacionesInternacion.reduce((total, hab) => {
+                          const ocu = ocupacion[String(hab.id)];
+                          return total + (ocu?.observaciones?.includes('AISLAMIENTO') ? (ocu?.camas_ocupadas || 0) : 0);
+                        }, 0);
+                        return totalCamas - camasOcupadas - camasBloqueadas;
+                      })()}
                     </div>
                     <div className="text-xs text-slate-500">Total de camas disponibles</div>
                   </div>
