@@ -279,7 +279,7 @@ const AdminDashboard = () => {
         tipo: tipo,
         camas: estado?.total_camas?.toString() || '0',
         texto: tipo === 'OTROS' ? (estado?.observaciones || '') : '',
-        observaciones: tipo === 'INTERNACION' ? (estado?.observaciones || '') : '',
+        observaciones: tipo === 'INTERNACION' ? (estado?.observaciones || '') : (tipo === 'EN REPARACION' ? (estado?.observaciones || '') : ''),
         camas_ocupadas: estado?.camas_ocupadas || 0,
         // informacion_ampliatoria eliminado - ahora usa observaciones
       };
