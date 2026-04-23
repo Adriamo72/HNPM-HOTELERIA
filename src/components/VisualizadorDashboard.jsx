@@ -745,10 +745,10 @@ const VisualizadorDashboard = () => {
                   <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
                     <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Internación</div>
                     <div className="text-2xl font-bold text-green-400">
-                      8
+                      16
                     </div>
-                    <div className="text-xs text-slate-500">Total de habitaciones</div>
-                    <div className="text-xs text-slate-400 mt-1">16 Total camas de internación</div>
+                    <div className="text-xs text-slate-500">Total de camas de internación</div>
+                    <div className="text-xs text-slate-400 mt-1">8 Total de habitaciones</div>
                   </div>
                   <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
                     <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas ocupadas</div>
