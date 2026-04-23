@@ -407,10 +407,12 @@ const VisualizadorDashboard = () => {
       import('jspdf'),
       import('jspdf-autotable')
     ]).then(([jsPDF, autoTable]) => {
-      const doc = new jsPDF.default();
+      // Usar sintaxis tradicional CommonJS
+      const jsPDFConstructor = jsPDF.default || jsPDF;
+      const doc = new jsPDFConstructor();
       
-      // Agregar autoTable como plugin
-      autoTable.default(doc);
+      // Asignar autoTable directamente al documento
+      doc.autoTable = autoTable.default || autoTable;
       
       // Configuración de página
       doc.setFontSize(16);
