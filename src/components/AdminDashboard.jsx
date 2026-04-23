@@ -1672,10 +1672,11 @@ const eliminarVisualizador = async (visId, usuario) => {
       import('jspdf'),
       import('jspdf-autotable')
     ]).then(([jsPDF, autoTable]) => {
-      const doc = new jsPDF.default();
+      const { default: jsPDFConstructor } = jsPDF;
+      const doc = new jsPDFConstructor();
       
       // Agregar autoTable como plugin
-      doc.autoTable = autoTable.default;
+      autoTable.default(doc);
       
       // Configuración de página
       doc.setFontSize(16);
