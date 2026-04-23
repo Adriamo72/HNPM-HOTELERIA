@@ -10,7 +10,14 @@ import AsistenteIA from './AsistenteIA';
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
   const [activeEstadosTab, setActiveEstadosTab] = useState('internacion');
-  const [filterColumn, setFilterColumn] = useState('');
+  const [filters, setFilters] = useState({
+    piso: '',
+    habitacion: '',
+    camas_ocupadas: '',
+    total_camas: '',
+    aislacion: '',
+    novedades: ''
+  });
   const [habitaciones, setHabitaciones] = useState([]);
   const [ocupacion, setOcupacion] = useState({});
   const [personal, setPersonal] = useState([]);
@@ -1642,9 +1649,43 @@ const eliminarVisualizador = async (visId, usuario) => {
   };
 
   // ==================== FUNCIONES PARA ESTADOS ====================
+  const updateFilter = (column, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [column]: value
+    }));
+  };
+
   const filtrarHabitacionesPorTipo = (tipo) => {
     return habitaciones.filter(habitacion => {
       const ocu = ocupacion[String(habitacion.id)];
+      const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+      
+      // Aplicar filtros de texto
+      if (filters.piso && !piso?.nombre_piso?.toLowerCase().includes(filters.piso.toLowerCase())) {
+        return false;
+      }
+      if (filters.habitacion && !habitacion.nombre?.toLowerCase().includes(filters.habitacion.toLowerCase())) {
+        return false;
+      }
+      if (filters.novedades && !ocu?.observaciones?.toLowerCase().includes(filters.novedades.toLowerCase())) {
+        return false;
+      }
+      
+      // Filtros específicos para internacion/ocupacion
+      if (tipo === 'internacion' || tipo === 'ocupacion') {
+        if (filters.camas_ocupadas && !String(ocu?.camas_ocupadas || 0).includes(filters.camas_ocupadas)) {
+          return false;
+        }
+        if (filters.total_camas && !String(ocu?.total_camas || 0).includes(filters.total_camas)) {
+          return false;
+        }
+        if (filters.aislacion) {
+          const tieneAislamiento = ocu?.observaciones?.includes('AISLAMIENTO');
+          if (filters.aislacion === 'SI' && !tieneAislamiento) return false;
+          if (filters.aislacion === 'NO' && tieneAislamiento) return false;
+        }
+      }
       
       switch (tipo) {
         case 'ocupacion':
@@ -2052,33 +2093,27 @@ const eliminarVisualizador = async (visId, usuario) => {
                   <tr className="border-b border-slate-700">
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                       PISO
-                      {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
-                        <div className="mt-1">
-                          <input
-                            type="text"
-                            placeholder="Filtrar piso..."
-                            value={filterColumn === 'piso' ? filterColumn : ''}
-                            onChange={(e) => setFilterColumn(e.target.value)}
-                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
-                            onFocus={() => setFilterColumn('piso')}
-                          />
-                        </div>
-                      )}
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          placeholder="Filtrar piso..."
+                          value={filters.piso || ''}
+                          onChange={(e) => updateFilter('piso', e.target.value)}
+                          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                        />
+                      </div>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                       HABITACIÓN
-                      {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
-                        <div className="mt-1">
-                          <input
-                            type="text"
-                            placeholder="Filtrar habitación..."
-                            value={filterColumn === 'habitacion' ? filterColumn : ''}
-                            onChange={(e) => setFilterColumn(e.target.value)}
-                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
-                            onFocus={() => setFilterColumn('habitacion')}
-                          />
-                        </div>
-                      )}
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          placeholder="Filtrar habitación..."
+                          value={filters.habitacion || ''}
+                          onChange={(e) => updateFilter('habitacion', e.target.value)}
+                          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                        />
+                      </div>
                     </th>
                     {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
@@ -2087,10 +2122,9 @@ const eliminarVisualizador = async (visId, usuario) => {
                           <input
                             type="text"
                             placeholder="Filtrar..."
-                            value={filterColumn === 'camas_ocupadas' ? filterColumn : ''}
-                            onChange={(e) => setFilterColumn(e.target.value)}
+                            value={filters.camas_ocupadas || ''}
+                            onChange={(e) => updateFilter('camas_ocupadas', e.target.value)}
                             className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
-                            onFocus={() => setFilterColumn('camas_ocupadas')}
                           />
                         </div>
                       </th>
@@ -2102,10 +2136,9 @@ const eliminarVisualizador = async (visId, usuario) => {
                           <input
                             type="text"
                             placeholder="Filtrar..."
-                            value={filterColumn === 'total_camas' ? filterColumn : ''}
-                            onChange={(e) => setFilterColumn(e.target.value)}
+                            value={filters.total_camas || ''}
+                            onChange={(e) => updateFilter('total_camas', e.target.value)}
                             className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
-                            onFocus={() => setFilterColumn('total_camas')}
                           />
                         </div>
                       </th>
@@ -2115,10 +2148,9 @@ const eliminarVisualizador = async (visId, usuario) => {
                         AISLACIÓN
                         <div className="mt-1">
                           <select
-                            value={filterColumn === 'aislacion' ? filterColumn : ''}
-                            onChange={(e) => setFilterColumn(e.target.value)}
+                            value={filters.aislacion || ''}
+                            onChange={(e) => updateFilter('aislacion', e.target.value)}
                             className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
-                            onFocus={() => setFilterColumn('aislacion')}
                           >
                             <option value="">Todos</option>
                             <option value="SI">SI</option>
@@ -2129,18 +2161,15 @@ const eliminarVisualizador = async (visId, usuario) => {
                     )}
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                       NOVEDADES
-                      {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
-                        <div className="mt-1">
-                          <input
-                            type="text"
-                            placeholder="Filtrar..."
-                            value={filterColumn === 'novedades' ? filterColumn : ''}
-                            onChange={(e) => setFilterColumn(e.target.value)}
-                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
-                            onFocus={() => setFilterColumn('novedades')}
-                          />
-                        </div>
-                      )}
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          placeholder="Filtrar..."
+                          value={filters.novedades || ''}
+                          onChange={(e) => updateFilter('novedades', e.target.value)}
+                          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                        />
+                      </div>
                     </th>
                   </tr>
                 </thead>
