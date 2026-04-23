@@ -274,10 +274,12 @@ const AdminDashboard = () => {
     const next = {};
     habitaciones.forEach(hab => {
       const estado = estadoPorHabitacion[hab.id];
+      const tipo = estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS';
       next[hab.id] = {
-        tipo: estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS',
+        tipo: tipo,
         camas: estado?.total_camas?.toString() || '0',
-        texto: estado?.observaciones || '',
+        texto: tipo === 'OTROS' ? (estado?.observaciones || '') : '',
+        observaciones: tipo === 'INTERNACION' ? (estado?.observaciones || '') : '',
         camas_ocupadas: estado?.camas_ocupadas || 0,
         // informacion_ampliatoria eliminado - ahora usa observaciones
       };
