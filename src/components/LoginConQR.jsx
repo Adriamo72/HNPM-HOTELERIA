@@ -21,13 +21,14 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     };
   }, []);
 
-  // Escaneo de QR para operadores (pañoleros)
+  // Escaneo de QR para operadores (pañoleros) y accesos directos
   const handleScanSuccess = async (decodedText) => {
     if (verificando) return;
     
     setVerificando(true);
     
     try {
+      // QR de autenticación de personal
       if (decodedText.includes('/auth/')) {
         const token = decodedText.split('/auth/')[1];
         
@@ -87,6 +88,29 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
         localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
         
         onLoginSuccess(usuario);
+        
+      } else if (decodedText.includes('/recorrido/')) {
+        const recorridoId = decodedText.split('/recorrido/')[1];
+        
+        const { data: recorrido, error: recorridoError } = await supabase
+          .from('recorridos')
+          .select('*')
+          .eq('id', recorridoId)
+          .maybeSingle();
+        
+        if (recorridoError || !recorrido) {
+          setError("RECORRIDO NO ENCONTRADO");
+          setVerificando(false);
+          return;
+        }
+        
+        const sesion = {
+          recorrido: recorrido,
+          expira: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+        };
+        localStorage.setItem('sesion_hnpm', JSON.stringify(sesion));
+        
+        onLoginSuccess(recorrido);
         
       } else {
         setError("❌ ESCANEA TU CREDENCIAL PERSONAL");
