@@ -1674,8 +1674,8 @@ const eliminarVisualizador = async (visId, usuario) => {
     ]).then(([jsPDF, autoTable]) => {
       const doc = new jsPDF.default();
       
-      // Agregar autoTable al documento
-      autoTable.default(doc);
+      // Agregar autoTable como plugin
+      doc.autoTable = autoTable.default;
       
       // Configuración de página
       doc.setFontSize(16);
