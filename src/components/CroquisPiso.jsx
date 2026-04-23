@@ -602,7 +602,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           bg: 'border-yellow-400',
           text: 'text-black',
           blink: false,
-          title: '🔧 EN REPARACIÓN',
+          title: ocup.observaciones ? `🔧 EN REPARACIÓN\n${ocup.observaciones}` : '🔧 EN REPARACIÓN',
           style: { backgroundColor: 'rgba(255, 248, 24, 0.95)' }
         };
       case 'otros':
@@ -1035,7 +1035,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Habitación</p>
                 <h4 className="text-white font-bold text-lg">
                   {tooltipHabitacion.hab.nombre}
-                  {tooltipHabitacion.ocup?.tipo_habitacion === 'activa' && tooltipHabitacion.ocup?.observaciones
+                  {(tooltipHabitacion.ocup?.tipo_habitacion === 'activa' || tooltipHabitacion.ocup?.tipo_habitacion === 'otros' || tooltipHabitacion.ocup?.tipo_habitacion === 'reparacion') && tooltipHabitacion.ocup?.observaciones
                     ? ` - ${tooltipHabitacion.ocup.observaciones}`
                     : ''}
                 </h4>
