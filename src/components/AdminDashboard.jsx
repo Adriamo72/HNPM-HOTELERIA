@@ -1765,6 +1765,18 @@ const eliminarVisualizador = async (visId, usuario) => {
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
           const ocu = ocupacion[String(habitacion.id)] || { observaciones: 'Sin novedad' };
           
+          // Debug para habitación 601
+          if (habitacion.nombre === '601') {
+            console.log('DEBUG Habitación 601:', {
+              habitacionId: habitacion.id,
+              habitacionNombre: habitacion.nombre,
+              piso: piso?.nombre_piso,
+              ocu: ocu,
+              observaciones: ocu?.observaciones,
+              resultadoFinal: ocu?.observaciones || 'Sin novedad'
+            });
+          }
+          
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
