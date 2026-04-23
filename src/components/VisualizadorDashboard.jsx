@@ -411,7 +411,7 @@ const VisualizadorDashboard = () => {
       const doc = new jsPDFConstructor();
       
       // Agregar autoTable como plugin usando sintaxis correcta
-      doc.autoTable = autoTable.default;
+      autoTable.default(doc);
       
       // Configuración de página
       doc.setFontSize(16);
