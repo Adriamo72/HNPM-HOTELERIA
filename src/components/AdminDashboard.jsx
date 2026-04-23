@@ -261,7 +261,7 @@ const AdminDashboard = () => {
         habitacion_id: habId,
         fecha,
         tipo_habitacion: 'reparacion',
-        total_camas: 1,
+        total_camas: 0,
         camas_ocupadas: 0,
         observaciones: value || null,
         actualizado_por: perfilUsuario?.dni,
@@ -350,7 +350,7 @@ const AdminDashboard = () => {
       camasOcupadas = Number(config.camas_ocupadas) || 0;
       observaciones = config.observaciones || '';
     } else if (config.tipo === 'EN REPARACION') {
-      totalCamas = 1;
+      totalCamas = 0;
       camasOcupadas = 0;
       observaciones = config.observaciones || null;
     } else if (config.tipo === 'OTROS') {
