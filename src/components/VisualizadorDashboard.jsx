@@ -963,16 +963,9 @@ const VisualizadorDashboard = () => {
                           </td>
                         )}
                         <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={
-                          activeEstadosTab === 'otros' 
-                            ? (ocu?.observaciones || 'Sin novedades')
-                            : (ocu?.observaciones || 'Sin novedades')
+                          ocu?.observaciones || 'Sin novedades'
                         }>
-                          {activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion' 
-                            ? (ocu?.observaciones || 'Sin novedades')
-                            : activeEstadosTab === 'otros'
-                              ? (ocu?.observaciones || 'Sin novedades')
-                              : 'Sin novedad'
-                          }
+                          {ocu?.observaciones || 'Sin novedades'}
                         </td>
                       </tr>
                     );
