@@ -1696,7 +1696,10 @@ const eliminarVisualizador = async (visId, usuario) => {
         case 'internacion':
           return ocu && ocu.tipo_habitacion === 'activa';
         case 'reparacion':
-          return ocu && ocu.tipo_habitacion === 'reparacion';
+          // Mostrar habitaciones que tienen registro de ocupación con tipo 'reparacion' 
+          // O que están configuradas localmente como 'EN REPARACION'
+          const status = habitacionStatus[habitacion.id];
+          return (ocu && ocu.tipo_habitacion === 'reparacion') || (status && status.tipo === 'EN REPARACION');
         case 'otros':
           return ocu && ocu.tipo_habitacion === 'otros';
         default:
