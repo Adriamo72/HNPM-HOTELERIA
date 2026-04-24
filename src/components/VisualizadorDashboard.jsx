@@ -1179,11 +1179,14 @@ const VisualizadorDashboard = () => {
                         </p>
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           {rechazo.horaDeteccion ? 
-                            `Hora de detección: ${rechazo.horaDeteccion.toLocaleTimeString('es-AR', { 
+                            `Hora de detección: ${rechazo.horaDeteccion.toLocaleString('es-AR', { 
                               hour12: false,
                               hour: '2-digit',
                               minute: '2-digit',
                               second: '2-digit',
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
                             })}` :
                             new Date(rechazo.createdAt).toLocaleString('es-AR', { 
                               hour12: false,
