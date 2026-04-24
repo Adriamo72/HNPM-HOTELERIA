@@ -697,7 +697,7 @@ const VisualizadorDashboard = () => {
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
-              ESTADOS DE HABITACIONES
+              ESTADOS DE HABITACIONES ({habitaciones.length})
             </h2>
             <button
               onClick={generarPDFHabitaciones}
@@ -741,115 +741,106 @@ const VisualizadorDashboard = () => {
           {/* Resúmenes totales entre botones y tabla */}
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+               <div className="lg:col-span-4 md:col-span-2 col-span-1 w-full">
               {activeEstadosTab === 'internacion' && (
-                <>
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Internación</div>
-                    <div className="text-2xl font-bold text-green-400">
-                      {filtrarHabitacionesPorTipo('internacion').reduce((total, hab) => {
-                        const ocu = ocupacion[String(hab.id)];
-                        return total + (ocu?.total_camas || 0);
-                      }, 0)}
+                <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
+                  <div className="flex gap-6 justify-center flex-wrap">
+                    <div>
+                      <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL DE HABITACIONES DE INTERNACIÓN</p>
+                      <p className="text-2xl font-black text-green-400">{filtrarHabitacionesPorTipo('internacion').length}</p>
                     </div>
-                    <div className="text-xs text-slate-500">Total de camas de internación</div>
-                    <div className="text-xs text-slate-400 mt-1">{filtrarHabitacionesPorTipo('internacion').length} Total de habitaciones</div>
                   </div>
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas ocupadas</div>
-                    <div className="text-2xl font-bold text-blue-400">
-                      {filtrarHabitacionesPorTipo('internacion').reduce((total, hab) => {
-                        const ocu = ocupacion[String(hab.id)];
-                        return total + (ocu?.camas_ocupadas || 0);
-                      }, 0)}
-                    </div>
-                    <div className="text-xs text-slate-500">Total de camas con pacientes</div>
-                  </div>
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas bloqueadas</div>
-                    <div className="text-2xl font-bold text-red-400">
-                      {filtrarHabitacionesPorTipo('internacion').reduce((total, hab) => {
-                        const ocu = ocupacion[String(hab.id)];
-                        return total + (ocu?.observaciones?.includes('AISLAMIENTO') ? (ocu?.camas_ocupadas || 0) : 0);
-                      }, 0)}
-                    </div>
-                    <div className="text-xs text-slate-500">Total de camas bloqueadas por patologías</div>
-                  </div>
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas disponibles</div>
-                    <div className="text-2xl font-bold text-green-400">
-                      {(() => {
-                        const habitacionesInternacion = filtrarHabitacionesPorTipo('internacion');
-                        const totalCamas = habitacionesInternacion.reduce((total, hab) => {
-                          const ocu = ocupacion[String(hab.id)];
-                          return total + (ocu?.total_camas || 0);
-                        }, 0);
-                        const camasOcupadas = habitacionesInternacion.reduce((total, hab) => {
-                          const ocu = ocupacion[String(hab.id)];
-                          return total + (ocu?.camas_ocupadas || 0);
-                        }, 0);
-                        const camasBloqueadas = habitacionesInternacion.reduce((total, hab) => {
-                          const ocu = ocupacion[String(hab.id)];
-                          return total + (ocu?.observaciones?.includes('AISLAMIENTO') ? (ocu?.camas_ocupadas || 0) : 0);
-                        }, 0);
-                        return totalCamas - camasOcupadas - camasBloqueadas;
-                      })()}
-                    </div>
-                    <div className="text-xs text-slate-500">Total de camas disponibles</div>
-                  </div>
-                </>
+                </div>
               )}
               
               {activeEstadosTab === 'reparacion' && (
-                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Reparación</div>
-                  <div className="text-2xl font-bold text-orange-400">
-                    {filtrarHabitacionesPorTipo('reparacion').length}
+                <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
+                  <div className="flex gap-6 justify-center flex-wrap">
+                    <div>
+                      <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">TOTAL DE HABITACIONES EN REPARACIÓN</p>
+                      <p className="text-2xl font-black text-orange-400">{filtrarHabitacionesPorTipo('reparacion').length}</p>
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500">Total de habitaciones en reparación</div>
                 </div>
               )}
               
               {activeEstadosTab === 'otros' && (
-                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                  <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Otros fines</div>
-                  <div className="text-2xl font-bold text-purple-400">
-                    {filtrarHabitacionesPorTipo('otros').length}
+                <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
+                  <div className="flex gap-6 justify-center flex-wrap">
+                    <div>
+                      <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">TOTAL DE HABITACIONES OTROS</p>
+                      <p className="text-2xl font-black text-purple-400">{filtrarHabitacionesPorTipo('otros').length}</p>
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500">Total de habitaciones para otros fines</div>
                 </div>
               )}
               
-              {activeEstadosTab === 'ocupacion' && (
-                <>
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Habitaciones ocupadas</div>
-                    <div className="text-2xl font-bold text-blue-400">
-                      {filtrarHabitacionesPorTipo('ocupacion').length}
+           
+            {activeEstadosTab === 'ocupacion' && (() => {
+              // ... (Cálculos de constantes se mantienen igual)
+              const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
+              const totalCamasActivas = habitacionesActivas.reduce((total, hab) => {
+                const ocu = ocupacion[String(hab.id)];
+                return total + (ocu?.total_camas || 0);
+              }, 0);
+              const camasOcupadasActivas = habitacionesActivas.reduce((total, hab) => {
+                const ocu = ocupacion[String(hab.id)];
+                return total + (ocu?.camas_ocupadas || 0);
+              }, 0);
+              const camasBloqueadasActivas = habitacionesActivas.reduce((total, hab) => {
+                const ocu = ocupacion[String(hab.id)];
+                const totalCamas = ocu?.total_camas || 0;
+                const camasOcupadasReales = ocu?.camas_ocupadas || 0;
+                const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+                if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return total;
+                return total + Math.max(0, totalCamas - camasOcupadasReales);
+              }, 0);
+              const camasDisponibles = totalCamasActivas - camasOcupadasActivas - camasBloqueadasActivas;
+
+              return (
+                <div className="bg-slate-800/50 rounded-xl py-3 border border-slate-700/50 w-full mt-2">
+                  <div className="flex w-full items-center">
+                    
+                    {/* 1. HABITACIONES OCUPADAS */}
+                    <div className="flex-1 flex flex-col items-center text-center">
+                      <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">HABITACIONES OCUPADAS</p>
+                      <p className="text-2xl font-black text-blue-400 mt-0.5">{filtrarHabitacionesPorTipo('ocupacion').length}</p>
                     </div>
-                    <div className="text-xs text-slate-500">Total de habitaciones ocupadas</div>
-                  </div>
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas ocupadas</div>
-                    <div className="text-2xl font-bold text-blue-400">
-                      {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
-                        const ocu = ocupacion[hab.id];
-                        return total + (ocu?.camas_ocupadas || 0);
-                      }, 0)}
+                    
+                    {/* 2. HABITACIONES BLOQUEADAS */}
+                    <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
+                      <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">HABITACIONES BLOQUEADAS</p>
+                      <p className="text-2xl font-black text-red-500 mt-0.5">
+                        {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
+                          const ocu = ocupacion[String(hab.id)];
+                          return total + (ocu?.observaciones?.includes('AISLAMIENTO') ? 1 : 0);
+                        }, 0)}
+                      </p>
                     </div>
-                    <div className="text-xs text-slate-500">Total de camas ocupadas</div>
-                  </div>
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600">
-                    <div className="text-xs font-semibold text-slate-400 uppercase mb-1">Camas bloqueadas por patologías</div>
-                    <div className="text-2xl font-bold text-red-400">
-                      {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
-                        const ocu = ocupacion[hab.id];
-                        return total + (ocu?.observaciones?.includes('AISLAMIENTO') ? (ocu?.camas_ocupadas || 0) : 0);
-                      }, 0)}
+                    
+                    {/* 3. CAMAS OCUPADAS */}
+                    <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
+                      <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider px-1">CAMAS OCUPADAS POR PACIENTES</p>
+                      <p className="text-2xl font-black text-yellow-400 mt-0.5">{camasOcupadasActivas}</p>
                     </div>
-                    <div className="text-xs text-slate-500">Total de camas bloqueadas por patologías</div>
+                    
+                    {/* 4. CAMAS AISLACIÓN */}
+                    <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
+                      <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider px-1">CAMAS NO UTILIZADAS POR AISLACIÓN</p>
+                      <p className="text-2xl font-black text-red-500 mt-0.5">{camasBloqueadasActivas}</p>
+                    </div>
+                    
+                    {/* 5. CAMAS DISPONIBLES */}
+                    <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
+                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES</p>
+                      <p className="text-2xl font-black text-emerald-300 mt-0.5">{camasDisponibles}</p>
+                    </div>
+
                   </div>
-                </>
-              )}
+                </div>
+              );
+            })()}
+             </div>
             </div>
           </div>
 
