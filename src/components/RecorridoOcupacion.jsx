@@ -163,11 +163,22 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     const camasOcupadasHab = estado?.camas_ocupadas || 0;
     const aislamientoActivo = Boolean(estado?.aislamiento);
 
-    if (aislamientoActivo && camasOcupadasHab > 0 && totalCamasHab > 0) {
-      return totalCamasHab;
+    const resultado = aislamientoActivo && camasOcupadasHab > 0 && totalCamasHab > 0 
+      ? totalCamasHab 
+      : Math.min(totalCamasHab, Math.max(0, camasOcupadasHab));
+
+    // Debug para verificar cálculos
+    if (aislamientoActivo) {
+      console.log('DEBUG - Cálculo aislamiento:', {
+        habitacion: hab?.nombre,
+        totalCamasHab,
+        camasOcupadasHab,
+        aislamientoActivo,
+        resultado
+      });
     }
 
-    return Math.min(totalCamasHab, Math.max(0, camasOcupadasHab));
+    return resultado;
   };
 
   const guardarTodas = async () => {
@@ -277,6 +288,19 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     0
   );
   const porcentaje = totalCamas > 0 ? (totalOcupadas / totalCamas) * 100 : 0;
+
+  // Debug para estadísticas
+  console.log('DEBUG - Estadísticas actualizadas:', {
+    totalCamas,
+    totalOcupadas,
+    porcentaje: porcentaje.toFixed(1),
+    habitaciones: habitaciones.map(hab => ({
+      nombre: hab.nombre,
+      camas_ocupadas: ocupaciones[hab.id]?.camas_ocupadas || 0,
+      aislamiento: Boolean(ocupaciones[hab.id]?.aislamiento),
+      efectivas: getCamasOcupadasEfectivas(hab, ocupaciones[hab.id])
+    }))
+  });
 
   // Pantalla de carga
   if (cargando) {

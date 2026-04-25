@@ -3,13 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { supabase } from '../supabaseClient';
 
-const esAislamientoPatologia = (observaciones) =>
-  String(observaciones || '').toUpperCase().includes('AISLAMIENTO');
+const esAislamientoPatologia = (ocup) =>
+  Boolean(ocup?.aislamiento_activo) || String(ocup?.observaciones || '').toUpperCase().includes('AISLAMIENTO');
 
 const getCamasOcupadasEfectivas = (ocup) => {
   const totalCamas = ocup?.total_camas || 0;
   const camasOcupadas = ocup?.camas_ocupadas || 0;
-  const aislamientoActivo = esAislamientoPatologia(ocup?.observaciones);
+  const aislamientoActivo = esAislamientoPatologia(ocup);
 
   if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
     return totalCamas;
@@ -27,7 +27,7 @@ const getCamasOcupadasReales = (ocup) => {
 const getCamasNoUtilizadasPorAislamiento = (ocup) => {
   const totalCamas = ocup?.total_camas || 0;
   const camasOcupadasReales = getCamasOcupadasReales(ocup);
-  const aislamientoActivo = esAislamientoPatologia(ocup?.observaciones);
+  const aislamientoActivo = esAislamientoPatologia(ocup);
 
   if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) {
     return 0;
@@ -220,7 +220,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       
       let query = supabase
         .from('ocupacion_habitaciones')
-        .select('*')
+        .select('*, aislamiento_activo')
         .in('habitacion_id', todasHabitaciones.map(h => h.id));
       
       if (fecha === hoy) {
@@ -290,7 +290,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         const bloqueadas = getCamasNoUtilizadasPorAislamiento(ocup);
         camasBloqueadasAislamiento += bloqueadas;
         
-        if (esAislamientoPatologia(ocup.observaciones)) {
+        if (esAislamientoPatologia(ocup)) {
           habitacionesAisladas += 1;
         }
       }
@@ -325,7 +325,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       
       let query = supabase
         .from('ocupacion_habitaciones')
-        .select('*')
+        .select('*, aislamiento_activo')
         .in('habitacion_id', habitaciones.map(h => h.id))
         .gte('fecha', fechaLimiteStr); // Solo registros de últimos 7 días
 
