@@ -1,4 +1,4 @@
-// components/AsistenteIA.jsx - Versión con voz
+// components/AsistenteIA.jsx - Versión limpia y simplificada
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -40,61 +40,37 @@ const encontrarPisoPorNumero = (pisos, texto) => {
   return null;
 };
 
-const encontrarServicios = (texto, ocupacion) => {
+const encontrarServicio = (texto, ocupacion) => {
   const n = norm(texto);
   const servicios = new Set();
   
-  // Extraer servicios de informacion_ampliatoria
   Object.values(ocupacion).forEach(o => {
     if (o.informacion_ampliatoria) {
       servicios.add(o.informacion_ampliatoria.toLowerCase());
     }
   });
   
-  // Buscar coincidencias exactas o parciales - mejorar lógica
   const serviciosArray = Array.from(servicios);
   const matches = serviciosArray.filter(s => {
-    // Coincidencia exacta
     if (n.includes(s) || s.includes(n)) return true;
     
-    // Coincidencia con palabras clave comunes - normalizar ambos lados
     const palabrasClave = ['pediatria', 'pediatría', 'clinica', 'clínica', 'traumatologia', 'traumatología', 'cardiologia', 'cardiología', 'cirugia', 'cirugía'];
     const servicioNormalizado = norm(s);
     
-    // Buscar coincidencias con palabras clave
     for (const palabra of palabrasClave) {
       if (n.includes(palabra) && servicioNormalizado.includes(palabra)) return true;
     }
     
-    // Coincidencia más flexible para pediatria
     if (n.includes('pediatri') || n.includes('pediatr')) {
       if (servicioNormalizado.includes('pediatri') || servicioNormalizado.includes('pediatr')) return true;
     }
     
-    // Coincidencia más flexible para otros servicios
     if (n.includes('clinic') || n.includes('clín')) {
       if (servicioNormalizado.includes('clinic') || servicioNormalizado.includes('clín')) return true;
     }
     
-    if (n.includes('traumatolog') || n.includes('traumatol')) {
-      if (servicioNormalizado.includes('traumatolog') || servicioNormalizado.includes('traumatol')) return true;
-    }
-    
-    if (n.includes('cardiolog') || n.includes('cardiol')) {
-      if (servicioNormalizado.includes('cardiolog') || servicioNormalizado.includes('cardiol')) return true;
-    }
-    
-    if (n.includes('cirug') || n.includes('ciru')) {
-      if (servicioNormalizado.includes('cirug') || servicioNormalizado.includes('ciru')) return true;
-    }
-    
     return false;
   });
-  
-  // Debug logging
-  console.log('DEBUG: Texto buscado:', n);
-  console.log('DEBUG: Servicios encontrados:', serviciosArray);
-  console.log('DEBUG: Matches:', matches);
   
   return matches.length > 0 ? matches : null;
 };
@@ -110,8 +86,8 @@ const calcularStats = (ocupaciones) => {
       const camasOcupadas = Math.min(totalCamas, Math.max(0, o.camas_ocupadas || 0));
       ocupadasReales += camasOcupadas;
 
-      // Calcular camas bloqueadas por aislamiento
-      if (o.observaciones && String(o.observaciones).toUpperCase().includes('AISLAMIENTO') && camasOcupadas > 0 && totalCamas > 0) {
+      // Calcular camas bloqueadas por aislamiento usando aislamiento_activo
+      if (Boolean(o?.aislamiento_activo) && camasOcupadas > 0 && totalCamas > 0) {
         const bloqueadas = Math.max(0, totalCamas - camasOcupadas);
         aislamiento += bloqueadas;
       }
@@ -125,132 +101,19 @@ const calcularStats = (ocupaciones) => {
   return { total, ocupadas, libres, pct, ocupadasReales, aislamiento };
 };
 
-// ==================== Motor de respuestas ====================
-function responder(texto, { pisos, habitaciones, ocupacion, contextoAnterior }) {
+// ==================== Motor de respuestas simplificado ====================
+function responder(texto, { pisos, habitaciones, ocupacion }) {
   if (!pisos.length || !habitaciones.length) {
     return 'Todavía estoy cargando los datos. Intentá en un momento.';
   }
 
   const n = norm(texto);
-
-  // Detectar si es una respuesta de confirmación para detalles
-  if (contextoAnterior && (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar'))) {
-    // Si el usuario confirma que quiere detalles, proporcionarlos
-    if (contextoAnterior.tipo === 'servicio') {
-      const servicios = encontrarServicios(contextoAnterior.texto, ocupacion);
-      if (servicios && servicios.length > 0) {
-        const labelServicio = servicios.length === 1 ? `**${servicios[0]}**` : `**${servicios.join(' + ')}**`;
-        
-        // Filtrar ocupaciones por servicio
-        const ocuServicio = Object.values(ocupacion).filter(o => 
-          o.informacion_ampliatoria && servicios.some(s => 
-            norm(o.informacion_ampliatoria) === norm(s)
-          )
-        );
-        
-        // Filtrar habitaciones por servicio
-        const habServicio = habitaciones.filter(h => {
-          const o = ocupacion[h.id];
-          return o && o.informacion_ampliatoria && servicios.some(s => 
-            norm(o.informacion_ampliatoria) === norm(s)
-          );
-        });
-
-        // Proporcionar resumen completo del servicio
-        const activas = habServicio.filter(h => ocupacion[h.id]?.tipo_habitacion === 'activa').length;
-        const reparacion = habServicio.filter(h => ocupacion[h.id]?.tipo_habitacion === 'reparacion').length;
-        const otros = habServicio.filter(h => ocupacion[h.id]?.tipo_habitacion === 'otros').length;
-        const stats = calcularStats(ocuServicio);
-        
-        // Contar pacientes por servicio
-        let totalPacientes = 0;
-        habServicio.forEach(h => {
-          const o = ocupacion[h.id];
-          if (o && o.tipo_habitacion === 'activa' && o.camas_ocupadas > 0) {
-            totalPacientes += o.camas_ocupadas;
-          }
-        });
-        
-        // Detalle de habitaciones
-        let detalleHabitaciones = '';
-        habServicio.filter(h => ocupacion[h.id]?.tipo_habitacion === 'activa').forEach(h => {
-          const o = ocupacion[h.id];
-          if (o) {
-            const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
-            detalleHabitaciones += `• **Habitación ${h.nombre}**: ${o.total_camas} totales, ${o.camas_ocupadas} ocupadas, ${camasLibres} libres`;
-            if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
-              detalleHabitaciones += ' (camas bloqueadas por aislamiento)';
-            }
-            detalleHabitaciones += '\n';
-          }
-        });
-        
-        return (
-          `${labelServicio} — Resumen:\n` +
-          `• **${stats.total}** camas totales\n` +
-          `• **${stats.ocupadasReales}** camas ocupadas reales\n` +
-          `• **${totalPacientes}** pacientes internados\n` +
-          `• **${stats.aislamiento}** camas bloqueadas por aislamiento\n` +
-          `• **${stats.libres}** camas disponibles\n` +
-          `• **${stats.pct}%** de ocupación\n` +
-          `• **${activas}** habitaciones activas\n` +
-          `• **${reparacion}** en reparación\n` +
-          `• **${otros}** de tipo "Otros"\n\n` +
-          `**Detalle por habitación:**\n${detalleHabitaciones}`
-        );
-      }
-    }
-    
-    if (contextoAnterior.tipo === 'pacientes') {
-      const piso = encontrarPisoPorNumero(pisos, contextoAnterior.texto);
-      const habs = piso
-        ? habitaciones.filter(h => String(h.piso_id) === String(piso.id))
-        : habitaciones;
-      
-      const stats = calcularStats(habs.map(h => ocupacion[h.id]).filter(Boolean));
-      let detallePacientes = '';
-      habs.filter(h => ocupacion[h.id]?.tipo_habitacion === 'activa' && ocupacion[h.id]?.camas_ocupadas > 0).forEach(h => {
-        const o = ocupacion[h.id];
-        detallePacientes += `• **Habitación ${h.nombre}**: ${o.camas_ocupadas} paciente${o.camas_ocupadas !== 1 ? 's' : ''}\n`;
-      });
-      
-      const labelInicio = piso ? `**${piso.nombre_piso}**` : '**Todo el hospital**';
-      return `${labelInicio} hay **${stats.ocupadasReales}** paciente${stats.ocupadasReales !== 1 ? 's' : ''} internado${stats.ocupadasReales !== 1 ? 's' : ''} de ${stats.total} camas totales.\n\n**Detalle:**\n${detallePacientes}`;
-    }
-    
-    if (contextoAnterior.tipo === 'camas') {
-      const piso = encontrarPisoPorNumero(pisos, contextoAnterior.texto);
-      const habs = piso
-        ? habitaciones.filter(h => String(h.piso_id) === String(piso.id))
-        : habitaciones;
-      
-      const stats = calcularStats(habs.map(h => ocupacion[h.id]).filter(Boolean));
-      let detalleCamas = '';
-      habs.filter(h => ocupacion[h.id]?.tipo_habitacion === 'activa').forEach(h => {
-        const o = ocupacion[h.id];
-        if (o) {
-          const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
-          detalleCamas += `• **Habitación ${h.nombre}**: ${o.total_camas} totales, ${o.camas_ocupadas} ocupadas, ${camasLibres} libres`;
-          if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
-            detalleCamas += ' (camas bloqueadas por aislamiento)';
-          }
-          if (o.informacion_ampliatoria) {
-            detalleCamas += ` - Servicio: **${o.informacion_ampliatoria}**`;
-          }
-          detalleCamas += '\n';
-        }
-      });
-      
-      const labelInicio = piso ? `**${piso.nombre_piso}**` : '**Todo el hospital**';
-      return `${labelInicio} hay **${stats.total}** camas en habitaciones activas (${stats.ocupadas} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).\n\n**Detalle:**\n${detalleCamas}`;
-    }
-  }
-
+  
   // Detectar si menciona un piso
   const piso = encontrarPisoPorNumero(pisos, texto);
   
   // Detectar si menciona un servicio
-  const servicios = encontrarServicios(texto, ocupacion);
+  const servicios = encontrarServicio(texto, ocupacion);
 
   // Filtrar habitaciones por piso si se menciona
   const habs = piso
@@ -258,392 +121,182 @@ function responder(texto, { pisos, habitaciones, ocupacion, contextoAnterior }) 
     : habitaciones;
 
   const getOcup = (h) => ocupacion[h.id];
-  const label = piso ? `en **${piso.nombre_piso}**` : 'en todo el hospital';
-  const labelInicio = piso ? `**${piso.nombre_piso}**` : '**Todo el hospital**';
+  const label = piso ? `en el ${piso.nombre_piso}` : 'en el hospital';
+  const labelInicio = piso ? `En el ${piso.nombre_piso}` : 'En el hospital';
 
   // =========================================================
-  // SCOPE: SERVICIO (prioridad si se menciona servicio específico)
+  // RESPUESTAS ESPECÍFICAS CORTAS Y PRECISAS
   // =========================================================
-  if (servicios && servicios.length > 0) {
-    const labelServicio = servicios.length === 1 ? `**${servicios[0]}**` : `**${servicios.join(' + ')}**`;
-    
-    // Filtrar ocupaciones por servicio
+
+  // Habitaciones de internación por piso
+  if (/habitaci[oó]n|habitaciones/.test(n) && /internaci[oó]n/.test(n) && piso) {
+    const count = habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
+    return `Hay ${count} habitaciones de internación en el ${piso.nombre_piso}.`;
+  }
+
+  // Habitaciones en reparación por piso
+  if (/habitaci[oó]n|habitaciones/.test(n) && /reparaci[oó]n/.test(n) && piso) {
+    const count = habs.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
+    return `Hay ${count} habitaciones en reparación en el ${piso.nombre_piso}.`;
+  }
+
+  // Habitaciones en reparación total
+  if (/habitaci[oó]n|habitaciones/.test(n) && /reparaci[oó]n/.test(n)) {
+    const count = habs.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
+    return `Hay ${count} habitaciones en reparación en el hospital.`;
+  }
+
+  // Camas disponibles por piso
+  if (/cama/.test(n) && /disponible|libre/.test(n) && piso) {
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    return `Hay ${stats.libres} camas disponibles en el ${piso.nombre_piso}.`;
+  }
+
+  // Camas disponibles total
+  if (/cama/.test(n) && /disponible|libre/.test(n)) {
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    return `Hay ${stats.libres} camas disponibles en el hospital.`;
+  }
+
+  // Camas disponibles por servicio
+  if (/cama/.test(n) && /disponible|libre/.test(n) && servicios) {
     const ocuServicio = Object.values(ocupacion).filter(o => 
       o.informacion_ampliatoria && servicios.some(s => 
         norm(o.informacion_ampliatoria) === norm(s)
       )
     );
-    
-    // Filtrar habitaciones por servicio
-    const habServicio = habitaciones.filter(h => {
-      const o = getOcup(h);
-      return o && o.informacion_ampliatoria && servicios.some(s => 
-        norm(o.informacion_ampliatoria) === norm(s)
-      );
-    });
-
-    // Habitaciones del servicio
-    if (/habitaci[oó]n|habitaciones/.test(n)) {
-      if (/activa|paciente/.test(n)) {
-        const activas = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'activa');
-        let respuesta = `${labelServicio} tiene **${activas.length}** habitación${activas.length !== 1 ? 'es' : ''} activa${activas.length !== 1 ? 's' : ''} con pacientes.\n`;
-        
-        // Agregar detalles de cada habitación activa
-        activas.forEach(h => {
-          const o = getOcup(h);
-          if (o) {
-            respuesta += `• **Habitación ${h.nombre}**: `;
-            if (o.tipo_habitacion === 'activa') {
-              const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
-              respuesta += `**${o.total_camas}** camas totales, **${o.camas_ocupadas}** ocupadas, **${camasLibres}** libres`;
-              
-              // Detalles adicionales
-              if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
-                respuesta += ` (camas bloqueadas por aislamiento)`;
-              }
-              if (o.informacion_ampliatoria) {
-                respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
-              }
-            } else if (o.tipo_habitacion === 'reparacion') {
-              respuesta += `En reparación`;
-              if (o.informacion_ampliatoria) {
-                respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
-              }
-            } else if (o.tipo_habitacion === 'otros') {
-              respuesta += `Tipo: **${o.tipo_habitacion}**`;
-              if (o.informacion_ampliatoria) {
-                respuesta += ` - Servicio: **${o.informacion_ampliatoria}**`;
-              }
-            }
-            respuesta += '\n';
-          }
-        });
-        
-        return respuesta;
-      }
-      if (/reparaci[oó]n/.test(n)) {
-        const count = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
-        let respuesta = `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} en reparación.\n`;
-        
-        // Agregar detalles de cada habitación en reparación
-        habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').forEach(h => {
-          respuesta += `• **Habitación ${h.nombre}**: En reparación`;
-          if (h.informacion_ampliatoria) {
-            respuesta += ` - Servicio: **${h.informacion_ampliatoria}**`;
-          }
-          respuesta += '\n';
-        });
-        
-        return respuesta;
-      }
-      if (/otros|oficina|guardia|sala/.test(n)) {
-        const count = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
-        let respuesta = `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} de tipo "Otros".\n`;
-        
-        // Agregar detalles de cada habitación de tipo "Otros"
-        habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'otros').forEach(h => {
-          respuesta += `• **Habitación ${h.nombre}**: **${h.tipo_habitacion}**`;
-          if (h.informacion_ampliatoria) {
-            respuesta += ` - Servicio: **${h.informacion_ampliatoria}**`;
-          }
-          respuesta += '\n';
-        });
-        
-        return respuesta;
-      }
-      const count = habServicio.length;
-      return `${labelServicio} tiene **${count}** habitación${count !== 1 ? 'es' : ''} registradas.`;
-    }
-
-    // Camas del servicio
-    if (/cama/.test(n)) {
-      const stats = calcularStats(ocuServicio);
-      if (!stats || stats.total === 0) {
-        return `${labelServicio} no tiene camas activas.`;
-      }
-      
-      // Respuesta concisa según el tipo
-      let respuestaConcisa = '';
-      if (/libre|disponible/.test(n)) {
-        respuestaConcisa = `${labelServicio} tiene **${stats.libres}** cama${stats.libres !== 1 ? 's' : ''} libre${stats.libres !== 1 ? 's' : ''} (${stats.ocupadasReales} ocupadas de ${stats.total} totales).`;
-      } else if (/ocupad|usad/.test(n)) {
-        respuestaConcisa = `${labelServicio} tiene **${stats.ocupadasReales}** cama${stats.ocupadasReales !== 1 ? 's' : ''} ocupada${stats.ocupadasReales !== 1 ? 's' : ''} con pacientes (${stats.aislamiento} bloqueadas por aislamiento).`;
-      } else if (/bloquead|aislamient/.test(n)) {
-        respuestaConcisa = `${labelServicio} tiene **${stats.aislamiento}** cama${stats.aislamiento !== 1 ? 's' : ''} bloqueadas por aislamiento.`;
-      } else {
-        respuestaConcisa = `${labelServicio} tiene **${stats.total}** camas en total (${stats.ocupadasReales} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
-      }
-      
-      // Si pide detalle, mostrar desglose por habitación
-      if (/detallar|detalle/.test(n)) {
-        let detalleCamas = '';
-        habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'activa').forEach(h => {
-          const o = getOcup(h);
-          if (o) {
-            const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
-            detalleCamas += `• **Habitación ${h.nombre}**: ${o.total_camas} totales, ${o.camas_ocupadas} ocupadas, ${camasLibres} libres`;
-            if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
-              detalleCamas += ' (camas bloqueadas por aislamiento)';
-            }
-            detalleCamas += '\n';
-          }
-        });
-        
-        return respuestaConcisa + '\n\n**Detalle por habitación:**\n' + detalleCamas;
-      }
-      
-      // Si hay camas, ofrecer detalle
-      if (stats.total > 0) {
-        return respuestaConcisa + '\n\n¿Quieres el detalle de camas por habitación?';
-      }
-      
-      return respuestaConcisa;
-    }
-
-    // Resumen del servicio
-    {
-      const activas = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
-      const reparacion = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
-      const otros = habServicio.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
-      const stats = calcularStats(ocuServicio);
-      
-      // Contar pacientes por servicio
-      let totalPacientes = 0;
-      habServicio.forEach(h => {
-        const o = getOcup(h);
-        if (o && o.tipo_habitacion === 'activa' && o.camas_ocupadas > 0) {
-          totalPacientes += o.camas_ocupadas;
-        }
-      });
-      
-      // Respuesta concisa
-      const respuestaConcisa = `${labelServicio} tiene **${stats.total}** camas asignadas, las cuales están ocupadas por **${totalPacientes}** pacientes.`;
-      
-      // Si pide detalle, mostrar resumen completo
-      if (/detallar|detalle/.test(n)) {
-        return (
-          `${labelServicio} — Resumen:\n` +
-          `• **${stats.total}** camas totales\n` +
-          `• **${stats.ocupadasReales}** camas ocupadas reales\n` +
-          `• **${totalPacientes}** pacientes internados\n` +
-          `• **${stats.aislamiento}** camas bloqueadas por aislamiento\n` +
-          `• **${stats.libres}** camas disponibles\n` +
-          `• **${stats.pct}%** de ocupación\n` +
-          `• **${activas}** habitaciones activas\n` +
-          `• **${reparacion}** en reparación\n` +
-          `• **${otros}** de tipo "Otros"`
-        );
-      }
-      
-      // Si hay camas, ofrecer detalle
-      if (stats.total > 0) {
-        return respuestaConcisa + '\n\n¿Quieres el resumen completo del servicio?';
-      }
-      
-      return respuestaConcisa;
-    }
+    const stats = calcularStats(ocuServicio);
+    return `${servicios.join(' + ')} tiene ${stats.libres} camas disponibles.`;
   }
 
-  // Habitaciones activas
-  if (/habitaci[oó]n|habitaciones/.test(n)) {
-    // Buscar número de habitación específico si se menciona
-    const habitacionMatch = n.match(/habitaci[oó]n\s*(\d+)/);
-    if (habitacionMatch) {
-      const numHabitacion = parseInt(habitacionMatch[1]);
-      const habitacion = habs.find(h => h.nombre.includes(numHabitacion.toString()));
-      
-      if (habitacion) {
-        const o = getOcup(habitacion);
-        let respuestaConcisa = `**Habitación ${habitacion.nombre}**: `;
-        
-        if (o) {
-          if (o.tipo_habitacion === 'activa') {
-            respuestaConcisa += `**${o.total_camas}** camas totales, **${o.camas_ocupadas}** ocupadas, **${Math.max(0, o.total_camas - o.camas_ocupadas)}** libres`;
-            
-            // Si pide detalle, mostrar información completa
-            if (/detallar|detalle/.test(n)) {
-              respuestaConcisa += '\n\n**Estado:** ';
-              if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
-                respuestaConcisa += 'Camas bloqueadas por aislamiento. ';
-              }
-              respuestaConcisa += `${o.camas_ocupadas} paciente${o.camas_ocupadas !== 1 ? 's' : ''} internados.`;
-              
-              if (o.informacion_ampliatoria) {
-                respuestaConcisa += `\n**Servicio:** ${o.informacion_ampliatoria}`;
-              }
-            }
-          } else if (o.tipo_habitacion === 'reparacion') {
-            respuestaConcisa += `En reparación`;
-            if (/detallar|detalle/.test(n)) {
-              if (o.informacion_ampliatoria) {
-                respuestaConcisa += `\n\n**Servicio:** ${o.informacion_ampliatoria}`;
-              }
-            }
-          } else if (o.tipo_habitacion === 'otros') {
-            respuestaConcisa += `**${o.tipo_habitacion}**`;
-            if (/detallar|detalle/.test(n)) {
-              if (o.informacion_ampliatoria) {
-                respuestaConcisa += `\n\n**Servicio:** ${o.informacion_ampliatoria}`;
-              }
-            }
-          } else {
-            respuestaConcisa += `Sin datos recientes`;
-          }
-          
-          // Si no pide detalle y hay info adicional, ofrecer detalle
-          if (!/detallar|detalle/.test(n) && o && (o.tipo_habitacion !== 'otros' || o.informacion_ampliatoria)) {
-            respuestaConcisa += '\n\n¿Quieres el detalle completo?';
-          }
-          
-          return respuestaConcisa;
-        } else {
-          return `No se encontró la habitación ${numHabitacion} en el ${piso ? piso.nombre_piso : 'hospital'}.`;
-        }
-      } else {
-        const count = habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
-        return `${labelInicio} hay **${count}** habitación${count !== 1 ? 'es' : ''} activa${count !== 1 ? 's' : ''} con pacientes.`;
-      }
-    }
-  }
-
-  // Camas totales
-  if (/cama/.test(n)) {
+  // Ocupación general del hospital
+  if (/ocupaci[oó]n/.test(n) && !piso && !servicios) {
     const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
-    if (!stats || stats.total === 0) {
-      return `No hay camas activas ${label}.`;
-    }
-    
-    // Respuesta concisa
-    const respuestaConcisa = `${labelInicio} hay **${stats.total}** camas en habitaciones activas (${stats.ocupadas} ocupadas, ${stats.libres} libres, **${stats.pct}%** de ocupación).`;
-    
-    // Si pide detalle, mostrar desglose por habitación
-    if (/detallar|detalle/.test(n)) {
-      let detalleCamas = '';
-      habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa').forEach(h => {
-        const o = getOcup(h);
-        if (o) {
-          const camasLibres = Math.max(0, o.total_camas - o.camas_ocupadas);
-          detalleCamas += `• **Habitación ${h.nombre}**: ${o.total_camas} totales, ${o.camas_ocupadas} ocupadas, ${camasLibres} libres`;
-          if (o.observaciones && o.observaciones.includes('AISLAMIENTO')) {
-            detalleCamas += ' (camas bloqueadas por aislamiento)';
-          }
-          if (o.informacion_ampliatoria) {
-            detalleCamas += ` - Servicio: **${o.informacion_ampliatoria}**`;
-          }
-          detalleCamas += '\n';
-        }
-      });
-      
-      return respuestaConcisa + '\n\n**Detalle:**\n' + detalleCamas;
-    }
-    
-    // Si hay camas, ofrecer detalle
-    if (stats.total > 0) {
-      return respuestaConcisa + '\n\n¿Quieres el detalle de camas por habitación?';
-    }
-    
-    return respuestaConcisa;
+    return `La ocupación del hospital es del ${stats.pct}% (${stats.ocupadas} de ${stats.total} camas).`;
   }
 
-  // Pacientes
-  if (/paciente|pacientes/.test(n)) {
+  // Pacientes internados total
+  if (/paciente|pacientes/.test(n) && !piso && !servicios) {
     const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
-    if (!stats || stats.total === 0) {
-      return `No hay pacientes ${label}.`;
-    }
-    
-    // Respuesta concisa
-    const respuestaConcisa = `${labelInicio} hay **${stats.ocupadasReales}** paciente${stats.ocupadasReales !== 1 ? 's' : ''} internado${stats.ocupadasReales !== 1 ? 's' : ''} de ${stats.total} camas totales.`;
-    
-    // Si pide detalle, mostrar desglose
-    if (/detallar|detalle/.test(n)) {
-      let detallePacientes = '';
-      habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa' && getOcup(h)?.camas_ocupadas > 0).forEach(h => {
-        const o = getOcup(h);
-        detallePacientes += `• **Habitación ${h.nombre}**: ${o.camas_ocupadas} paciente${o.camas_ocupadas !== 1 ? 's' : ''}\n`;
-      });
-      
-      return respuestaConcisa + '\n\n**Detalle:**\n' + detallePacientes;
-    }
-    
-    // Si hay pacientes, ofrecer detalle
-    if (stats.ocupadasReales > 0) {
-      return respuestaConcisa + '\n\n¿Quieres el detalle de pacientes por habitación?';
-    }
-    
-    return respuestaConcisa;
+    return `Hay ${stats.ocupadasReales} pacientes internados en el hospital.`;
   }
 
-  // Total habitaciones
-  if (/habitaci[oó]n|habitaciones/.test(n)) {
-    return `${labelInicio} hay **${habs.length}** habitación${habs.length !== 1 ? 'es' : ''} en total.`;
+  // Pacientes internados por piso
+  if (/paciente|pacientes/.test(n) && piso) {
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    return `Hay ${stats.ocupadasReales} pacientes internados en el ${piso.nombre_piso}.`;
+  }
+
+  // Camas bloqueadas total
+  if (/cama/.test(n) && /bloquead|aislamient/.test(n)) {
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    return `Hay ${stats.aislamiento} camas bloqueadas por aislamiento en el hospital.`;
+  }
+
+  // Habitaciones bloqueadas total
+  if (/habitaci[oó]n|habitaciones/.test(n) && /bloquead|aislamient/.test(n)) {
+    const count = habs.filter(h => Boolean(getOcup(h)?.aislamiento_activo)).length;
+    return `Hay ${count} habitaciones bloqueadas por aislamiento en el hospital.`;
+  }
+
+  // Estado de habitación específica
+  const habitacionMatch = n.match(/habitaci[oó]n\s*(\d+)/);
+  if (habitacionMatch) {
+    const numHabitacion = habitacionMatch[1];
+    const habitacion = habs.find(h => h.nombre === numHabitacion);
+    
+    if (habitacion) {
+      const o = getOcup(habitacion);
+      if (o) {
+        let estado = `Habitación ${habitacion.nombre}: `;
+        
+        if (o.tipo_habitacion === 'activa') {
+          estado += `${o.total_camas} camas totales, ${o.camas_ocupadas} ocupadas, ${Math.max(0, o.total_camas - o.camas_ocupadas)} libres`;
+          if (Boolean(o?.aislamiento_activo)) {
+            estado += ' (con aislamiento)';
+          }
+        } else if (o.tipo_habitacion === 'reparacion') {
+          estado += 'En reparación';
+        } else if (o.tipo_habitacion === 'otros') {
+          estado += 'Otros';
+        }
+        
+        if (o.informacion_ampliatoria) {
+          estado += `. Servicio: ${o.informacion_ampliatoria}`;
+        }
+        
+        if (o.observaciones) {
+          estado += `. Observaciones: ${o.observaciones}`;
+        }
+        
+        return estado + '.';
+      } else {
+        return `Habitación ${numHabitacion}: Sin datos recientes.`;
+      }
+    } else {
+      return `No se encontró la habitación ${numHabitacion} ${piso ? `en el ${piso.nombre_piso}` : 'en el hospital'}.`;
+    }
+  }
+
+  // Habitación específica (formato corto)
+  const habitacionCortaMatch = n.match(/^(\d{3})$/);
+  if (habitacionCortaMatch) {
+    const numHabitacion = habitacionCortaMatch[1];
+    const habitacion = habs.find(h => h.nombre === numHabitacion);
+    
+    if (habitacion) {
+      const o = getOcup(habitacion);
+      if (o) {
+        let estado = `Habitación ${habitacion.nombre}: `;
+        
+        if (o.tipo_habitacion === 'activa') {
+          estado += `${o.total_camas} camas, ${o.camas_ocupadas} ocupadas, ${Math.max(0, o.total_camas - o.camas_ocupadas)} libres`;
+          if (Boolean(o?.aislamiento_activo)) {
+            estado += ' (aislamiento)';
+          }
+        } else if (o.tipo_habitacion === 'reparacion') {
+          estado += 'En reparación';
+        } else if (o.tipo_habitacion === 'otros') {
+          estado += 'Otros';
+        }
+        
+        if (o.informacion_ampliatoria) {
+          estado += `. ${o.informacion_ampliatoria}`;
+        }
+        
+                
+        if (o.observaciones) {
+          estado += `. Observaciones: ${o.observaciones}`;
+        }
+        
+        return estado + '.';
+      } else {
+        return `Habitación ${numHabitacion}: Sin datos.`;
+      }
+    } else {
+      return `No existe la habitación ${numHabitacion}.`;
+    }
   }
 
   // Resumen general
-  if (/resumen|estadistica|estad[ií]sticas|como est[aá]|general/.test(n)) {
-    const scope = habs;
-    const enReparacion = scope.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
-    const enOtros = scope.filter(h => getOcup(h)?.tipo_habitacion === 'otros').length;
-    const activas = scope.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
-    const activasConPacientes = scope.filter(h => getOcup(h)?.tipo_habitacion === 'activa' && getOcup(h)?.camas_ocupadas > 0).length;
-    const sinDatos = scope.filter(h => !getOcup(h)).length;
-    const { total, libres, pct, aislamiento, ocupadasReales } = calcularStats(scope.map(h => getOcup(h)).filter(Boolean));
-    // Las camas disponibles ya tienen en cuenta las bloqueadas por aislamiento
-    // No hay que restarlas nuevamente
-    
-    // Agrupar camas disponibles por servicio y piso para consultas detalladas
-    const disponiblesPorServicioPiso = {};
-    scope.forEach(h => {
-      const ocup = getOcup(h);
-      if (ocup?.tipo_habitacion === 'activa') {
-        const camasLibres = Math.max(0, ocup.total_camas - ocup.camas_ocupadas - (ocup.observaciones?.includes('AISLAMIENTO') ? ocup.total_camas : 0));
-        if (camasLibres > 0) {
-          const servicio = ocup.informacion_ampliatoria?.trim() || 'Sin servicio';
-          const piso = pisos.find(p => String(p.id) === String(h.piso_id))?.nombre_piso || 'Sin piso';
-          const key = `${servicio} - ${piso}`;
-          
-          if (!disponiblesPorServicioPiso[key]) {
-            disponiblesPorServicioPiso[key] = 0;
-          }
-          disponiblesPorServicioPiso[key] += camasLibres;
-        }
-      }
-    });
-
-    // Crear lista detallada de camas disponibles
-    const detalleDisponibles = Object.entries(disponiblesPorServicioPiso)
-      .sort((a, b) => {
-        // Ordenar por piso primero, luego por servicio
-        const pisoA = a[0].split(' - ')[1] || '';
-        const pisoB = b[0].split(' - ')[1] || '';
-        if (pisoA !== pisoB) {
-          return pisoA.localeCompare(pisoB);
-        }
-        return a[0].localeCompare(b[0]);
-      })
-      .map(([servicioPiso, camas]) => `- ${camas} camas ${servicioPiso}`)
-      .join('\n');
-    
-    // Usar el detalle solo si hay camas disponibles
-    const detalleTexto = detalleDisponibles ? `\n${detalleDisponibles}` : '';
+  if (/resumen|general|estad[ií]stica|como est[aá]/.test(n)) {
+    const stats = calcularStats(habs.map(h => getOcup(h)).filter(Boolean));
+    const activas = habs.filter(h => getOcup(h)?.tipo_habitacion === 'activa').length;
+    const reparacion = habs.filter(h => getOcup(h)?.tipo_habitacion === 'reparacion').length;
     
     return (
-      `${labelInicio} - Resumen:\n` +
-      `* **${total}** camas totales\n` +
-      `* **${ocupadasReales}** camas ocupadas con pacientes\n` +
-      `* **${aislamiento}** camas no utilizadas por aislamiento\n` +
-      `* **${pct}%** de ocupación práctica\n` +
-      `* **${libres}** camas disponibles global:${detalleTexto}\n` +
-      `* **${scope.length}** habitaciones en total\n` +
-      `* **${activas}** habitaciones activas\n` +
-      `* **${activasConPacientes}** activas con pacientes\n` +
-      `* **${enReparacion}** en reparación\n` +
-      `* **${enOtros}** en estado "Otros"\n` +
-      `* **${sinDatos}** sin datos de hoy`
+      `Resumen del hospital:\n` +
+      `• ${stats.total} camas totales\n` +
+      `• ${stats.ocupadasReales} pacientes\n` +
+      `• ${stats.aislamiento} camas bloqueadas por aislamiento\n` +
+      `• ${stats.libres} camas disponibles\n` +
+      `• ${stats.pct}% de ocupación\n` +
+      `• ${activas} habitaciones activas\n` +
+      `• ${reparacion} en reparación`
     );
   }
 
-  return 'No entendí la pregunta. Podés preguntarme:\n\n• **Estados generales:** ¿Cuántas habitaciones/camas hay? ¿Cuál es el porcentaje de ocupación?\n• **Por piso:** ¿Cuántas habitaciones en el 6to piso? ¿Cuántos pacientes en el 4to?\n• **Por servicio:** ¿Cuántas camas tiene pediatría? ¿Cuántos pacientes en cardiología?\n• **Detalles:** ¿Cuántas camas libres/ocupadas? ¿Cuántas bloqueadas por aislamiento?\n• **Específico:** ¿Qué estado tiene la habitación 344? ¿Cuál es el servicio de la habitación 301?\n\nSi te ofrezco detalles y respondés "si", te daré la información completa.';
+  return 'No entendí la pregunta. Podés preguntar:\n\n• Cuántas habitaciones de internación hay en el cuarto piso?\n• Cuántas camas disponibles hay en el sexto piso?\n• Cuántas habitaciones en reparación hay en el sexto piso?\n• Cuántas camas disponibles tiene Clínica 1?\n• Cuánta ocupación hay en el hospital?\n• Cuántos pacientes internados hay en el hospital?\n• Cuántas camas bloqueadas hay?\n• Cuántas habitaciones bloqueadas hay?\n• Estado de habitación 402?\n• 401? (número de habitación)';
 }
 
 // ==================== Componente principal ====================
@@ -657,7 +310,6 @@ const AsistenteIA = ({ pisos }) => {
   const [datosListos, setDatosListos] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [contextoAnterior, setContextoAnterior] = useState(null);
   const mensajesEndRef = useRef(null);
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -673,36 +325,26 @@ const AsistenteIA = ({ pisos }) => {
     try {
       setCargando(true);
 
-      // Cargar habitaciones
-      const { data: habitacionesData, error: habError } = await supabase
-        .from('habitaciones_especiales')
-        .select('id, piso_id, nombre');
+      // Cargar habitaciones y ocupación como CroquisPiso
+      const [resHabs, resOcupacion] = await Promise.all([
+        supabase.from('habitaciones_especiales').select('id, piso_id, nombre').order('nombre'),
+        supabase.from('ocupacion_habitaciones').select('*, aislamiento_activo').order('habitacion_id'),
+      ]);
 
-      if (habError) throw habError;
-      setHabitaciones(habitacionesData || []);
+      if (resHabs.error) throw resHabs.error;
+      if (resOcupacion.error) throw resOcupacion.error;
+      
+      setHabitaciones(resHabs.data || []);
+      
+      // Procesar ocupación como CroquisPiso
+      const ocupMap = {};
+      (resOcupacion.data || []).forEach(occ => {
+        if (!ocupMap[occ.habitacion_id]) {
+          ocupMap[occ.habitacion_id] = occ;
+        }
+      });
 
-      // Cargar ocupación
-      if (habitacionesData && habitacionesData.length > 0) {
-        const ids = habitacionesData.map(h => h.id);
-
-        const { data: ocupacionData } = await supabase
-          .from('ocupacion_habitaciones')
-          .select('habitacion_id, tipo_habitacion, camas_ocupadas, total_camas, fecha, actualizado_en, informacion_ampliatoria, observaciones')
-          .in('habitacion_id', ids)
-          .order('fecha', { ascending: false })
-          .order('actualizado_en', { ascending: false });
-
-        // Tomar el registro más reciente por habitación
-        const ocupMap = {};
-        (ocupacionData || []).forEach(occ => {
-          if (!ocupMap[occ.habitacion_id]) {
-            ocupMap[occ.habitacion_id] = occ;
-          }
-        });
-
-        setOcupacion(ocupMap);
-      }
-
+      setOcupacion(ocupMap);
       setDatosListos(true);
     } catch (err) {
       console.error('Error cargando datos:', err);
@@ -711,10 +353,10 @@ const AsistenteIA = ({ pisos }) => {
     }
   };
 
+  
   // Text-to-speech function
   const speak = useCallback((text) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      // Cancelar cualquier speech en curso
       window.speechSynthesis.cancel();
       
       const utterance = new SpeechSynthesisUtterance(text);
@@ -740,7 +382,7 @@ const AsistenteIA = ({ pisos }) => {
     }
   }, []);
 
-  const enviarPregunta = useCallback((textoInput) => {
+  const enviarPregunta = useCallback(async (textoInput) => {
     if (!textoInput.trim()) return;
 
     const pregunta = { tipo: 'user', texto: textoInput };
@@ -752,34 +394,15 @@ const AsistenteIA = ({ pisos }) => {
       return;
     }
 
-    // Guardar contexto para futuras respuestas (antes de generar respuesta)
-    const n = norm(textoInput);
     
-    // Si es una respuesta de confirmación, mantener el contexto existente
-    if (n.includes('si') || n.includes('sí') || n.includes('detalle') || n.includes('detallar')) {
-      // No hacer nada, mantener el contexto existente
-      console.log('DEBUG: Manteniendo contexto para respuesta de confirmación');
-    } else {
-      // Si no es confirmación, actualizar contexto según la consulta
-      if (encontrarServicios(textoInput, ocupacion)) {
-        setContextoAnterior({ tipo: 'servicio', texto: textoInput });
-      } else if (/paciente|pacientes/.test(n)) {
-        setContextoAnterior({ tipo: 'pacientes', texto: textoInput });
-      } else if (/cama/.test(n)) {
-        setContextoAnterior({ tipo: 'camas', texto: textoInput });
-      } else {
-        setContextoAnterior(null);
-      }
-    }
-
-    const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion, contextoAnterior });
+    const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion });
     setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
     
     // Reproducir respuesta por voz automáticamente
     setTimeout(() => {
       speak(respuesta.replace(/\*\*/g, '').replace(/·/g, ''));
     }, 500);
-  }, [cargando, pisos, habitaciones, ocupacion, speak, contextoAnterior]);
+  }, [cargando, pisos, habitaciones, ocupacion, speak]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -821,7 +444,6 @@ const AsistenteIA = ({ pisos }) => {
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         setInput(transcript);
-        // Enviar automáticamente después de reconocer
         setTimeout(() => enviarPregunta(transcript), 500);
       };
       
@@ -840,40 +462,16 @@ const AsistenteIA = ({ pisos }) => {
     }
   }, [enviarPregunta]);
 
-  // Voice input handler
   const startListening = () => {
     if (recognitionRef.current && !isListening) {
       recognitionRef.current.start();
     }
   };
 
-  // Stop listening
   const stopListening = () => {
     if (recognitionRef.current && isListening) {
       recognitionRef.current.stop();
     }
-  };
-
-  // Enhanced enviarPregunta to include voice response
-  const enviarPreguntaConVoz = (textoInput) => {
-    if (!textoInput.trim()) return;
-
-    const pregunta = { tipo: 'user', texto: textoInput };
-    setMensajes(prev => [...prev, pregunta]);
-    setInput('');
-
-    if (cargando) {
-      const respuesta = 'Cargando datos, esperá un momento...';
-      setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
-      speak(respuesta);
-      return;
-    }
-
-    const respuesta = responder(textoInput, { pisos, habitaciones, ocupacion });
-    setMensajes(prev => [...prev, { tipo: 'bot', texto: respuesta }]);
-    
-    // Speak the response
-    speak(respuesta.replace(/\*\*/g, '').replace(/·/g, ''));
   };
 
   return (
@@ -950,7 +548,7 @@ const AsistenteIA = ({ pisos }) => {
           {/* Sugerencias */}
           {mensajes.length <= 1 && (
             <div className="px-3 pb-2 flex flex-wrap gap-1 flex-shrink-0">
-              {['Resumen general', '¿Cuántas habitaciones hay en el 6to piso?', '¿Cuántas camas libres hay?', '¿Cuál es el porcentaje de ocupación?'].map((s, i) => (
+              {['¿Cuántas habitaciones de internación hay en el cuarto piso?', '¿Cuántas camas disponibles hay en el sexto piso?', '¿Cuánta ocupación hay en el hospital?', 'Estado de habitación 402?'].map((s, i) => (
                 <button
                   key={i}
                   onClick={() => enviarPregunta(s)}
@@ -974,7 +572,6 @@ const AsistenteIA = ({ pisos }) => {
               className="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500 transition-colors"
             />
             
-            {/* Voice control buttons */}
             <button
               onClick={isListening ? stopListening : startListening}
               disabled={!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)}
@@ -997,20 +594,14 @@ const AsistenteIA = ({ pisos }) => {
             </button>
             
             <button
-              onClick={() => enviarPreguntaConVoz(input)}
+              onClick={() => enviarPregunta(input)}
               disabled={!input.trim() || isSpeaking}
               className="bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl px-3 py-2 transition-colors"
-              title="Enviar y escuchar respuesta"
+              title="Enviar pregunta"
             >
-              {isSpeaking ? (
-                <svg className="w-4 h-4 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 0112.728 0" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              )}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
             </button>
           </div>
         </div>
