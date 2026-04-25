@@ -121,8 +121,6 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     : habitaciones;
 
   const getOcup = (h) => ocupacion[h.id];
-  const label = piso ? `en el ${piso.nombre_piso}` : 'en el hospital';
-  const labelInicio = piso ? `En el ${piso.nombre_piso}` : 'En el hospital';
 
   // =========================================================
   // RESPUESTAS ESPECÍFICAS CORTAS Y PRECISAS
