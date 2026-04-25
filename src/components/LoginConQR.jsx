@@ -326,7 +326,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
               </svg>
             </div>
-            <h1 className="text-2xl font-black text-white uppercase">HNPM HOTELERÍA</h1>
+            <h1 className="text-xl font-black text-white uppercase">HNPM HOTELERÍA</h1>
             <p className="text-blue-400 text-xs uppercase mt-2 font-semibold">Panel de Control</p>
           </div>
           
@@ -337,7 +337,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
                 type="text"
                 value={usuario}
                 onChange={(e) => setUsuario(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-lg outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-base outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="usuario"
                 required
                 disabled={bloqueado}
@@ -350,7 +350,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
                 type="password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-2xl text-center tracking-[0.5em] outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-xl text-center tracking-[0.5em] outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="••••"
                 maxLength="6"
                 required
@@ -360,14 +360,14 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
             
             {error && (
               <div className="p-3 bg-red-900/30 border border-red-800 rounded-xl">
-                <p className="text-sm text-center text-red-400">{error}</p>
+                <p className="text-xs text-center text-red-400">{error}</p>
               </div>
             )}
             
             <button
               type="submit"
               disabled={verificando || bloqueado}
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white font-black py-4 rounded-xl shadow-lg active:scale-95 uppercase disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white font-black py-4 rounded-xl shadow-lg active:scale-95 uppercase text-sm"
             >
               {verificando ? 'VERIFICANDO...' : 'INGRESAR'}
             </button>
@@ -388,7 +388,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
             </svg>
           </div>
           <h1 className="text-xl font-black text-white uppercase">HNPM HOTELERÍA</h1>
-          <p className="text-blue-400 text-[10px] uppercase mt-1 font-semibold">Acceso con Credencial</p>
+          <p className="text-blue-400 text-xs uppercase mt-1 font-semibold">Acceso con Credencial</p>
         </div>
 
         <LiveQRScanner 
