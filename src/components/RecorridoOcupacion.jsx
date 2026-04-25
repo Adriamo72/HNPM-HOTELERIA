@@ -188,16 +188,25 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   
   try {
     // Un solo upsert con todos los registros en paralelo
-    const payload = habitaciones.map(hab => ({
+    const payload = habitaciones.map(hab => {
+    console.log('DEBUG - Guardando habitación:', {
+      habitacionId: hab.id,
+      aislamientoEstado: ocupaciones[hab.id]?.aislamiento,
+      observacionesOriginales: hab.observaciones,
+      observacionesGuardadas: ocupaciones[hab.id]?.aislamiento ? AISLAMIENTO_TOKEN : null
+    });
+    
+    return {
       habitacion_id: hab.id,
       fecha: fecha,
       tipo_habitacion: 'activa',
       total_camas: hab.total_camas,
       camas_ocupadas: ocupaciones[hab.id]?.camas_ocupadas || 0,
-      observaciones: ocupaciones[hab.id]?.aislamiento ? AISLAMIENTO_TOKEN : hab.observaciones || null,
+      observaciones: ocupaciones[hab.id]?.aislamiento ? AISLAMIENTO_TOKEN : null,
       actualizado_por: perfilUsuario?.dni,
       actualizado_en: timestampActual
-    }));
+    };
+  });
 
     const [{ error: upsertError }] = await Promise.all([
       supabase.from('ocupacion_habitaciones').upsert(payload, { onConflict: 'habitacion_id,fecha' }),
