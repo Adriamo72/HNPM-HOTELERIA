@@ -127,20 +127,39 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     const estadoActual = ocupaciones[habitacionId];
     const camasOcupadas = estadoActual?.camas_ocupadas || 0;
     
+    console.log('DEBUG - togglearAislamiento:', {
+      habitacionId,
+      estadoActual,
+      camasOcupadas,
+      aislamientoActual: estadoActual?.aislamiento
+    });
+    
     // No permitir activar aislamiento si no hay camas ocupadas
     if (!estadoActual?.aislamiento && camasOcupadas === 0) {
+      console.log('DEBUG - Bloqueando activación de aislamiento');
       setError("No se puede activar AISLAMIENTO si no hay camas ocupadas");
       setTimeout(() => setError(null), 3000);
       return;
     }
     
+    console.log('DEBUG - Permitiendo cambio de aislamiento');
+    
+    // Mostrar feedback inmediato
+    const nuevoEstado = !(estadoActual?.aislamiento);
+    const mensaje = nuevoEstado ? "✅ AISLAMIENTO ACTIVADO" : "❌ AISLAMIENTO DESACTIVADO";
+    
+    // Actualizar estado inmediatamente
     setOcupaciones(prev => ({
       ...prev,
       [habitacionId]: {
         ...(prev[habitacionId] || {}),
-        aislamiento: !(prev[habitacionId]?.aislamiento)
+        aislamiento: nuevoEstado
       }
     }));
+    
+    // Mostrar feedback visual
+    setMensajeExito(mensaje);
+    setTimeout(() => setMensajeExito(null), 2000);
   };
 
   const getCamasOcupadasEfectivas = (hab, estado) => {
