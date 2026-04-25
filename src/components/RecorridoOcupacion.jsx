@@ -2,11 +2,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
-const AISLAMIENTO_TOKEN = 'AISLAMIENTO_PATOLOGIA';
-
-const esAislamientoPatologia = (observaciones) =>
-  String(observaciones || '').toUpperCase().includes('AISLAMIENTO');
-
 const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const [piso, setPiso] = useState(null);
   const [habitaciones, setHabitaciones] = useState([]);
@@ -57,7 +52,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       const habitacionIds = habitacionesData.map(h => h.id);
       const { data: ocupacionesData, error: ocupError } = await supabase
         .from('ocupacion_habitaciones')
-        .select('habitacion_id, tipo_habitacion, total_camas, camas_ocupadas, observaciones, fecha, actualizado_en')
+        .select('habitacion_id, tipo_habitacion, total_camas, camas_ocupadas, observaciones, aislamiento_activo, fecha, actualizado_en')
         .in('habitacion_id', habitacionIds)
         .order('fecha', { ascending: false })
         .order('actualizado_en', { ascending: false });
@@ -87,7 +82,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
           });
           ocupState[hab.id] = {
             camas_ocupadas: ocupReciente.camas_ocupadas || 0,
-            aislamiento: esAislamientoPatologia(ocupReciente.observaciones)
+            aislamiento: Boolean(ocupReciente.aislamiento_activo) || (ocupReciente.observaciones || '').toUpperCase().includes('AISLAMIENTO')
           };
         }
       }
@@ -207,6 +202,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         total_camas: hab.total_camas,
         camas_ocupadas: ocupaciones[hab.id]?.camas_ocupadas || 0,
         observaciones: observacionesAGuardar,
+        aislamiento_activo: Boolean(ocupaciones[hab.id]?.aislamiento),
         actualizado_por: perfilUsuario?.dni,
         actualizado_en: timestampActual
       };
