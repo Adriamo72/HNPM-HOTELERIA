@@ -124,6 +124,16 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   };
 
   const togglearAislamiento = (habitacionId) => {
+    const estadoActual = ocupaciones[habitacionId];
+    const camasOcupadas = estadoActual?.camas_ocupadas || 0;
+    
+    // No permitir activar aislamiento si no hay camas ocupadas
+    if (!estadoActual?.aislamiento && camasOcupadas === 0) {
+      setError("No se puede activar AISLAMIENTO si no hay camas ocupadas");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+    
     setOcupaciones(prev => ({
       ...prev,
       [habitacionId]: {

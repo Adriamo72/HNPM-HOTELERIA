@@ -35,7 +35,8 @@ const VisualizadorDashboard = () => {
     camas_ocupadas: '',
     total_camas: '',
     aislacion: '',
-    novedades: ''
+    novedades: '',
+    camas_disponibles: ''
   });
 
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
@@ -426,6 +427,30 @@ const VisualizadorDashboard = () => {
         }
       }
       
+      // Filtros específicos para disponible
+      if (tipo === 'disponible') {
+        const totalCamas = ocu?.total_camas || 0;
+        const camasOcupadas = ocu?.camas_ocupadas || 0;
+        const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+        let camasBloqueadas = 0;
+        
+        if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
+          camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
+        }
+        
+        const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
+        
+        // Aplicar filtro de camas_disponibles si existe
+        if (filters.camas_disponibles) {
+          if (!String(camasDisponibles).includes(filters.camas_disponibles)) {
+            return false;
+          }
+        }
+        
+        // Solo habitaciones con camas disponibles > 0
+        return camasDisponibles > 0;
+      }
+      
       switch (tipo) {
         case 'ocupacion':
           // Solo habitaciones de internación que estén ocupadas
@@ -436,6 +461,21 @@ const VisualizadorDashboard = () => {
           return ocu && ocu.tipo_habitacion === 'reparacion';
         case 'otros':
           return ocu && ocu.tipo_habitacion === 'otros';
+        case 'disponible':
+          // Mostrar solo habitaciones de internación (activas) que tengan camas disponibles > 0
+          if (!ocu || ocu.tipo_habitacion !== 'activa') return false;
+          
+          const totalCamas = ocu.total_camas || 0;
+          const camasOcupadas = ocu.camas_ocupadas || 0;
+          const aislamientoActivo = ocu.observaciones?.includes('AISLAMIENTO');
+          let camasBloqueadas = 0;
+          
+          if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
+            camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
+          }
+          
+          const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
+          return camasDisponibles > 0;
         default:
           return false;
       }
@@ -736,6 +776,12 @@ const VisualizadorDashboard = () => {
             >
               Ocupación
             </button>
+            <button 
+              onClick={() => setActiveEstadosTab('disponible')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'disponible' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Disponible
+            </button>
           </div>
 
           {/* Resúmenes totales entre botones y tabla */}
@@ -770,6 +816,38 @@ const VisualizadorDashboard = () => {
                     <div>
                       <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">TOTAL DE HABITACIONES OTROS</p>
                       <p className="text-2xl font-black text-purple-400">{filtrarHabitacionesPorTipo('otros').length}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {activeEstadosTab === 'disponible' && (
+                <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
+                  <div className="flex gap-6 justify-center flex-wrap">
+                    <div>
+                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">TOTAL DE CAMAS DISPONIBLES</p>
+                      <p className="text-2xl font-black text-emerald-300">
+                        {(() => {
+                          const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
+                          const totalCamasActivas = habitacionesActivas.reduce((total, hab) => {
+                            const ocu = ocupacion[String(hab.id)];
+                            return total + (ocu?.total_camas || 0);
+                          }, 0);
+                          const camasOcupadasActivas = habitacionesActivas.reduce((total, hab) => {
+                            const ocu = ocupacion[String(hab.id)];
+                            return total + (ocu?.camas_ocupadas || 0);
+                          }, 0);
+                          const camasBloqueadasActivas = habitacionesActivas.reduce((total, hab) => {
+                            const ocu = ocupacion[String(hab.id)];
+                            const totalCamas = ocu?.total_camas || 0;
+                            const camasOcupadasReales = ocu?.camas_ocupadas || 0;
+                            const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+                            if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return total;
+                            return total + Math.max(0, totalCamas - camasOcupadasReales);
+                          }, 0);
+                          return totalCamasActivas - camasOcupadasActivas - camasBloqueadasActivas;
+                        })()}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -874,7 +952,20 @@ const VisualizadorDashboard = () => {
                         />
                       </div>
                     </th>
-                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                    {activeEstadosTab === 'disponible' ? (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        CAMAS DISPONIBLES
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar..."
+                            value={filters.camas_disponibles || ''}
+                            onChange={(e) => updateFilter('camas_disponibles', e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                          />
+                        </div>
+                      </th>
+                    ) : (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                         CAMAS OCUPADAS
                         <div className="mt-1">
@@ -941,6 +1032,23 @@ const VisualizadorDashboard = () => {
                       <tr key={habitacion.id} className="border-b border-slate-800 hover:bg-slate-800/50">
                         <td className="px-4 py-3 text-slate-200">{piso?.nombre_piso || 'Sin piso'}</td>
                         <td className="px-4 py-3 text-slate-200">{habitacion.nombre || 'Sin nombre'}</td>
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion' || activeEstadosTab === 'disponible') && (
+                          <td className="px-4 py-3 text-slate-200">
+                            {(() => {
+                              const totalCamas = ocu?.total_camas || 0;
+                              const camasOcupadas = ocu?.camas_ocupadas || 0;
+                              const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+                              let camasBloqueadas = 0;
+                              
+                              if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
+                                camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
+                              }
+                              
+                              const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
+                              return String(camasDisponibles);
+                            })()}
+                          </td>
+                        )}
                         {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
                           <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.camas_ocupadas || 0) : '0'}</td>
                         )}
