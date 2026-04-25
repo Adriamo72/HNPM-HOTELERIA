@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 import { supabase } from '../supabaseClient';
 
 const esAislamientoPatologia = (ocup) =>
-  Boolean(ocup?.aislamiento_activo) || String(ocup?.observaciones || '').toUpperCase().includes('AISLAMIENTO');
+  Boolean(ocup?.aislamiento_activo);
 
 const getCamasOcupadasEfectivas = (ocup) => {
   const totalCamas = ocup?.total_camas || 0;

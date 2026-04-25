@@ -82,7 +82,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
           });
           ocupState[hab.id] = {
             camas_ocupadas: ocupReciente.camas_ocupadas || 0,
-            aislamiento: Boolean(ocupReciente.aislamiento_activo) || (ocupReciente.observaciones || '').toUpperCase().includes('AISLAMIENTO')
+            aislamiento: Boolean(ocupReciente.aislamiento_activo)
           };
         }
       }
