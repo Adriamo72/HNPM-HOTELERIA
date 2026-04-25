@@ -219,13 +219,14 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
           estado += 'Otros';
         }
         
+        if (o.observaciones) {
+          estado += `. Observaciones: ${o.observaciones}`;
+        }
+        
         if (o.informacion_ampliatoria) {
           estado += `. Servicio: ${o.informacion_ampliatoria}`;
         }
         
-        if (o.observaciones) {
-          estado += `. Observaciones: ${o.observaciones}`;
-        }
         
         return estado + '.';
       } else {
@@ -236,7 +237,7 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
     }
   }
 
-  // Habitación específica (formato corto)
+  // Habitaciones por número (formato corto: "401", "502", etc.)
   const habitacionCortaMatch = n.match(/^(\d{3})$/);
   if (habitacionCortaMatch) {
     const numHabitacion = habitacionCortaMatch[1];
@@ -258,11 +259,11 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
           estado += 'Otros';
         }
         
+                
         if (o.informacion_ampliatoria) {
           estado += `. ${o.informacion_ampliatoria}`;
         }
         
-                
         if (o.observaciones) {
           estado += `. Observaciones: ${o.observaciones}`;
         }
@@ -326,7 +327,7 @@ const AsistenteIA = ({ pisos }) => {
       // Cargar habitaciones y ocupación como CroquisPiso
       const [resHabs, resOcupacion] = await Promise.all([
         supabase.from('habitaciones_especiales').select('id, piso_id, nombre').order('nombre'),
-        supabase.from('ocupacion_habitaciones').select('*, aislamiento_activo').order('habitacion_id'),
+        supabase.from('ocupacion_habitaciones').select('*, aislamiento_activo').order('fecha', { ascending: false }),
       ]);
 
       if (resHabs.error) throw resHabs.error;
@@ -334,7 +335,7 @@ const AsistenteIA = ({ pisos }) => {
       
       setHabitaciones(resHabs.data || []);
       
-      // Procesar ocupación como CroquisPiso
+      // Procesar ocupación priorizando el registro más reciente por fecha
       const ocupMap = {};
       (resOcupacion.data || []).forEach(occ => {
         if (!ocupMap[occ.habitacion_id]) {
