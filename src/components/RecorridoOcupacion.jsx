@@ -126,27 +126,28 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
   const togglearAislamiento = (habitacionId) => {
     const estadoActual = ocupaciones[habitacionId];
     const camasOcupadas = estadoActual?.camas_ocupadas || 0;
+    const aislamientoActual = Boolean(estadoActual?.aislamiento);
     
     console.log('DEBUG - togglearAislamiento:', {
       habitacionId,
-      estadoActual,
       camasOcupadas,
-      aislamientoActual: estadoActual?.aislamiento
+      aislamientoActual,
+      intento: aislamientoActual ? 'DESACTIVAR' : 'ACTIVAR'
     });
     
-    // No permitir activar aislamiento si no hay camas ocupadas
-    if (!estadoActual?.aislamiento && camasOcupadas === 0) {
-      console.log('DEBUG - Bloqueando activación de aislamiento');
+    // SOLO bloquear si se intenta ACTIVAR aislamiento con 0 pacientes
+    if (!aislamientoActual && camasOcupadas === 0) {
+      console.log('DEBUG - Bloqueando ACTIVACIÓN: no hay pacientes');
       setError("No se puede activar AISLAMIENTO si no hay camas ocupadas");
       setTimeout(() => setError(null), 3000);
       return;
     }
     
-    console.log('DEBUG - Permitiendo cambio de aislamiento');
-    
-    // Mostrar feedback inmediato
-    const nuevoEstado = !(estadoActual?.aislamiento);
+    // Permitir el cambio (activación con pacientes o desactivación siempre)
+    const nuevoEstado = !aislamientoActual;
     const mensaje = nuevoEstado ? "✅ AISLAMIENTO ACTIVADO" : "❌ AISLAMIENTO DESACTIVADO";
+    
+    console.log('DEBUG - Permitiendo cambio:', aislamientoActual ? 'DESACTIVAR' : 'ACTIVAR');
     
     // Actualizar estado inmediatamente
     setOcupaciones(prev => ({
