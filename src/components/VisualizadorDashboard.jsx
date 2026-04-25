@@ -1057,7 +1057,7 @@ const VisualizadorDashboard = () => {
                         )}
                         {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
                           <td className="px-4 py-3 text-slate-200">
-                            {ocu?.observaciones?.includes('AISLAMIENTO') ? (
+                            {Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO') ? (
                               <span className="text-red-400 font-semibold">SI</span>
                             ) : (
                               <span className="text-green-400">NO</span>

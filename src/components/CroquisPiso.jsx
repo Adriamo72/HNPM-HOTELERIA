@@ -929,7 +929,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
               
               const ocup = ocupacion[hab.id];
               const estilo = getColorPorTipoYOcupacion(hab, ocup);
-              const aislamientoActivo = ocup?.tipo_habitacion === 'activa' && esAislamientoPatologia(ocup?.observaciones);
+              const aislamientoActivo = ocup?.tipo_habitacion === 'activa' && esAislamientoPatologia(ocup);
               
               let displayTexto = '';
               if (!ocup) {
