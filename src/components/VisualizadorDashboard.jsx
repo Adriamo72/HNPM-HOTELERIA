@@ -491,6 +491,8 @@ const VisualizadorDashboard = () => {
     // Determinar columnas según el tipo de pestaña
     if (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') {
       headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN');
+    } else if (activeEstadosTab === 'disponible') {
+      headers.push('CAMAS DISPONIBLES');
     }
     headers.push('NOVEDADES');
     
@@ -549,6 +551,32 @@ const VisualizadorDashboard = () => {
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
             (Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO')) ? 'SI' : 'NO',
+            ocu?.observaciones || 'Sin novedades'
+          ];
+        });
+        break;
+      case 'disponible':
+        titulo = 'Habitaciones Disponibles';
+        datosTabla = filtrarHabitacionesPorTipo('disponible').map(habitacion => {
+          const ocu = ocupacion[String(habitacion.id)];
+          const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+          
+          // Calcular camas disponibles
+          const totalCamas = ocu?.total_camas || 0;
+          const camasOcupadas = ocu?.camas_ocupadas || 0;
+          const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
+          let camasBloqueadas = 0;
+          
+          if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
+            camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
+          }
+          
+          const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
+          
+          return [
+            piso?.nombre_piso || 'Sin piso',
+            habitacion.nombre || 'Sin nombre',
+            String(camasDisponibles),
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -1032,7 +1060,7 @@ const VisualizadorDashboard = () => {
                       <tr key={habitacion.id} className="border-b border-slate-800 hover:bg-slate-800/50">
                         <td className="px-4 py-3 text-slate-200">{piso?.nombre_piso || 'Sin piso'}</td>
                         <td className="px-4 py-3 text-slate-200">{habitacion.nombre || 'Sin nombre'}</td>
-                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion' || activeEstadosTab === 'disponible') && (
+                        {activeEstadosTab === 'disponible' && (
                           <td className="px-4 py-3 text-slate-200">
                             {(() => {
                               const totalCamas = ocu?.total_camas || 0;

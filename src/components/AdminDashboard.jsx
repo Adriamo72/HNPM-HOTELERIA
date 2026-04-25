@@ -273,57 +273,54 @@ const AdminDashboard = () => {
   };
 
   const cargarEstadoHabitaciones = async (habitaciones = []) => {
-  if (!habitaciones.length) return;
+    if (!habitaciones.length) return;
 
-  try {
-    const { data, error } = await supabase
-      .from('ocupacion_habitaciones')
-      .select('*')
-      .in('habitacion_id', habitaciones.map(h => h.id))
-      .order('actualizado_en', { ascending: false })
-      .order('fecha', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('ocupacion_habitaciones')
+        .select('*, aislamiento_activo')
+        .in('habitacion_id', habitaciones.map(h => h.id))
+        .order('actualizado_en', { ascending: false })
+        .order('fecha', { ascending: false });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const estadoPorHabitacion = {};
-    (data || []).forEach(e => {
-      if (!estadoPorHabitacion[e.habitacion_id]) {
-        estadoPorHabitacion[e.habitacion_id] = e;
-      }
-    });
+      const estadoPorHabitacion = {};
+      (data || []).forEach(e => {
+        if (!estadoPorHabitacion[e.habitacion_id]) {
+          estadoPorHabitacion[e.habitacion_id] = e;
+        }
+      });
 
-    // Actualizar habitacionStatus para la funcionalidad existente
-    const next = {};
-    habitaciones.forEach(hab => {
-      const estado = estadoPorHabitacion[hab.id];
-      const tipo = estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS';
-      next[hab.id] = {
-        tipo: tipo,
-        camas: estado?.total_camas?.toString() || '0',
-        texto: tipo === 'OTROS' ? (estado?.observaciones || '') : '',
-        observaciones: tipo === 'INTERNACION' ? (estado?.observaciones || '') : (tipo === 'EN REPARACION' ? (estado?.observaciones || '') : ''),
-        camas_ocupadas: estado?.camas_ocupadas || 0,
-        // informacion_ampliatoria eliminado - ahora usa observaciones
-      };
-    });
-    setHabitacionStatus(prev => ({
-      ...prev,
-      ...next
-    }));
+      const next = {};
+      habitaciones.forEach(hab => {
+        const estado = estadoPorHabitacion[hab.id];
+        const tipo = estado ? TIPO_MAP_UI[estado.tipo_habitacion] || 'OTROS' : 'OTROS';
+        next[hab.id] = {
+          tipo: tipo,
+          camas: estado?.total_camas?.toString() || '0',
+          texto: tipo === 'OTROS' ? (estado?.observaciones || '') : '',
+          observaciones: tipo === 'INTERNACION' ? (estado?.observaciones || '') : (tipo === 'EN REPARACION' ? (estado?.observaciones || '') : ''),
+          camas_ocupadas: estado?.camas_ocupadas || 0,
+        };
+      });
+      setHabitacionStatus(prev => ({
+        ...prev,
+        ...next
+      }));
 
-    // Actualizar ocupacion para la funcionalidad ESTADOS
-    const ocupacionMap = {};
-    (data || []).forEach(e => {
-      if (!ocupacionMap[String(e.habitacion_id)]) {
-        ocupacionMap[String(e.habitacion_id)] = e;
-      }
-    });
-    
-    setOcupacion(ocupacionMap);
-  } catch (error) {
-    console.error('Error cargando estado de habitaciones:', error);
-  }
-};
+      const ocupacionMap = {};
+      (data || []).forEach(e => {
+        if (!ocupacionMap[String(e.habitacion_id)]) {
+          ocupacionMap[String(e.habitacion_id)] = e;
+        }
+      });
+      
+      setOcupacion(ocupacionMap);
+    } catch (error) {
+      console.error('Error cargando estado de habitaciones:', error);
+    }
+  };
 
   const guardarEstadoHabitacion = async (habId) => {
   const config = habitacionStatus[habId];
@@ -1696,7 +1693,7 @@ const eliminarVisualizador = async (visId, usuario) => {
         return false;
       }
       
-      // Filtros específicos para internacion/ocupacion/disponible
+      // Filtros específicos para internacion/ocupacion
       if (tipo === 'internacion' || tipo === 'ocupacion') {
         if (filters.camas_ocupadas && !String(ocu?.camas_ocupadas || 0).includes(filters.camas_ocupadas)) {
           return false;
@@ -1705,7 +1702,7 @@ const eliminarVisualizador = async (visId, usuario) => {
           return false;
         }
         if (filters.aislacion) {
-          const tieneAislamiento = ocu?.observaciones?.includes('AISLAMIENTO');
+          const tieneAislamiento = Boolean(ocu?.aislamiento_activo);
           if (filters.aislacion === 'SI' && !tieneAislamiento) return false;
           if (filters.aislacion === 'NO' && tieneAislamiento) return false;
         }
@@ -1715,7 +1712,7 @@ const eliminarVisualizador = async (visId, usuario) => {
       if (tipo === 'disponible') {
         const totalCamas = ocu?.total_camas || 0;
         const camasOcupadas = ocu?.camas_ocupadas || 0;
-        const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+        const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
         let camasBloqueadas = 0;
         
         if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
@@ -1731,18 +1728,7 @@ const eliminarVisualizador = async (visId, usuario) => {
           }
         }
         
-        // Debug para ver qué está pasando
-        console.log('DEBUG - Habitación:', {
-          nombre: habitacion.nombre,
-          totalCamas,
-          camasOcupadas,
-          camasBloqueadas,
-          camasDisponibles,
-          resultado: camasDisponibles > 0
-        });
-        
-        // El filtrado principal se hará en el switch
-        // Guardamos el resultado en una variable temporal
+        // Solo habitaciones con camas disponibles > 0
         return camasDisponibles > 0;
       }
       
@@ -1753,12 +1739,24 @@ const eliminarVisualizador = async (visId, usuario) => {
         case 'internacion':
           return ocu && ocu.tipo_habitacion === 'activa';
         case 'reparacion':
-          // Mostrar habitaciones que tienen registro de ocupación con tipo 'reparacion' 
-          // O que están configuradas localmente como 'EN REPARACION'
-          const status = habitacionStatus[habitacion.id];
-          return (ocu && ocu.tipo_habitacion === 'reparacion') || (status && status.tipo === 'EN REPARACION');
+          return ocu && ocu.tipo_habitacion === 'reparacion';
         case 'otros':
           return ocu && ocu.tipo_habitacion === 'otros';
+        case 'disponible':
+          // Mostrar solo habitaciones de internación (activas) que tengan camas disponibles > 0
+          if (!ocu || ocu.tipo_habitacion !== 'activa') return false;
+          
+          const totalCamas = ocu.total_camas || 0;
+          const camasOcupadas = ocu.camas_ocupadas || 0;
+          const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
+          let camasBloqueadas = 0;
+          
+          if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
+            camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
+          }
+          
+          const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
+          return camasDisponibles > 0;
         default:
           return false;
       }
@@ -1789,7 +1787,7 @@ const eliminarVisualizador = async (visId, usuario) => {
             habitacion.nombre || 'Sin nombre',
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
-            ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+            Boolean(ocu?.aislamiento_activo) ? 'SI' : 'NO',
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -1843,7 +1841,7 @@ const eliminarVisualizador = async (visId, usuario) => {
             habitacion.nombre || 'Sin nombre',
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
-            ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+            Boolean(ocu?.aislamiento_activo) ? 'SI' : 'NO',
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -2145,7 +2143,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                             const ocu = ocupacion[String(hab.id)];
                             const totalCamas = ocu?.total_camas || 0;
                             const camasOcupadasReales = ocu?.camas_ocupadas || 0;
-                            const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+                            const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
                             if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return total;
                             return total + Math.max(0, totalCamas - camasOcupadasReales);
                           }, 0);
@@ -2172,7 +2170,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                 const ocu = ocupacion[String(hab.id)];
                 const totalCamas = ocu?.total_camas || 0;
                 const camasOcupadasReales = ocu?.camas_ocupadas || 0;
-                const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+                const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
                 if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return total;
                 return total + Math.max(0, totalCamas - camasOcupadasReales);
               }, 0);
@@ -2194,7 +2192,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                       <p className="text-2xl font-black text-red-500 mt-0.5">
                         {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
                           const ocu = ocupacion[String(hab.id)];
-                          return total + (ocu?.observaciones?.includes('AISLAMIENTO') ? 1 : 0);
+                          return total + (Boolean(ocu?.aislamiento_activo) ? 1 : 0);
                         }, 0)}
                       </p>
                     </div>
@@ -2335,12 +2333,18 @@ const eliminarVisualizador = async (visId, usuario) => {
                       <tr key={habitacion.id} className="border-b border-slate-800 hover:bg-slate-800/50">
                         <td className="px-4 py-3 text-slate-200">{piso?.nombre_piso || 'Sin piso'}</td>
                         <td className="px-4 py-3 text-slate-200">{habitacion.nombre || 'Sin nombre'}</td>
-                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion' || activeEstadosTab === 'disponible') && (
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                          <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.camas_ocupadas || 0) : '0'}</td>
+                        )}
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                          <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.total_camas || 0) : '0'}</td>
+                        )}
+                        {activeEstadosTab === 'disponible' && (
                           <td className="px-4 py-3 text-slate-200">
                             {(() => {
                               const totalCamas = ocu?.total_camas || 0;
                               const camasOcupadas = ocu?.camas_ocupadas || 0;
-                              const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+                              const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
                               let camasBloqueadas = 0;
                               
                               if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
@@ -2353,11 +2357,8 @@ const eliminarVisualizador = async (visId, usuario) => {
                           </td>
                         )}
                         {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
-                          <td className="px-4 py-3 text-slate-200">{ocu ? String(ocu.total_camas || 0) : '0'}</td>
-                        )}
-                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
                           <td className="px-4 py-3 text-slate-200">
-                            {ocu?.observaciones?.includes('AISLAMIENTO') ? (
+                            {Boolean(ocu?.aislamiento_activo) ? (
                               <span className="text-red-400 font-semibold">SI</span>
                             ) : (
                               <span className="text-green-400">NO</span>
