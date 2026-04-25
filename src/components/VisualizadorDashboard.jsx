@@ -259,7 +259,7 @@ const VisualizadorDashboard = () => {
       const [resPisos, resHabs, resOcupacion] = await Promise.all([
         supabase.from('pisos').select('*').order('nombre_piso'),
         supabase.from('habitaciones_especiales').select('*').order('nombre'),
-        supabase.from('ocupacion_habitaciones').select('*').order('habitacion_id'),
+        supabase.from('ocupacion_habitaciones').select('*, aislamiento_activo').order('habitacion_id'),
       ]);
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
@@ -421,7 +421,7 @@ const VisualizadorDashboard = () => {
           return false;
         }
         if (filters.aislacion) {
-          const tieneAislamiento = ocu?.observaciones?.includes('AISLAMIENTO');
+          const tieneAislamiento = Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO');
           if (filters.aislacion === 'SI' && !tieneAislamiento) return false;
           if (filters.aislacion === 'NO' && tieneAislamiento) return false;
         }
@@ -431,7 +431,7 @@ const VisualizadorDashboard = () => {
       if (tipo === 'disponible') {
         const totalCamas = ocu?.total_camas || 0;
         const camasOcupadas = ocu?.camas_ocupadas || 0;
-        const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+        const aislamientoActivo = Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO');
         let camasBloqueadas = 0;
         
         if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
@@ -506,7 +506,7 @@ const VisualizadorDashboard = () => {
             habitacion.nombre || 'Sin nombre',
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
-            ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+            (Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO')) ? 'SI' : 'NO',
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -548,7 +548,7 @@ const VisualizadorDashboard = () => {
             habitacion.nombre || 'Sin nombre',
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
-            ocu?.observaciones?.includes('AISLAMIENTO') ? 'SI' : 'NO',
+            (Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO')) ? 'SI' : 'NO',
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -841,7 +841,7 @@ const VisualizadorDashboard = () => {
                             const ocu = ocupacion[String(hab.id)];
                             const totalCamas = ocu?.total_camas || 0;
                             const camasOcupadasReales = ocu?.camas_ocupadas || 0;
-                            const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+                            const aislamientoActivo = Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO');
                             if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return total;
                             return total + Math.max(0, totalCamas - camasOcupadasReales);
                           }, 0);
@@ -869,7 +869,7 @@ const VisualizadorDashboard = () => {
                 const ocu = ocupacion[String(hab.id)];
                 const totalCamas = ocu?.total_camas || 0;
                 const camasOcupadasReales = ocu?.camas_ocupadas || 0;
-                const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+                const aislamientoActivo = Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO');
                 if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return total;
                 return total + Math.max(0, totalCamas - camasOcupadasReales);
               }, 0);
@@ -1037,7 +1037,7 @@ const VisualizadorDashboard = () => {
                             {(() => {
                               const totalCamas = ocu?.total_camas || 0;
                               const camasOcupadas = ocu?.camas_ocupadas || 0;
-                              const aislamientoActivo = ocu?.observaciones?.includes('AISLAMIENTO');
+                              const aislamientoActivo = Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO');
                               let camasBloqueadas = 0;
                               
                               if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
