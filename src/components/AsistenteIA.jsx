@@ -260,12 +260,12 @@ function responder(texto, { pisos, habitaciones, ocupacion }) {
         }
         
                 
-        if (o.informacion_ampliatoria) {
-          estado += `. ${o.informacion_ampliatoria}`;
-        }
-        
         if (o.observaciones) {
           estado += `. Observaciones: ${o.observaciones}`;
+        }
+        
+        if (o.informacion_ampliatoria) {
+          estado += `. Servicio: ${o.informacion_ampliatoria}`;
         }
         
         return estado + '.';
