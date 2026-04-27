@@ -467,7 +467,7 @@ const VisualizadorDashboard = () => {
           
           const totalCamas = ocu.total_camas || 0;
           const camasOcupadas = ocu.camas_ocupadas || 0;
-          const aislamientoActivo = ocu.observaciones?.includes('AISLAMIENTO');
+          const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
           let camasBloqueadas = 0;
           
           if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
@@ -508,7 +508,7 @@ const VisualizadorDashboard = () => {
             habitacion.nombre || 'Sin nombre',
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
-            (Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO')) ? 'SI' : 'NO',
+            Boolean(ocu?.aislamiento_activo) ? 'SI' : 'NO',
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -550,7 +550,7 @@ const VisualizadorDashboard = () => {
             habitacion.nombre || 'Sin nombre',
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
-            (Boolean(ocu?.aislamiento_activo) || ocu?.observaciones?.includes('AISLAMIENTO')) ? 'SI' : 'NO',
+            Boolean(ocu?.aislamiento_activo) ? 'SI' : 'NO',
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -919,7 +919,7 @@ const VisualizadorDashboard = () => {
                       <p className="text-2xl font-black text-red-500 mt-0.5">
                         {filtrarHabitacionesPorTipo('ocupacion').reduce((total, hab) => {
                           const ocu = ocupacion[String(hab.id)];
-                          return total + (ocu?.observaciones?.includes('AISLAMIENTO') ? 1 : 0);
+                          return total + (Boolean(ocu?.aislamiento_activo) ? 1 : 0);
                         }, 0)}
                       </p>
                     </div>
