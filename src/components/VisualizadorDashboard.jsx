@@ -265,10 +265,22 @@ const VisualizadorDashboard = () => {
       setHabitacionesEspeciales(resHabs.data || []);
       // Usar habitaciones_especiales como habitaciones principales
       setHabitaciones(resHabs.data || []);
-      setOcupacion(resOcupacion.data?.reduce((acc, curr) => {
-        acc[curr.habitacion_id] = curr;
-        return acc;
-      }, {}) || {});
+      // Procesar ocupación como AdminDashboard - obtener solo el registro más reciente por habitación
+      const estadoPorHabitacion = {};
+      (resOcupacion.data || []).forEach(e => {
+        if (!estadoPorHabitacion[e.habitacion_id]) {
+          estadoPorHabitacion[e.habitacion_id] = e;
+        }
+      });
+
+      const ocupacionMap = {};
+      (resOcupacion.data || []).forEach(e => {
+        if (!ocupacionMap[String(e.habitacion_id)]) {
+          ocupacionMap[String(e.habitacion_id)] = e;
+        }
+      });
+      
+      setOcupacion(ocupacionMap);
       
       // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
       if (resPisos.data && resPisos.data.length > 0) {
