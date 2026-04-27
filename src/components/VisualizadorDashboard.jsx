@@ -259,7 +259,7 @@ const VisualizadorDashboard = () => {
       const [resPisos, resHabs, resOcupacion] = await Promise.all([
         supabase.from('pisos').select('*').order('nombre_piso'),
         supabase.from('habitaciones_especiales').select('*').order('nombre'),
-        supabase.from('ocupacion_habitaciones').select('*, aislamiento_activo').order('habitacion_id'),
+        supabase.from('ocupacion_habitaciones').select('*, aislamiento_activo').order('actualizado_en', { ascending: false }).order('fecha', { ascending: false }),
       ]);
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
