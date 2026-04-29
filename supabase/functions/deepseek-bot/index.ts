@@ -16,24 +16,100 @@ serve(async (req) => {
     const { mensaje } = await req.json()
     const textoLower = mensaje.toLowerCase()
     
-    // Crear cliente de Supabase
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!
     )
     
     // ============================================
-    // DETECTAR PREGUNTAS SOBRE RECHAZOS
+    // 1. PREGUNTAS SOBRE HABITACIÓN ESPECÍFICA
     // ============================================
-    const esPreguntaRechazos = textoLower.includes('rechazo') || 
-                                textoLower.includes('rechazos') ||
-                                textoLower.includes('iosfa') ||
-                                textoLower.includes('pami') ||
-                                textoLower.includes('obra social') ||
-                                textoLower.includes('motivo')
+    let numeroHabitacion = null
+    let habitacionMatch = textoLower.match(/habitaci[oó]n\s*(\d+)/) || textoLower.match(/^(\d{3})$/)
     
-    if (esPreguntaRechazos) {
-      // Determinar rango de fechas
+    if (habitacionMatch) {
+      numeroHabitacion = habitacionMatch[1]
+      
+      // Determinar fecha
+      let fecha = new Date()
+      let textoFecha = 'hoy'
+      if (textoLower.includes('ayer')) {
+        fecha.setDate(fecha.getDate() - 1)
+        textoFecha = 'ayer'
+      }
+      const fechaStr = fecha.toISOString().split('T')[0]
+      
+      // Buscar la habitación
+      const { data: habitacion, error: habError } = await supabase
+        .from('habitaciones_especiales')
+        .select('id, nombre, piso_id, pisos!habitaciones_especiales_piso_id_fkey (nombre_piso)')
+        .eq('nombre', numeroHabitacion)
+        .maybeSingle()
+      
+      if (habError || !habitacion) {
+        return new Response(
+          JSON.stringify({ respuesta: `No encontré la habitación ${numeroHabitacion}. Verificá el número.`, ok: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      
+      // Buscar ocupación más reciente para esa fecha
+      const { data: ocupacionData, error: occError } = await supabase
+        .from('ocupacion_habitaciones')
+        .select('*')
+        .eq('habitacion_id', habitacion.id)
+        .eq('fecha', fechaStr)
+        .order('actualizado_en', { ascending: false })
+        .limit(1)
+      
+      const ocupacion = ocupacionData?.[0]
+      
+      if (!ocupacion) {
+        return new Response(
+          JSON.stringify({ respuesta: `No hay datos de ocupación para la habitación ${numeroHabitacion} ${textoFecha === 'ayer' ? 'ayer' : 'hoy'}.`, ok: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      
+      const nombrePiso = habitacion.pisos?.nombre_piso || 'piso desconocido'
+      const verbo = textoFecha === 'hoy' ? 'está' : 'estaba'
+      
+      let estado = `La habitación ${numeroHabitacion} ${verbo} `
+      
+      if (ocupacion.tipo_habitacion === 'activa') {
+        const ocupadas = ocupacion.camas_ocupadas || 0
+        const total = ocupacion.total_camas || 0
+        const libres = total - ocupadas
+        estado += `activa con ${ocupadas} de ${total} camas ocupadas (${libres} libre${libres !== 1 ? 's' : ''}).`
+        
+        if (ocupacion.aislamiento_activo === true) {
+          estado += ` Tiene aislamiento activo.`
+        }
+        
+        if (ocupacion.observaciones) {
+          estado += ` Servicio: ${ocupacion.observaciones}.`
+        }
+      } else if (ocupacion.tipo_habitacion === 'reparacion') {
+        estado += `en reparación.`
+        if (ocupacion.observaciones) {
+          estado += ` Motivo: ${ocupacion.observaciones}.`
+        }
+      } else {
+        estado += `fuera de servicio (${ocupacion.tipo_habitacion || 'otros'}).`
+      }
+      
+      estado += ` Ubicada en ${nombrePiso}.`
+      
+      return new Response(
+        JSON.stringify({ respuesta: estado, ok: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    // ============================================
+    // 2. PREGUNTAS SOBRE RECHAZOS (simplificado)
+    // ============================================
+    if (textoLower.includes('rechazo') || textoLower.includes('iosfa') || textoLower.includes('pami')) {
       let fechaInicio = new Date()
       let fechaFin = new Date()
       let textoRango = 'hoy'
@@ -42,112 +118,25 @@ serve(async (req) => {
         fechaInicio.setDate(fechaInicio.getDate() - 1)
         fechaFin.setDate(fechaFin.getDate() - 1)
         textoRango = 'ayer'
-      } else if (textoLower.includes('esta semana')) {
-        fechaInicio.setDate(fechaInicio.getDate() - fechaInicio.getDay())
-        textoRango = 'esta semana'
-      } else if (textoLower.includes('este mes')) {
-        fechaInicio = new Date(fechaInicio.getFullYear(), fechaInicio.getMonth(), 1)
-        textoRango = 'este mes'
       }
       
-      const fechaInicioStr = fechaInicio.toISOString()
-      const fechaFinStr = fechaFin.toISOString()
-      
-      // Consultar rechazos
-      let query = supabase
+      const { data: rechazos } = await supabase
         .from('rechazos_pacientes')
         .select('*')
+        .gte('fecha_rechazo', fechaInicio.toISOString())
+        .lt('fecha_rechazo', fechaFin.toISOString())
       
-      if (textoLower.includes('ayer')) {
-        query = query.gte('fecha_rechazo', fechaInicioStr)
-                 .lt('fecha_rechazo', fechaFinStr)
-      } else if (textoLower.includes('esta semana') || textoLower.includes('este mes')) {
-        query = query.gte('fecha_rechazo', fechaInicioStr)
-      }
-      
-      const { data: rechazos, error: rechazosError } = await query.order('fecha_rechazo', { ascending: false })
-      
-      if (rechazosError) {
-        return new Response(
-          JSON.stringify({ respuesta: `Error consultando rechazos: ${rechazosError.message}`, ok: false }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-      
-      // Filtrar por obra social si se menciona
-      let obrasSocialesFiltradas = []
+      let filtrados = rechazos || []
       if (textoLower.includes('iosfa')) {
-        obrasSocialesFiltradas = rechazos?.filter(r => r.obra_social?.toLowerCase().includes('iosfa')) || []
+        filtrados = filtrados.filter(r => r.obra_social?.toLowerCase().includes('iosfa'))
       } else if (textoLower.includes('pami')) {
-        obrasSocialesFiltradas = rechazos?.filter(r => r.obra_social?.toLowerCase().includes('pami')) || []
-      } else if (textoLower.includes('swiss medical')) {
-        obrasSocialesFiltradas = rechazos?.filter(r => r.obra_social?.toLowerCase().includes('swiss')) || []
-      } else {
-        obrasSocialesFiltradas = rechazos || []
+        filtrados = filtrados.filter(r => r.obra_social?.toLowerCase().includes('pami'))
       }
       
-      // Detectar si pregunta por cantidad
-      const preguntaCuantos = textoLower.includes('cuantos') || textoLower.includes('cuántos')
-      
-      // Detectar si pregunta por motivo principal
-      const preguntaMotivo = textoLower.includes('motivo') || textoLower.includes('razón') || textoLower.includes('causa')
-      
-      if (preguntaMotivo) {
-        // Agrupar por motivo
-        const motivos: Record<string, number> = {}
-        for (const r of obrasSocialesFiltradas) {
-          const motivo = r.motivo || 'No especificado'
-          motivos[motivo] = (motivos[motivo] || 0) + 1
-        }
-        
-        // Encontrar el motivo más frecuente
-        const motivoPrincipal = Object.entries(motivos).sort((a, b) => b[1] - a[1])[0]
-        
-        if (motivoPrincipal) {
-          let respuesta = `El motivo de rechazo más frecuente es "${motivoPrincipal[0]}" con ${motivoPrincipal[1]} casos`
-          if (textoRango !== 'hoy') respuesta += ` ${textoRango}`
-          respuesta += `.`
-          return new Response(
-            JSON.stringify({ respuesta, ok: true }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
-      }
-      
-      if (preguntaCuantos) {
-        let respuesta = `Hubo ${obrasSocialesFiltradas.length} rechazos`
-        
-        // Identificar obra social
-        if (textoLower.includes('iosfa')) respuesta += ` de IOSFA`
-        else if (textoLower.includes('pami')) respuesta += ` de PAMI`
-        else if (textoLower.includes('swiss')) respuesta += ` de Swiss Medical`
-        
-        if (textoRango !== 'hoy') respuesta += ` ${textoRango}`
-        respuesta += `.`
-        
-        return new Response(
-          JSON.stringify({ respuesta, ok: true }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-      
-      // Respuesta general sobre rechazos
-      let respuesta = `Se registraron ${rechazos?.length || 0} rechazos de pacientes`
+      let respuesta = `Hubo ${filtrados.length} rechazos`
+      if (textoLower.includes('iosfa')) respuesta += ` de IOSFA`
+      else if (textoLower.includes('pami')) respuesta += ` de PAMI`
       if (textoRango !== 'hoy') respuesta += ` ${textoRango}`
-      
-      // Agregar desglose por obra social si hay datos
-      if (rechazos && rechazos.length > 0) {
-        const porObra: Record<string, number> = {}
-        for (const r of rechazos) {
-          const obra = r.obra_social || 'No especificada'
-          porObra[obra] = (porObra[obra] || 0) + 1
-        }
-        const topObras = Object.entries(porObra).slice(0, 3)
-        if (topObras.length > 0) {
-          respuesta += `. Principales obras sociales: ${topObras.map(([obra, count]) => `${obra} (${count})`).join(', ')}`
-        }
-      }
-      
       respuesta += `.`
       
       return new Response(
@@ -157,129 +146,41 @@ serve(async (req) => {
     }
     
     // ============================================
-    // PREGUNTAS SOBRE OCUPACIÓN (código anterior)
+    // 3. OCUPACIÓN GENERAL
     // ============================================
-    
-    // Determinar la fecha
     let fecha = new Date()
     let textoFecha = 'hoy'
-    
     if (textoLower.includes('ayer')) {
       fecha.setDate(fecha.getDate() - 1)
       textoFecha = 'ayer'
-    } else if (textoLower.includes('anteayer')) {
-      fecha.setDate(fecha.getDate() - 2)
-      textoFecha = 'anteayer'
     }
     
     const fechaStr = fecha.toISOString().split('T')[0]
     
-    const { data: ocupaciones, error } = await supabase
+    const { data: ocupaciones } = await supabase
       .from('ocupacion_habitaciones')
       .select(`
         *,
         habitaciones_especiales!ocupacion_habitaciones_habitacion_id_fkey (
-          id,
-          nombre,
-          piso_id,
-          pisos!habitaciones_especiales_piso_id_fkey (
-            id,
-            nombre_piso
-          )
+          pisos!habitaciones_especiales_piso_id_fkey (nombre_piso)
         )
       `)
-      .gte('fecha', `${fechaStr} 00:00:00`)
-      .lte('fecha', `${fechaStr} 23:59:59`)
+      .eq('fecha', fechaStr)
     
-    if (error) {
-      return new Response(
-        JSON.stringify({ respuesta: `Error: ${error.message}`, ok: false }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-    
-    // Detectar piso
-    let numeroPiso = null
-    const palabrasANumero: Record<string, number> = {
-      'primero': 1, 'primer': 1, '1': 1, '1er': 1, '1ro': 1,
-      'segundo': 2, '2': 2, '2do': 2, '2°': 2,
-      'tercero': 3, 'tercer': 3, '3': 3, '3er': 3, '3ro': 3,
-      'cuarto': 4, '4': 4, '4to': 4, '4°': 4,
-      'quinto': 5, '5': 5, '5to': 5, '5°': 5,
-      'sexto': 6, '6': 6, '6to': 6, '6°': 6
-    }
-    
-    for (const [palabra, num] of Object.entries(palabrasANumero)) {
-      if (textoLower.includes(palabra)) {
-        numeroPiso = num
-        break
-      }
-    }
-    
-    let datosFiltrados = ocupaciones || []
-    
-    if (numeroPiso) {
-      datosFiltrados = datosFiltrados.filter(occ => {
-        const nombrePiso = occ.habitaciones_especiales?.pisos?.nombre_piso || ''
-        const numeroEncontrado = nombrePiso.match(/\d+/)
-        const pisoNumero = numeroEncontrado ? parseInt(numeroEncontrado[0]) : null
-        return pisoNumero === numeroPiso
-      })
-    }
-    
-    // Calcular estadísticas
     let totalPacientes = 0
     let totalCamas = 0
-    let pacientesAislamiento = 0
-    let habitacionesReparacion = 0
-    
-    for (const occ of datosFiltrados || []) {
+    for (const occ of ocupaciones || []) {
       if (occ.tipo_habitacion === 'activa') {
         totalPacientes += occ.camas_ocupadas || 0
         totalCamas += occ.total_camas || 0
-        if (occ.aislamiento_activo === true) {
-          pacientesAislamiento += occ.camas_ocupadas || 0
-        }
-      } else if (occ.tipo_habitacion === 'reparacion') {
-        habitacionesReparacion++
       }
     }
     
     const camasLibres = totalCamas - totalPacientes
-    const ocupacionPorcentaje = totalCamas > 0 ? Math.round((totalPacientes / totalCamas) * 100) : 0
-    
-    let nombrePisoMostrar = ''
-    if (numeroPiso && datosFiltrados.length > 0) {
-      const primerPiso = datosFiltrados[0]?.habitaciones_especiales?.pisos?.nombre_piso || `PISO ${numeroPiso}`
-      nombrePisoMostrar = primerPiso
-    } else if (numeroPiso) {
-      nombrePisoMostrar = `PISO ${numeroPiso}`
-    }
-    
+    const porcentaje = totalCamas > 0 ? Math.round((totalPacientes / totalCamas) * 100) : 0
     const verbo = textoFecha === 'hoy' ? 'hay' : 'había'
-    let respuesta = ''
     
-    const preguntaCamasLibres = textoLower.includes('camas libres') || textoLower.includes('camas disponibles')
-    const preguntaAislamiento = textoLower.includes('aislamiento')
-    
-    if (preguntaCamasLibres) {
-      respuesta = `${textoFecha === 'hoy' ? 'Hoy' : 'El ' + fechaStr} ${verbo} ${camasLibres} camas libres`
-      if (nombrePisoMostrar) respuesta += ` en ${nombrePisoMostrar}`
-      respuesta += ` (${totalPacientes} pacientes ocupando ${totalCamas} camas).`
-    } 
-    else if (preguntaAislamiento) {
-      respuesta = `${textoFecha === 'hoy' ? 'Hoy' : 'El ' + fechaStr} ${verbo} ${pacientesAislamiento} pacientes en aislamiento`
-      if (nombrePisoMostrar) respuesta += ` en ${nombrePisoMostrar}`
-      respuesta += `.`
-    }
-    else {
-      respuesta = `${textoFecha === 'hoy' ? 'Hoy' : 'El ' + fechaStr} ${verbo} ${totalPacientes} pacientes internados`
-      if (nombrePisoMostrar) respuesta += ` en ${nombrePisoMostrar}`
-      respuesta += ` (${ocupacionPorcentaje}% de ocupación, ${camasLibres} camas libres).`
-      if (pacientesAislamiento > 0 && !preguntaAislamiento) {
-        respuesta += ` ${pacientesAislamiento} pacientes están en aislamiento.`
-      }
-    }
+    const respuesta = `${textoFecha === 'hoy' ? 'Hoy' : 'El ' + fechaStr} ${verbo} ${totalPacientes} pacientes internados (${porcentaje}% de ocupación, ${camasLibres} camas libres).`
     
     return new Response(
       JSON.stringify({ respuesta, ok: true }),
@@ -287,7 +188,6 @@ serve(async (req) => {
     )
     
   } catch (error) {
-    console.error('Error:', error.message)
     return new Response(
       JSON.stringify({ error: error.message, ok: false }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
