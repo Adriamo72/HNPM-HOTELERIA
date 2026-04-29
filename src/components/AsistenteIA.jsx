@@ -63,16 +63,13 @@ const AsistenteIA = ({ pisos }) => {
       utterance.volume = 0.8;
       utterance.onstart = () => setIsSpeaking(true);
       utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = (event) => {
-        console.error('Speech synthesis error:', event);
-        setIsSpeaking(false);
-      };
+      utterance.onerror = () => setIsSpeaking(false);
       window.speechSynthesis.speak(utterance);
     }
   }, []);
 
   // Consultar a DeepSeek (IA)
-  const consultarDeepSeek = async (mensaje, historialMensajes) => {
+  const consultarDeepSeek = useCallback(async (mensaje, historialMensajes) => {
     try {
       const { data, error } = await supabase.functions.invoke('deepseek-bot', {
         body: {
@@ -88,7 +85,7 @@ const AsistenteIA = ({ pisos }) => {
       console.error('Error en IA:', err);
       return 'Lo siento, tuve un problema. Por favor, intenta de nuevo.';
     }
-  };
+  }, [pisos, habitaciones, ocupacion]);
 
   // Enviar pregunta usando IA
   const enviarPregunta = useCallback(async (textoInput) => {
@@ -114,7 +111,7 @@ const AsistenteIA = ({ pisos }) => {
     } finally {
       setCargando(false);
     }
-  }, [mensajes, cargando, speak, pisos, habitaciones, ocupacion]);
+  }, [mensajes, cargando, speak, consultarDeepSeek]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
