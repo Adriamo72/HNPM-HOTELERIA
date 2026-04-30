@@ -221,12 +221,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       let query = supabase
         .from('ocupacion_habitaciones')
         .select('*, aislamiento_activo')
-        .in('habitacion_id', todasHabitaciones.map(h => h.id));
+        .in('habitacion_id', todasHabitaciones.map(h => h.id))
+        .order('fecha', { ascending: false })
+        .order('actualizado_en', { ascending: false });
       
-      if (fecha === hoy) {
-        query = query.order('fecha', { ascending: false }).order('actualizado_en', { ascending: false });
-      } else {
-        query = query.eq('fecha', fecha).order('actualizado_en', { ascending: false });
+      // Si es una fecha histórica específica, filtrar por esa fecha
+      if (fecha !== hoy) {
+        query = query.eq('fecha', fecha);
       }
       
       const { data: ocupaciones, error: occError } = await query;
@@ -318,27 +319,25 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     try {
       const hoy = new Date().toISOString().split('T')[0];
       
-      // Limitar a 7 días hacia atrás para el histórico
-      const fechaLimite = new Date();
-      fechaLimite.setDate(fechaLimite.getDate() - 7);
-      const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
-      
+      // Obtener TODOS los registros de ocupación para las habitaciones del piso
+      // ordenados por fecha y actualizado_en para tener el más reciente primero
       let query = supabase
         .from('ocupacion_habitaciones')
         .select('*, aislamiento_activo')
         .in('habitacion_id', habitaciones.map(h => h.id))
-        .gte('fecha', fechaLimiteStr); // Solo registros de últimos 7 días
+        .order('fecha', { ascending: false })
+        .order('actualizado_en', { ascending: false });
 
-      if (fechaSeleccionada === hoy) {
-        query = query.order('fecha', { ascending: false }).order('actualizado_en', { ascending: false });
-      } else {
-        query = query.eq('fecha', fechaSeleccionada).order('actualizado_en', { ascending: false });
+      // Si es una fecha histórica específica, filtrar por esa fecha
+      if (fechaSeleccionada !== hoy) {
+        query = query.eq('fecha', fechaSeleccionada);
       }
 
       const { data, error } = await query;
 
       if (error) throw error;
 
+      // Procesar ocupación - obtener solo el registro más reciente por habitación
       const ocupMap = {};
       (data || []).forEach(occ => {
         if (!ocupMap[occ.habitacion_id]) {
