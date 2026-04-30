@@ -186,6 +186,13 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
     mostrarNotificacion("No hay habitaciones para guardar", 'error');
     return;
   }
+
+  // Validar que haya un usuario logueado con DNI
+  if (!perfilUsuario?.dni) {
+    console.error('ERROR: No hay usuario logueado o falta el DNI:', perfilUsuario);
+    mostrarNotificacion("Error: No se detectó el operador. Por favor, escanee nuevamente su QR de personal.", 'error');
+    return;
+  }
   
   setGuardando(true);
   
@@ -203,6 +210,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         aislamientoEstado: ocupaciones[hab.id]?.aislamiento,
         observacionesOriginales: hab.observaciones,
         observacionesGuardadas: observacionesAGuardar,
+        actualizadoPor: perfilUsuario?.dni,
         nota: "Las observaciones NUNCA se modifican"
       });
       
@@ -237,7 +245,10 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
 };
 
   const guardarLogRecorrido = async (timestampSincronizado) => {
-  if (!piso) return;
+  if (!piso || !perfilUsuario?.dni) {
+    console.error('ERROR: No se puede guardar log - falta piso o perfilUsuario:', { piso, perfilUsuario });
+    return;
+  }
   
   const totalCamasPiso = totalCamas;
   const totalOcupadasPiso = totalOcupadas;
