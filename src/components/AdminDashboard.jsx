@@ -48,6 +48,7 @@ const AdminDashboard = () => {
   const [cargandoRechazos, setCargandoRechazos] = useState(false);
   const [errorRechazos, setErrorRechazos] = useState('');
   const [rechazosEliminando, setRechazosEliminando] = useState([]);
+  const [mostrarHistorialCompleto, setMostrarHistorialCompleto] = useState(false);
 
   
   // Estados para modales
@@ -554,6 +555,7 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
 
   const abrirModalInfo = () => {
     setMostrarModalInfo(true);
+    setMostrarHistorialCompleto(false); // Resetear al abrir
     const idsActuales = rechazosPacientes.map(r => r.id);
     guardarRechazosLeidosStorage([...rechazosLeidos, ...idsActuales]);
   };
@@ -3458,6 +3460,22 @@ const eliminarVisualizador = async (visId, usuario) => {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="text-xs uppercase font-semibold text-slate-400">Total: {rechazosPacientes.length}</span>
               <span className="text-xs uppercase font-semibold text-red-400">No leídos: {rechazosNoLeidos}</span>
+              {!mostrarHistorialCompleto && rechazosPacientes.length > 5 && (
+                <button
+                  onClick={() => setMostrarHistorialCompleto(true)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg"
+                >
+                  Ver historial completo ({rechazosPacientes.length})
+                </button>
+              )}
+              {mostrarHistorialCompleto && (
+                <button
+                  onClick={() => setMostrarHistorialCompleto(false)}
+                  className="bg-slate-600 hover:bg-slate-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg"
+                >
+                  Ver solo últimos 5
+                </button>
+              )}
               <button
                 onClick={() => guardarRechazosLeidosStorage(rechazosPacientes.map(r => r.id))}
                 className="ml-auto bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700"
@@ -3481,7 +3499,13 @@ const eliminarVisualizador = async (visId, usuario) => {
                 <div className="text-center text-slate-500 text-sm py-8">Sin rechazos registrados.</div>
               )}
 
-              {!cargandoRechazos && !errorRechazos && rechazosPacientes.map((rechazo) => {
+              {!cargandoRechazos && !errorRechazos && !mostrarHistorialCompleto && rechazosPacientes.length > 5 && (
+                <div className="text-center text-slate-400 text-xs py-2 border-b border-slate-800">
+                  Mostrando los últimos 5 de {rechazosPacientes.length} rechazos
+                </div>
+              )}
+
+              {!cargandoRechazos && !errorRechazos && (mostrarHistorialCompleto ? rechazosPacientes : rechazosPacientes.slice(0, 5)).map((rechazo) => {
                 const noLeido = !rechazosLeidos.includes(rechazo.id);
                 const eliminando = rechazosEliminando.includes(rechazo.id);
                 const nombreCompleto = `${rechazo.apellido || 'Sin apellido'}, ${rechazo.nombre || 'Sin nombre'}`;
