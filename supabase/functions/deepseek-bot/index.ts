@@ -21,44 +21,48 @@ serve(async (req) => {
     )
     
     // ============================================
-    // DETECTAR EXCLUSIONES MANUALMENTE
+    // DETECTAR INTENCIÓN REAL
     // ============================================
-    let pisosExcluir: number[] = []
-    let serviciosExcluir: string[] = []
+    let modo = 'total' // total | solo_piso | excluir_piso | excluir_servicio
+    let pisoObjetivo: number | null = null
+    let servicioObjetivo: string | null = null
     
-    // Detectar pisos a excluir
-    if (textoLower.includes('piso 2') || textoLower.includes('segundo piso')) {
-      pisosExcluir.push(2)
-    }
-    if (textoLower.includes('piso 3') || textoLower.includes('tercer piso')) {
-      pisosExcluir.push(3)
-    }
-    if (textoLower.includes('piso 4') || textoLower.includes('cuarto piso')) {
-      pisosExcluir.push(4)
-    }
-    if (textoLower.includes('piso 5') || textoLower.includes('quinto piso')) {
-      pisosExcluir.push(5)
-    }
-    if (textoLower.includes('piso 6') || textoLower.includes('sexto piso')) {
-      pisosExcluir.push(6)
+    // Detectar pisos
+    let pisoEncontrado: number | null = null
+    if (textoLower.includes('piso 2') || textoLower.includes('segundo piso')) pisoEncontrado = 2
+    if (textoLower.includes('piso 3') || textoLower.includes('tercer piso')) pisoEncontrado = 3
+    if (textoLower.includes('piso 4') || textoLower.includes('cuarto piso')) pisoEncontrado = 4
+    if (textoLower.includes('piso 5') || textoLower.includes('quinto piso')) pisoEncontrado = 5
+    if (textoLower.includes('piso 6') || textoLower.includes('sexto piso')) pisoEncontrado = 6
+    
+    // Detectar servicios
+    let servicioEncontrado: string | null = null
+    if (textoLower.includes('uco')) servicioEncontrado = 'UCO'
+    if (textoLower.includes('uti')) servicioEncontrado = 'UTI'
+    
+    // DETERMINAR MODO según las palabras clave
+    const esExclusion = textoLower.includes('exceptuando') || 
+                        textoLower.includes('excluyendo') || 
+                        textoLower.includes('sin contar') ||
+                        textoLower.includes('menos')
+    
+    const esSoloPiso = (textoLower.includes('en el piso') || textoLower.includes('del piso')) && !esExclusion
+    
+    if (esSoloPiso && pisoEncontrado) {
+      modo = 'solo_piso'
+      pisoObjetivo = pisoEncontrado
+    } else if (esExclusion && pisoEncontrado) {
+      modo = 'excluir_piso'
+      pisoObjetivo = pisoEncontrado
+    } else if (esExclusion && servicioEncontrado) {
+      modo = 'excluir_servicio'
+      servicioObjetivo = servicioEncontrado
+    } else if (pisoEncontrado && !esExclusion) {
+      modo = 'solo_piso'
+      pisoObjetivo = pisoEncontrado
     }
     
-    // Detectar servicios a excluir
-    if (textoLower.includes('uco')) {
-      serviciosExcluir.push('UCO')
-    }
-    if (textoLower.includes('uti')) {
-      serviciosExcluir.push('UTI')
-    }
-    if (textoLower.includes('cirugía') || textoLower.includes('cirugia')) {
-      serviciosExcluir.push('CIRUGÍA')
-    }
-    if (textoLower.includes('pediatría') || textoLower.includes('pediatria')) {
-      serviciosExcluir.push('PEDIATRÍA')
-    }
-    
-    console.log("Pisos a excluir:", pisosExcluir)
-    console.log("Servicios a excluir:", serviciosExcluir)
+    console.log(`Modo: ${modo}, Piso: ${pisoObjetivo}, Servicio: ${servicioObjetivo}`)
     
     // ============================================
     // OBTENER DATOS DE LA BASE DE DATOS
@@ -91,7 +95,7 @@ serve(async (req) => {
     }
     
     // ============================================
-    // CALCULAR CAMAS DISPONIBLES CON FILTROS
+    // FILTRAR SEGÚN MODO
     // ============================================
     let totalCamas = 0
     let totalPacientes = 0
@@ -109,15 +113,10 @@ serve(async (req) => {
       const pisoNumero = parseInt(pisoNombre.replace(/\D/g, '')) || 0
       const servicio = (ocupacionActual.observaciones || '').toUpperCase()
       
-      // Verificar exclusiones
-      if (pisosExcluir.includes(pisoNumero)) {
-        console.log(`Excluyendo habitación ${hab.nombre} (${pisoNombre}) por piso`)
-        continue
-      }
-      if (serviciosExcluir.some(s => servicio.includes(s))) {
-        console.log(`Excluyendo habitación ${hab.nombre} (${servicio}) por servicio`)
-        continue
-      }
+      // Aplicar filtro según modo
+      if (modo === 'solo_piso' && pisoObjetivo !== null && pisoNumero !== pisoObjetivo) continue
+      if (modo === 'excluir_piso' && pisoObjetivo !== null && pisoNumero === pisoObjetivo) continue
+      if (modo === 'excluir_servicio' && servicioObjetivo !== null && servicio.includes(servicioObjetivo)) continue
       
       const camas = ocupacionActual.total_camas || 0
       const ocupadas = ocupacionActual.camas_ocupadas || 0
@@ -126,13 +125,8 @@ serve(async (req) => {
       totalCamas += camas
       totalPacientes += ocupadas
       
-      // Calcular camas bloqueadas por aislamiento (misma lógica que tu dashboard)
-      if (aislamiento) {
-        if (ocupadas > 0) {
-          // Si hay pacientes en habitación con aislamiento, todas las camas se bloquean
-          camasBloqueadas += (camas - ocupadas)
-        }
-        // Si no hay pacientes en habitación con aislamiento, las camas están disponibles
+      if (aislamiento && ocupadas > 0) {
+        camasBloqueadas += (camas - ocupadas)
       }
     }
     
@@ -142,19 +136,16 @@ serve(async (req) => {
     // ============================================
     // CONSTRUIR RESPUESTA
     // ============================================
-    let respuestaTexto = `Hay ${camasDisponibles} camas disponibles`
+    let respuestaTexto = ''
     
-    if (pisosExcluir.length > 0) {
-      respuestaTexto += ` (excluyendo ${pisosExcluir.map(p => `PISO ${p}`).join(' y ')})`
-    }
-    if (serviciosExcluir.length > 0) {
-      respuestaTexto += ` (excluyendo ${serviciosExcluir.join(' y ')})`
-    }
-    
-    respuestaTexto += `. Total camas consideradas: ${totalCamas}. Ocupación: ${porcentajeOcupacion}%.`
-    
-    if (camasBloqueadas > 0) {
-      respuestaTexto += ` ${camasBloqueadas} camas bloqueadas por aislamiento.`
+    if (modo === 'solo_piso' && pisoObjetivo) {
+      respuestaTexto = `En el PISO ${pisoObjetivo} hay ${camasDisponibles} camas disponibles. Total camas en el piso: ${totalCamas}. Ocupación: ${porcentajeOcupacion}%.`
+    } else if (modo === 'excluir_piso' && pisoObjetivo) {
+      respuestaTexto = `Excluyendo el PISO ${pisoObjetivo}, hay ${camasDisponibles} camas disponibles. Total camas consideradas: ${totalCamas}. Ocupación: ${porcentajeOcupacion}%.`
+    } else if (modo === 'excluir_servicio' && servicioObjetivo) {
+      respuestaTexto = `Excluyendo ${servicioObjetivo}, hay ${camasDisponibles} camas disponibles. Total camas consideradas: ${totalCamas}. Ocupación: ${porcentajeOcupacion}%.`
+    } else {
+      respuestaTexto = `Hay ${camasDisponibles} camas disponibles. Total camas: ${totalCamas}. Ocupación: ${porcentajeOcupacion}%. ${camasBloqueadas} camas bloqueadas por aislamiento.`
     }
     
     return new Response(
