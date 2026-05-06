@@ -21,71 +21,21 @@ serve(async (req) => {
     )
     
     // ============================================
-    // DETECTAR INTENCIÓN REAL
+    // OBTENER EL ESTADO MÁS RECIENTE DE CADA HABITACIÓN
     // ============================================
-    let modo = 'total' // total | solo_piso | excluir_piso | excluir_servicio
-    let pisoObjetivo: number | null = null
-    let servicioObjetivo: string | null = null
-    
-    // Detectar pisos
-    let pisoEncontrado: number | null = null
-    if (textoLower.includes('piso 2') || textoLower.includes('segundo piso')) pisoEncontrado = 2
-    if (textoLower.includes('piso 3') || textoLower.includes('tercer piso')) pisoEncontrado = 3
-    if (textoLower.includes('piso 4') || textoLower.includes('cuarto piso')) pisoEncontrado = 4
-    if (textoLower.includes('piso 5') || textoLower.includes('quinto piso')) pisoEncontrado = 5
-    if (textoLower.includes('piso 6') || textoLower.includes('sexto piso')) pisoEncontrado = 6
-    
-    // Detectar servicios
-    let servicioEncontrado: string | null = null
-    if (textoLower.includes('uco')) servicioEncontrado = 'UCO'
-    if (textoLower.includes('uti')) servicioEncontrado = 'UTI'
-    
-    // DETERMINAR MODO según las palabras clave
-    const esExclusion = textoLower.includes('exceptuando') || 
-                        textoLower.includes('excluyendo') || 
-                        textoLower.includes('sin contar') ||
-                        textoLower.includes('menos')
-    
-    const esSoloPiso = (textoLower.includes('en el piso') || textoLower.includes('del piso')) && !esExclusion
-    
-    if (esSoloPiso && pisoEncontrado) {
-      modo = 'solo_piso'
-      pisoObjetivo = pisoEncontrado
-    } else if (esExclusion && pisoEncontrado) {
-      modo = 'excluir_piso'
-      pisoObjetivo = pisoEncontrado
-    } else if (esExclusion && servicioEncontrado) {
-      modo = 'excluir_servicio'
-      servicioObjetivo = servicioEncontrado
-    } else if (pisoEncontrado && !esExclusion) {
-      modo = 'solo_piso'
-      pisoObjetivo = pisoEncontrado
-    }
-    
-    console.log(`Modo: ${modo}, Piso: ${pisoObjetivo}, Servicio: ${servicioObjetivo}`)
-    
-    // ============================================
-    // OBTENER DATOS DE LA BASE DE DATOS
-    // ============================================
-    const hoy = new Date().toISOString().split('T')[0]
-    
-    const { data: habitacionesConOcupacion, error } = await supabase
-      .from('habitaciones_especiales')
+    const { data: ultimaOcupacion, error } = await supabase
+      .from('ocupacion_habitaciones')
       .select(`
-        id,
-        nombre,
-        piso_id,
-        pisos (nombre_piso),
-        ocupacion_habitaciones (
-          fecha,
-          tipo_habitacion,
-          total_camas,
-          camas_ocupadas,
-          observaciones,
-          aislamiento_activo,
-          actualizado_en
+        *,
+        habitaciones_especiales!inner (
+          id,
+          nombre,
+          piso_id,
+          pisos!inner (nombre_piso)
         )
       `)
+      .order('habitacion_id')
+      .order('actualizado_en', { ascending: false })
     
     if (error) {
       return new Response(
@@ -94,62 +44,85 @@ serve(async (req) => {
       )
     }
     
+    // DEDUPLICAR: quedarse con el primer registro de cada habitación (el más reciente)
+    const mapaUltimoEstado = new Map()
+    for (const registro of ultimaOcupacion || []) {
+      if (!mapaUltimoEstado.has(registro.habitacion_id)) {
+        mapaUltimoEstado.set(registro.habitacion_id, registro)
+      }
+    }
+    
+    const ocupacionesRecientes = Array.from(mapaUltimoEstado.values())
+    
     // ============================================
-    // FILTRAR SEGÚN MODO
+    // DETECTAR PISO
+    // ============================================
+    let pisoObjetivo: number | null = null
+    if (textoLower.includes('piso 6') || textoLower.includes('sexto piso')) pisoObjetivo = 6
+    if (textoLower.includes('piso 5') || textoLower.includes('quinto piso')) pisoObjetivo = 5
+    if (textoLower.includes('piso 4') || textoLower.includes('cuarto piso')) pisoObjetivo = 4
+    if (textoLower.includes('piso 3') || textoLower.includes('tercer piso')) pisoObjetivo = 3
+    if (textoLower.includes('piso 2') || textoLower.includes('segundo piso')) pisoObjetivo = 2
+    if (textoLower.includes('piso 1') || textoLower.includes('primer piso')) pisoObjetivo = 1
+    
+    // ============================================
+    // HABITACIONES EN REPARACIÓN
+    // ============================================
+    if (textoLower.includes('reparacion') || textoLower.includes('reparación')) {
+      const reparaciones = ocupacionesRecientes.filter(occ => 
+        occ.tipo_habitacion === 'reparacion' &&
+        (pisoObjetivo === null || occ.habitaciones_especiales?.pisos?.nombre_piso === `PISO ${pisoObjetivo}`)
+      ).map(occ => occ.habitaciones_especiales?.nombre)
+      
+      const lista = reparaciones.filter(Boolean).join(', ')
+      
+      if (reparaciones.length === 0) {
+        const respuesta = pisoObjetivo 
+          ? `No hay habitaciones en reparación en el PISO ${pisoObjetivo}.`
+          : `No hay habitaciones en reparación en el hospital.`
+        return new Response(
+          JSON.stringify({ respuesta, ok: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      
+      const respuesta = pisoObjetivo
+        ? `Habitaciones en reparación en el PISO ${pisoObjetivo}: ${lista}.`
+        : `Habitaciones en reparación en el hospital: ${lista}.`
+      
+      return new Response(
+        JSON.stringify({ respuesta, ok: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    // ============================================
+    // RESPUESTA POR DEFECTO (CAMAS DISPONIBLES)
     // ============================================
     let totalCamas = 0
     let totalPacientes = 0
     let camasBloqueadas = 0
     
-    for (const hab of habitacionesConOcupacion || []) {
-      const ocupaciones = hab.ocupacion_habitaciones || []
-      const ocupacionActual = ocupaciones
-        .filter((o: any) => o.fecha === hoy)
-        .sort((a: any, b: any) => new Date(b.actualizado_en).getTime() - new Date(a.actualizado_en).getTime())[0]
+    for (const occ of ocupacionesRecientes) {
+      if (pisoObjetivo !== null && occ.habitaciones_especiales?.pisos?.nombre_piso !== `PISO ${pisoObjetivo}`) continue
+      if (occ.tipo_habitacion !== 'activa') continue
       
-      if (!ocupacionActual || ocupacionActual.tipo_habitacion !== 'activa') continue
-      
-      const pisoNombre = hab.pisos?.nombre_piso || ''
-      const pisoNumero = parseInt(pisoNombre.replace(/\D/g, '')) || 0
-      const servicio = (ocupacionActual.observaciones || '').toUpperCase()
-      
-      // Aplicar filtro según modo
-      if (modo === 'solo_piso' && pisoObjetivo !== null && pisoNumero !== pisoObjetivo) continue
-      if (modo === 'excluir_piso' && pisoObjetivo !== null && pisoNumero === pisoObjetivo) continue
-      if (modo === 'excluir_servicio' && servicioObjetivo !== null && servicio.includes(servicioObjetivo)) continue
-      
-      const camas = ocupacionActual.total_camas || 0
-      const ocupadas = ocupacionActual.camas_ocupadas || 0
-      const aislamiento = ocupacionActual.aislamiento_activo === true
-      
-      totalCamas += camas
-      totalPacientes += ocupadas
-      
-      if (aislamiento && ocupadas > 0) {
-        camasBloqueadas += (camas - ocupadas)
+      totalCamas += occ.total_camas || 0
+      totalPacientes += occ.camas_ocupadas || 0
+      if (occ.aislamiento_activo && (occ.camas_ocupadas || 0) > 0) {
+        camasBloqueadas += (occ.total_camas || 0) - (occ.camas_ocupadas || 0)
       }
     }
     
     const camasDisponibles = totalCamas - totalPacientes - camasBloqueadas
-    const porcentajeOcupacion = totalCamas > 0 ? Math.round((totalPacientes / totalCamas) * 100) : 0
+    const porcentaje = totalCamas > 0 ? Math.round((totalPacientes / totalCamas) * 100) : 0
     
-    // ============================================
-    // CONSTRUIR RESPUESTA
-    // ============================================
-    let respuestaTexto = ''
-    
-    if (modo === 'solo_piso' && pisoObjetivo) {
-      respuestaTexto = `En el PISO ${pisoObjetivo} hay ${camasDisponibles} camas disponibles. Total camas en el piso: ${totalCamas}. Ocupación: ${porcentajeOcupacion}%.`
-    } else if (modo === 'excluir_piso' && pisoObjetivo) {
-      respuestaTexto = `Excluyendo el PISO ${pisoObjetivo}, hay ${camasDisponibles} camas disponibles. Total camas consideradas: ${totalCamas}. Ocupación: ${porcentajeOcupacion}%.`
-    } else if (modo === 'excluir_servicio' && servicioObjetivo) {
-      respuestaTexto = `Excluyendo ${servicioObjetivo}, hay ${camasDisponibles} camas disponibles. Total camas consideradas: ${totalCamas}. Ocupación: ${porcentajeOcupacion}%.`
-    } else {
-      respuestaTexto = `Hay ${camasDisponibles} camas disponibles. Total camas: ${totalCamas}. Ocupación: ${porcentajeOcupacion}%. ${camasBloqueadas} camas bloqueadas por aislamiento.`
-    }
+    let respuesta = pisoObjetivo
+      ? `En el PISO ${pisoObjetivo} hay ${camasDisponibles} camas disponibles. Total camas: ${totalCamas}. Ocupación: ${porcentaje}%.`
+      : `Hay ${camasDisponibles} camas disponibles. Total camas: ${totalCamas}. Ocupación: ${porcentaje}%. ${camasBloqueadas} camas bloqueadas por aislamiento.`
     
     return new Response(
-      JSON.stringify({ respuesta: respuestaTexto, ok: true }),
+      JSON.stringify({ respuesta, ok: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
     
