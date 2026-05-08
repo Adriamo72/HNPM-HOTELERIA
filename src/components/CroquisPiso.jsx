@@ -174,9 +174,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   useEffect(() => {
     if (habitaciones && habitaciones.length > 0 && croquis) {
         calcularEstadisticas();
-      
-      // Verificar cuántas habitaciones tienen coordenadas
-      const conCoordenadas = habitaciones.filter(hab => coordenadas[hab.id]).length;
       }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [habitaciones, croquis]);
