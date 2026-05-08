@@ -472,9 +472,13 @@ const VisualizadorDashboard = () => {
         case 'internacion':
           return ocu && ocu.tipo_habitacion === 'activa';
         case 'reparacion':
-          return ocu && ocu.tipo_habitacion === 'reparacion';
+          // Incluir habitaciones que están en reparación según su último registro conocido
+          // o que no tienen registro reciente (asumir que están en reparación si no hay datos)
+          return ocu ? ocu.tipo_habitacion === 'reparacion' : true;
         case 'otros':
-          return ocu && ocu.tipo_habitacion === 'otros';
+          // Incluir habitaciones que están en otros según su último registro conocido
+          // o que no tienen registro reciente (asumir que están en otros si no hay datos)
+          return ocu ? ocu.tipo_habitacion === 'otros' : true;
         case 'disponible':
           // Mostrar solo habitaciones de internación (activas) que tengan camas disponibles > 0
           if (!ocu || ocu.tipo_habitacion !== 'activa') return false;
