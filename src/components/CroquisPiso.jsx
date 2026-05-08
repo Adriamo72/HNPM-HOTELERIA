@@ -118,8 +118,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
 
   // ==================== RESETEAR COMPLETO cuando cambia el pisoId ====================
   useEffect(() => {
-    console.log(`🔄 Resetear croquis para pisoId: ${normalizedPisoId}`);
-    
+        
     // Resetear todos los estados
     setCroquis(null);
     setCoordenadas({});
@@ -144,8 +143,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     
     // Validar que tengamos un piso válido
     if (normalizedPisoId !== '' && normalizedPisoId !== null && normalizedPisoId !== undefined && normalizedPisoId !== 0) {
-      console.log(`✅ Cargando croquis para piso ${normalizedPisoId}`);
-      cargarCroquis();
+            cargarCroquis();
       cargarEstadisticasGlobales();
     } else {
       console.warn(`⚠️ Piso inválido: ${normalizedPisoId}`);
@@ -175,20 +173,17 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   // ==================== Sincronizar habitaciones cuando cambian externamente ====================
   useEffect(() => {
     if (habitaciones && habitaciones.length > 0 && croquis) {
-      console.log(`📋 Sincronizando ${habitaciones.length} habitaciones para piso ${pisoId}`);
-      calcularEstadisticas();
+        calcularEstadisticas();
       
       // Verificar cuántas habitaciones tienen coordenadas
       const conCoordenadas = habitaciones.filter(hab => coordenadas[hab.id]).length;
-      console.log(`📍 Habitaciones con coordenadas: ${conCoordenadas}/${habitaciones.length}`);
-    }
+      }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [habitaciones, croquis]);
 
   // ==================== Forzar re-render cuando coordenadas estén listas ====================
   useEffect(() => {
     if (!cargando && !cargandoCoordenadas && croquis && habitaciones.length > 0) {
-      console.log('✅ Todo listo - coordenadas:', Object.keys(coordenadas).length);
       // Forzar re-render de los marcadores
       setMarcadoresKey(prev => prev + 1);
     }
@@ -371,15 +366,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       const { data, error } = await query;
       if (error) throw error;
 
-      console.log(`CroquisPiso - PISO ${pisoId} - Query results:`, data);
       
       if (data && data.length > 0) {
         const ultima = new Date(data[0].fecha_registro);
-        console.log(`CroquisPiso - PISO ${pisoId} - Raw timestamp:`, data[0].fecha_registro);
-        console.log(`CroquisPiso - PISO ${pisoId} - Date object:`, ultima);
         setUltimaActualizacion(ultima);
       } else {
-        console.log(`CroquisPiso - PISO ${pisoId} - No records found`);
         setUltimaActualizacion(null);
       }
     } catch (error) {
@@ -396,7 +387,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       return;
     }
     
-    console.log(`📥 Cargando croquis para piso ${normalizedPisoId}`);
     setCargando(true);
     setCargandoCoordenadas(true);
     
@@ -418,7 +408,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       }
 
       if (croquisData) {
-        console.log(`✅ Croquis encontrado: ${croquisData.id}`);
         setCroquis(croquisData);
         
         const { data: coords, error: coordError } = await supabase
@@ -435,11 +424,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           coordsMap[c.habitacion_id] = { x: c.x, y: c.y, ancho: c.ancho, alto: c.alto };
         });
         setCoordenadas(coordsMap);
-        console.log(`📍 ${Object.keys(coordsMap).length} coordenadas cargadas`);
         // Forzar re-render de marcadores
         setMarcadoresKey(prev => prev + 1);
       } else {
-        console.log(`📭 No hay croquis para piso ${normalizedPisoId}`);
         setCroquis(null);
         setCoordenadas({});
       }

@@ -258,29 +258,47 @@ const VisualizadorDashboard = () => {
     
     try {
       // Cargar pisos y habitaciones en paralelo
-      const [resPisos, resHabs, resOcupacion] = await Promise.all([
+      const [resPisos, resHabs, resOcupacion, resReparacion, resOtros] = await Promise.all([
         supabase.from('pisos').select('*').order('nombre_piso'),
         supabase.from('habitaciones_especiales').select('*').order('nombre'),
-        supabase.from('ocupacion_habitaciones').select('*, aislamiento_activo').order('actualizado_en', { ascending: false }).order('fecha', { ascending: false }),
+        supabase.from('ocupacion_habitaciones').select('*').order('actualizado_en', { ascending: false }).order('fecha', { ascending: false }).limit(10000),
+        supabase.from('ocupacion_habitaciones').select('*').eq('tipo_habitacion', 'reparacion').order('actualizado_en', { ascending: false }),
+        supabase.from('ocupacion_habitaciones').select('*').eq('tipo_habitacion', 'otros').order('actualizado_en', { ascending: false })
       ]);
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
       // Usar habitaciones_especiales como habitaciones principales
       setHabitaciones(resHabs.data || []);
-      // Procesar ocupación como AdminDashboard - obtener solo el registro más reciente por habitación
+      // Combinar todos los datos de ocupación
+      const todosLosDatos = [...(resOcupacion.data || []), ...(resReparacion.data || []), ...(resOtros.data || [])];
+
+      // Procesar ocupación - obtener el registro más reciente por habitación y por tipo
       const estadoPorHabitacion = {};
-      (resOcupacion.data || []).forEach(e => {
+      const estadoPorHabitacionYTipo = {};
+      
+      todosLosDatos.forEach(e => {
+        // Mantener el registro más reciente por habitación (para tabs generales)
         if (!estadoPorHabitacion[e.habitacion_id]) {
           estadoPorHabitacion[e.habitacion_id] = e;
         }
+        
+        // Mantener el registro más reciente por habitación y tipo (para tabs específicos)
+        const clave = `${e.habitacion_id}_${e.tipo_habitacion}`;
+        if (!estadoPorHabitacionYTipo[clave]) {
+          estadoPorHabitacionYTipo[clave] = e;
+        }
       });
 
+      // Para el mapa general de ocupación, usar el registro más reciente de cada habitación
       const ocupacionMap = {};
       (resOcupacion.data || []).forEach(e => {
         if (!ocupacionMap[String(e.habitacion_id)]) {
           ocupacionMap[String(e.habitacion_id)] = e;
         }
       });
+      
+      // Guardar también el mapa por tipo para uso específico en tabs REPARACION y OTROS
+      window.estadoPorHabitacionYTipo = estadoPorHabitacionYTipo;
       
       setOcupacion(ocupacionMap);
       
@@ -411,7 +429,7 @@ const VisualizadorDashboard = () => {
   };
 
   const filtrarHabitacionesPorTipo = (tipo) => {
-    return habitaciones.filter(habitacion => {
+    const resultado = habitaciones.filter(habitacion => {
       const ocu = ocupacion[String(habitacion.id)];
       const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
       
@@ -422,7 +440,7 @@ const VisualizadorDashboard = () => {
       if (filters.habitacion && !habitacion.nombre?.toLowerCase().includes(filters.habitacion.toLowerCase())) {
         return false;
       }
-      if (filters.novedades && !ocu?.observaciones?.toLowerCase().includes(filters.novedades.toLowerCase())) {
+      if (filters.novedades && ocu?.observaciones && !ocu.observaciones.toLowerCase().includes(filters.novedades.toLowerCase())) {
         return false;
       }
       
@@ -472,13 +490,15 @@ const VisualizadorDashboard = () => {
         case 'internacion':
           return ocu && ocu.tipo_habitacion === 'activa';
         case 'reparacion':
-          // Incluir habitaciones que están en reparación según su último registro conocido
-          // o que no tienen registro reciente (asumir que están en reparación si no hay datos)
-          return ocu ? ocu.tipo_habitacion === 'reparacion' : true;
+          // Buscar el último registro específico de tipo 'reparacion' para esta habitación
+          const claveReparacion = `${habitacion.id}_reparacion`;
+          const ultimoReparacion = window.estadoPorHabitacionYTipo?.[claveReparacion];
+          return !!ultimoReparacion;
         case 'otros':
-          // Incluir habitaciones que están en otros según su último registro conocido
-          // o que no tienen registro reciente (asumir que están en otros si no hay datos)
-          return ocu ? ocu.tipo_habitacion === 'otros' : true;
+          // Buscar el último registro específico de tipo 'otros' para esta habitación
+          const claveOtros = `${habitacion.id}_otros`;
+          const ultimoOtros = window.estadoPorHabitacionYTipo?.[claveOtros];
+          return !!ultimoOtros;
         case 'disponible':
           // Mostrar solo habitaciones de internación (activas) que tengan camas disponibles > 0
           if (!ocu || ocu.tipo_habitacion !== 'activa') return false;
@@ -498,6 +518,8 @@ const VisualizadorDashboard = () => {
           return false;
       }
     });
+    
+    return resultado;
   };
 
   const generarPDFHabitaciones = () => {
@@ -535,25 +557,28 @@ const VisualizadorDashboard = () => {
         titulo = 'Habitaciones en Reparación';
         datosTabla = filtrarHabitacionesPorTipo('reparacion').map(habitacion => {
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-          const ocu = ocupacion[String(habitacion.id)] || { observaciones: 'Sin novedad' };
+          const claveReparacion = `${habitacion.id}_reparacion`;
+          const ocuReparacion = window.estadoPorHabitacionYTipo?.[claveReparacion];
           
+                    
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
-            ocu.observaciones || 'Sin novedad'
+            ocuReparacion?.observaciones || 'Sin novedad'
           ];
         });
         break;
       case 'otros':
         titulo = 'Habitaciones OTROS';
         datosTabla = filtrarHabitacionesPorTipo('otros').map(habitacion => {
-          const ocu = ocupacion[String(habitacion.id)];
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+          const claveOtros = `${habitacion.id}_otros`;
+          const ocuOtros = window.estadoPorHabitacionYTipo?.[claveOtros];
           
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
-            ocu?.observaciones || 'Sin novedades'
+            ocuOtros?.observaciones || 'Sin novedades'
           ];
         });
         break;
@@ -1111,9 +1136,33 @@ const VisualizadorDashboard = () => {
                           </td>
                         )}
                         <td className="px-4 py-3 text-slate-200 max-w-xs truncate" title={
-                          ocu?.observaciones || 'Sin novedades'
+                          (() => {
+                            if (activeEstadosTab === 'reparacion') {
+                              const claveReparacion = `${habitacion.id}_reparacion`;
+                              const ocuReparacion = window.estadoPorHabitacionYTipo?.[claveReparacion];
+                              return ocuReparacion?.observaciones || 'Sin novedades';
+                            } else if (activeEstadosTab === 'otros') {
+                              const claveOtros = `${habitacion.id}_otros`;
+                              const ocuOtros = window.estadoPorHabitacionYTipo?.[claveOtros];
+                              return ocuOtros?.observaciones || 'Sin novedades';
+                            } else {
+                              return ocu?.observaciones || 'Sin novedades';
+                            }
+                          })()
                         }>
-                          {ocu?.observaciones || 'Sin novedades'}
+                          {(() => {
+                            if (activeEstadosTab === 'reparacion') {
+                              const claveReparacion = `${habitacion.id}_reparacion`;
+                              const ocuReparacion = window.estadoPorHabitacionYTipo?.[claveReparacion];
+                              return ocuReparacion?.observaciones || 'Sin novedades';
+                            } else if (activeEstadosTab === 'otros') {
+                              const claveOtros = `${habitacion.id}_otros`;
+                              const ocuOtros = window.estadoPorHabitacionYTipo?.[claveOtros];
+                              return ocuOtros?.observaciones || 'Sin novedades';
+                            } else {
+                              return ocu?.observaciones || 'Sin novedades';
+                            }
+                          })()}
                         </td>
                       </tr>
                     );
