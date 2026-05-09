@@ -3,16 +3,12 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
 import DatePicker from 'react-datepicker';
-import { registerLocale, setDefaultLocale } from "react-datepicker";
-import es from 'date-fns/locale/es';
 import 'react-datepicker/dist/react-datepicker.css';
 import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
 import RecorridosList from './RecorridosList';
 import AsistenteIA from './AsistenteIA';
 
-registerLocale('es', es);
-setDefaultLocale('es');
 
 const AdminDashboard = () => {
   // Obtener perfil del usuario desde localStorage

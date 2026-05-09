@@ -6,12 +6,7 @@ import SpinnerCarga from './SpinnerCarga';
 import RecorridosList from './RecorridosList';
 import AsistenteIA from './AsistenteIA';
 import DatePicker from 'react-datepicker';
-import { registerLocale, setDefaultLocale } from "react-datepicker";
-import es from 'date-fns/locale/es';
 import 'react-datepicker/dist/react-datepicker.css';
-
-registerLocale('es', es);
-setDefaultLocale('es');
 
 const VisualizadorDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
