@@ -537,7 +537,7 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
     return '';
   };
 
-  const normalizarRechazo = (row) => {
+  const normalizarRechazo = useCallback((row) => {
     const cuerpoEmail = row?.cuerpo_email || row?.contenido_email || row?.raw_email || row?.detalle || '';
     const pacienteMail = extraerDatoMail(cuerpoEmail, ['Paciente']);
     const [apellidoMail = '', ...restoNombreMail] = pacienteMail.split(/\s+/).filter(Boolean);
@@ -563,7 +563,7 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
       emailEnviado,
       cuerpoEmail,
     };
-  };
+  }, []);
 
   const construirClaveRechazo = (item) => [
     (item.apellido || '').toUpperCase().trim(),
@@ -574,7 +574,7 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
     (item.diagnostico || '').toUpperCase().trim(),
   ].join('|');
 
-  const deduplicarRechazos = (items) => {
+  const deduplicarRechazos = useCallback((items) => {
     const vistos = new Set();
     return (items || []).filter((item) => {
       const clave = construirClaveRechazo(item);
@@ -583,7 +583,7 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
       vistos.add(clave);
       return true;
     });
-  };
+  }, []);
 
   const cargarRechazosPacientes = useCallback(async () => {
     setCargandoRechazos(true);
