@@ -263,48 +263,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
-  // ==================== Calcular estadísticas actuales (para snapshot) ====================
-  const calcularEstadisticasActuales = () => {
-    let totalCamas = 0;
-    let camasOcupadasReales = 0;
-    let camasBloqueadasAislamiento = 0;
-    let habitacionesActivas = 0;
-    let habitacionesAisladas = 0;
-    
-    habitaciones.forEach(hab => {
-      const ocup = ocupacion[hab.id];
-      if (ocup && ocup.tipo_habitacion === 'activa') {
-        habitacionesActivas += 1;
-        totalCamas += ocup.total_camas > 0 ? ocup.total_camas : 0;
-        
-        const ocupadasReales = getCamasOcupadasReales(ocup);
-        camasOcupadasReales += ocupadasReales;
-        
-        const bloqueadas = getCamasNoUtilizadasPorAislamiento(ocup);
-        camasBloqueadasAislamiento += bloqueadas;
-        
-        if (esAislamientoPatologia(ocup)) {
-          habitacionesAisladas += 1;
-        }
-      }
-    });
-    
-    const camasOcupadasPracticas = camasOcupadasReales + camasBloqueadasAislamiento;
-    const porcentajePractico = totalCamas > 0 ? (camasOcupadasPracticas / totalCamas) * 100 : 0;
-    const camasDisponibles = Math.max(0, totalCamas - camasOcupadasPracticas);
-    
-    return {
-      totalCamas,
-      camasOcupadasReales,
-      camasBloqueadasAislamiento,
-      habitacionesActivas,
-      habitacionesAisladas,
-      camasOcupadasPracticas,
-      porcentajePractico,
-      camasDisponibles
-    };
-  };
-
   // ==================== Calcular estadísticas del piso ====================
   const calcularEstadisticas = () => {
     let totalCamas = 0;
