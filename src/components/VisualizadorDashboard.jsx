@@ -5,8 +5,6 @@ import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
 import RecorridosList from './RecorridosList';
 import AsistenteIA from './AsistenteIA';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
 
 const VisualizadorDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
@@ -806,17 +804,11 @@ const VisualizadorDashboard = () => {
                   <option key={p.id} value={p.id}>{p.nombre_piso}</option>
                 ))}
               </select>
-              <DatePicker
-                locale="es"
+              <input 
+                type="date" 
+                value={fechaSeleccionada}
+                onChange={(e) => { setFechaSeleccionada(e.target.value); setCroquisKey(prev => prev + 1); }}
                 className="flex-1 min-w-[130px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
-                selected={fechaSeleccionada ? new Date(fechaSeleccionada) : null}
-                onChange={(date) => { 
-                  const fechaStr = date ? date.toISOString().split('T')[0] : '';
-                  setFechaSeleccionada(fechaStr); 
-                  setCroquisKey(prev => prev + 1); 
-                }}
-                dateFormat="yyyy-MM-dd"
-                placeholderText="Seleccionar fecha"
               />
               <button 
                 onClick={refrescarDatos}
