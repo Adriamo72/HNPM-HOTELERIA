@@ -2064,6 +2064,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                   WebkitAppearance: 'none',
                   MozAppearance: 'textfield'
                 }}
+                locale="es"
                 weekStart="1"
               />
               <button

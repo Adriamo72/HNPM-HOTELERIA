@@ -813,6 +813,7 @@ const VisualizadorDashboard = () => {
                   WebkitAppearance: 'none',
                   MozAppearance: 'textfield'
                 }}
+                locale="es"
                 weekStart="1"
               />
               <button 
