@@ -105,7 +105,7 @@ const VisualizadorDashboard = () => {
     return '';
   };
 
-  const normalizarRechazo = (row) => {
+  const normalizarRechazo = useCallback((row) => {
     const cuerpoEmail = row?.cuerpo_email || row?.contenido_email || row?.raw_email || row?.detalle || '';
     const pacienteMail = extraerDatoMail(cuerpoEmail, ['Paciente']);
     const [apellidoMail = '', ...restoNombreMail] = pacienteMail.split(/\s+/).filter(Boolean);
@@ -147,18 +147,18 @@ const VisualizadorDashboard = () => {
       cuerpoEmail,
       horaDeteccion,
     };
-  };
+  }, []);
 
-  const construirClaveRechazo = (item) => [
+  const construirClaveRechazo = useCallback((item) => [
     (item.apellido || '').toUpperCase().trim(),
     (item.nombre || '').toUpperCase().trim(),
     (item.obraSocial || '').toUpperCase().trim(),
     (item.causa || '').toUpperCase().trim(),
     (item.responsableMi || '').toUpperCase().trim(),
     (item.diagnostico || '').toUpperCase().trim(),
-  ].join('|');
+  ].join('|'), []);
 
-  const deduplicarRechazos = (items) => {
+  const deduplicarRechazos = useCallback((items) => {
     const vistos = new Set();
     return (items || []).filter((item) => {
       const clave = construirClaveRechazo(item);
@@ -167,7 +167,7 @@ const VisualizadorDashboard = () => {
       vistos.add(clave);
       return true;
     });
-  };
+  }, [construirClaveRechazo]);
 
   const cargarRechazosPacientes = useCallback(async () => {
     setCargandoRechazos(true);
