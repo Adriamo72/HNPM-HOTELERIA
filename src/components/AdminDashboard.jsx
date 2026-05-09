@@ -221,15 +221,7 @@ const AdminDashboard = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const intervalo = setInterval(() => {
-      cargarRechazosPacientes();
-    }, 60000);
-
-    return () => clearInterval(intervalo);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  
   // Recargar datos cuando se cambia a la pestaña historial y no hay datos
   useEffect(() => {
     if (activeTab === 'historial' && Object.keys(stockPañol).length === 0 && !cargandoMonitor) {
