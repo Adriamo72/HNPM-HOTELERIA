@@ -1,5 +1,5 @@
 // components/AdminDashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
 import CroquisPiso from './CroquisPiso';
@@ -42,13 +42,19 @@ const AdminDashboard = () => {
   const [nuevoVisualizador, setNuevoVisualizador] = useState({ usuario: '', pin: '', confirmarPin: '' });
   const [visualizadorSeleccionado, setVisualizadorSeleccionado] = useState(null);
   const [mostrarModalCambioPinVisualizador, setMostrarModalCambioPinVisualizador] = useState(false);
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(() => {
+    const ahora = new Date();
+    // Ajustar para zona horaria de Argentina (UTC-3)
+    const fechaArgentina = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
+    return fechaArgentina.toISOString().split('T')[0];
+  });
   const [rechazosPacientes, setRechazosPacientes] = useState([]);
   const [rechazosLeidos, setRechazosLeidos] = useState([]);
+  const [rechazosFiltradosPorFecha, setRechazosFiltradosPorFecha] = useState([]);
   const [mostrarModalInfo, setMostrarModalInfo] = useState(false);
   const [cargandoRechazos, setCargandoRechazos] = useState(false);
   const [errorRechazos, setErrorRechazos] = useState('');
   const [rechazosEliminando, setRechazosEliminando] = useState([]);
-  const [mostrarHistorialCompleto, setMostrarHistorialCompleto] = useState(false);
 
   
   // Estados para modales
@@ -232,6 +238,14 @@ const AdminDashboard = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, stockPañol, cargandoMonitor]);
 
+  // ==================== RECARGAR DATOS CUANDO CAMBIA LA FECHA ====================
+  useEffect(() => {
+    if (habitacionesEspeciales.length > 0) {
+      cargarEstadoHabitaciones(habitacionesEspeciales);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fechaSeleccionada, habitacionesEspeciales]);
+
   useEffect(() => {
     if (!habitacionesEspeciales.length) return;
     setHabitacionStatus(prev => {
@@ -277,23 +291,37 @@ const AdminDashboard = () => {
     if (!habitaciones.length) return;
 
     try {
+      const hoy = new Date().toISOString().split('T')[0];
+      
+      // Construir consultas con filtro de fecha si es histórico
+      let queryOcupacion = supabase.from('ocupacion_habitaciones')
+        .select('*')
+        .in('habitacion_id', habitaciones.map(h => h.id))
+        .order('actualizado_en', { ascending: false })
+        .order('fecha', { ascending: false })
+        .limit(10000);
+      let queryReparacion = supabase.from('ocupacion_habitaciones')
+        .select('*')
+        .in('habitacion_id', habitaciones.map(h => h.id))
+        .eq('tipo_habitacion', 'reparacion')
+        .order('actualizado_en', { ascending: false });
+      let queryOtros = supabase.from('ocupacion_habitaciones')
+        .select('*')
+        .in('habitacion_id', habitaciones.map(h => h.id))
+        .eq('tipo_habitacion', 'otros')
+        .order('actualizado_en', { ascending: false });
+      
+      // Si es una fecha histórica, filtrar por esa fecha
+      if (fechaSeleccionada !== hoy) {
+        queryOcupacion = queryOcupacion.lte('fecha', fechaSeleccionada);
+        queryReparacion = queryReparacion.lte('fecha', fechaSeleccionada);
+        queryOtros = queryOtros.lte('fecha', fechaSeleccionada);
+      }
+      
       const [resOcupacion, resReparacion, resOtros] = await Promise.all([
-        supabase.from('ocupacion_habitaciones')
-          .select('*')
-          .in('habitacion_id', habitaciones.map(h => h.id))
-          .order('actualizado_en', { ascending: false })
-          .order('fecha', { ascending: false })
-          .limit(10000),
-        supabase.from('ocupacion_habitaciones')
-          .select('*')
-          .in('habitacion_id', habitaciones.map(h => h.id))
-          .eq('tipo_habitacion', 'reparacion')
-          .order('actualizado_en', { ascending: false }),
-        supabase.from('ocupacion_habitaciones')
-          .select('*')
-          .in('habitacion_id', habitaciones.map(h => h.id))
-          .eq('tipo_habitacion', 'otros')
-          .order('actualizado_en', { ascending: false })
+        queryOcupacion,
+        queryReparacion,
+        queryOtros
       ]);
 
       const data = resOcupacion.data;
@@ -557,21 +585,33 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
     });
   };
 
-  const cargarRechazosPacientes = async () => {
+  const cargarRechazosPacientes = useCallback(async () => {
     setCargandoRechazos(true);
     setErrorRechazos('');
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('rechazos_pacientes')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
 
+      // Si hay una fecha seleccionada, filtrar por esa fecha
+      if (fechaSeleccionada) {
+        const fechaInicio = new Date(fechaSeleccionada + 'T00:00:00').toISOString();
+        const fechaFin = new Date(fechaSeleccionada + 'T23:59:59').toISOString();
+        query = query
+          .gte('created_at', fechaInicio)
+          .lte('created_at', fechaFin);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
 
       const normalizados = deduplicarRechazos((data || []).map(normalizarRechazo));
       setRechazosPacientes(normalizados);
+      setRechazosFiltradosPorFecha(normalizados);
       setRechazosLeidos(cargarRechazosLeidosStorage());
     } catch (error) {
       console.error('Error cargando rechazos de pacientes:', error);
@@ -581,12 +621,11 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
     } finally {
       setCargandoRechazos(false);
     }
-  };
+  }, [fechaSeleccionada, deduplicarRechazos, normalizarRechazo]);
 
   const abrirModalInfo = () => {
     setMostrarModalInfo(true);
-    setMostrarHistorialCompleto(false); // Resetear al abrir
-    const idsActuales = rechazosPacientes.map(r => r.id);
+    const idsActuales = rechazosFiltradosPorFecha.map(r => r.id);
     guardarRechazosLeidosStorage([...rechazosLeidos, ...idsActuales]);
   };
 
@@ -645,13 +684,20 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
     }
   };
 
-  const rechazosNoLeidos = rechazosPacientes.filter(r => !rechazosLeidos.includes(r.id)).length;
+  const cantidadRechazosDia = useMemo(() => {
+    return rechazosFiltradosPorFecha.length;
+  }, [rechazosFiltradosPorFecha]);
+
+  // ==================== RECARGAR RECHAZOS CUANDO CAMBIA LA FECHA ====================
+  useEffect(() => {
+    cargarRechazosPacientes();
+  }, [fechaSeleccionada, cargarRechazosPacientes]);
 
   useEffect(() => {
     const actualizarBadgePwa = async () => {
       try {
-        if (rechazosNoLeidos > 0 && 'setAppBadge' in navigator) {
-          await navigator.setAppBadge(rechazosNoLeidos);
+        if (cantidadRechazosDia > 0 && 'setAppBadge' in navigator) {
+          await navigator.setAppBadge(cantidadRechazosDia);
           return;
         }
 
@@ -664,7 +710,7 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
     };
 
     actualizarBadgePwa();
-  }, [rechazosNoLeidos]);
+  }, [cantidadRechazosDia]);
 
   // ==================== FUNCIÓN PARA RECALCULAR STOCK DE UN PISO ====================
   const recalcularStockPiso = async (pisoId) => {
@@ -1982,9 +2028,9 @@ const eliminarVisualizador = async (visId, usuario) => {
                 title="Rechazos de pacientes"
               >
                 <span className="font-semibold">Info</span>
-                {rechazosNoLeidos > 0 && (
+                {cantidadRechazosDia > 0 && (
                   <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full bg-white text-red-700 text-[10px] font-black flex items-center justify-center border border-red-600">
-                    {rechazosNoLeidos > 99 ? '99+' : rechazosNoLeidos}
+                    {cantidadRechazosDia > 99 ? '99+' : cantidadRechazosDia}
                   </span>
                 )}
               </button>
@@ -2017,6 +2063,12 @@ const eliminarVisualizador = async (visId, usuario) => {
                   <option key={p.id} value={p.id}>{p.nombre_piso}</option>
                 ))}
               </select>
+              <input 
+                type="date" 
+                value={fechaSeleccionada}
+                onChange={(e) => { setFechaSeleccionada(e.target.value); setCroquisKey(prev => prev + 1); }}
+                className="flex-1 min-w-[130px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              />
               <button
                 onClick={recargarCroquis}
                 disabled={cargandoCroquis}
@@ -2038,6 +2090,9 @@ const eliminarVisualizador = async (visId, usuario) => {
               pisoId={pisoSeleccionado}
               pisoNombre={pisos.find(p => String(p.id) === String(pisoSeleccionado))?.nombre_piso}
               habitaciones={habitacionesEspeciales.filter(h => String(h.piso_id) === String(pisoSeleccionado))}
+              esVisualizador={false}
+              fechaConsulta={fechaSeleccionada}
+              onFechaChange={setFechaSeleccionada}
             />
           ) : (
             <div className="bg-slate-800 rounded-xl p-12 text-center">
@@ -2058,7 +2113,7 @@ const eliminarVisualizador = async (visId, usuario) => {
               Historial de recorridos de ocupación
             </p>
           </div>
-          <RecorridosList />
+          <RecorridosList fechaSeleccionada={fechaSeleccionada} />
         </div>
       )}
 
@@ -3508,30 +3563,7 @@ const eliminarVisualizador = async (visId, usuario) => {
             </div>
 
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase font-semibold text-slate-400">Total: {rechazosPacientes.length}</span>
-              <span className="text-xs uppercase font-semibold text-red-400">No leídos: {rechazosNoLeidos}</span>
-              {!mostrarHistorialCompleto && rechazosPacientes.length > 5 && (
-                <button
-                  onClick={() => setMostrarHistorialCompleto(true)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg"
-                >
-                  Ver historial completo ({rechazosPacientes.length})
-                </button>
-              )}
-              {mostrarHistorialCompleto && (
-                <button
-                  onClick={() => setMostrarHistorialCompleto(false)}
-                  className="bg-slate-600 hover:bg-slate-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg"
-                >
-                  Ver solo últimos 5
-                </button>
-              )}
-              <button
-                onClick={() => guardarRechazosLeidosStorage(rechazosPacientes.map(r => r.id))}
-                className="ml-auto bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700"
-              >
-                Marcar todos como leídos
-              </button>
+              <span className="text-xs uppercase font-semibold text-slate-400">Total del día {fechaSeleccionada}: {rechazosFiltradosPorFecha.length}</span>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
@@ -3545,23 +3577,16 @@ const eliminarVisualizador = async (visId, usuario) => {
                 </div>
               )}
 
-              {!cargandoRechazos && !errorRechazos && rechazosPacientes.length === 0 && (
-                <div className="text-center text-slate-500 text-sm py-8">Sin rechazos registrados.</div>
+              {!cargandoRechazos && !errorRechazos && rechazosFiltradosPorFecha.length === 0 && (
+                <div className="text-center text-slate-500 text-sm py-8">Sin rechazos registrados para esta fecha.</div>
               )}
 
-              {!cargandoRechazos && !errorRechazos && !mostrarHistorialCompleto && rechazosPacientes.length > 5 && (
-                <div className="text-center text-slate-400 text-xs py-2 border-b border-slate-800">
-                  Mostrando los últimos 5 de {rechazosPacientes.length} rechazos
-                </div>
-              )}
-
-              {!cargandoRechazos && !errorRechazos && (mostrarHistorialCompleto ? rechazosPacientes : rechazosPacientes.slice(0, 5)).map((rechazo) => {
-                const noLeido = !rechazosLeidos.includes(rechazo.id);
+              {!cargandoRechazos && !errorRechazos && rechazosFiltradosPorFecha.map((rechazo) => {
                 const eliminando = rechazosEliminando.includes(rechazo.id);
                 const nombreCompleto = `${rechazo.apellido || 'Sin apellido'}, ${rechazo.nombre || 'Sin nombre'}`;
 
                 return (
-                  <div key={rechazo.id} className={`rounded-xl border p-3 ${noLeido ? 'border-red-700 bg-red-950/20' : 'border-slate-800 bg-slate-950/40'}`}>
+                  <div key={rechazo.id} className="rounded-xl border p-3 border-slate-800 bg-slate-950/40">
                     <div className="flex justify-between gap-2 items-start">
                       <div>
                         <p className="text-sm font-semibold text-white uppercase">
@@ -3572,11 +3597,6 @@ const eliminarVisualizador = async (visId, usuario) => {
                         </p>
                       </div>
                       <div className="flex items-start gap-2">
-                        {noLeido ? (
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-600/20 text-red-300 border border-red-600/40">No leído</span>
-                        ) : (
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-600/20 text-emerald-300 border border-emerald-600/40">Leído</span>
-                        )}
                         <button
                           type="button"
                           onClick={() => eliminarRechazoPaciente(rechazo.id, nombreCompleto)}

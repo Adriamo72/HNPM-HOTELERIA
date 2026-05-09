@@ -36,7 +36,7 @@ const getCamasNoUtilizadasPorAislamiento = (ocup) => {
   return Math.max(0, totalCamas - camasOcupadasReales);
 };
 
-const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false, fechaConsulta }) => {
+const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false, fechaConsulta, onFechaChange }) => {
   const normalizedPisoId = typeof pisoId === 'string' && pisoId.trim() !== '' && !Number.isNaN(Number(pisoId))
     ? Number(pisoId)
     : pisoId;
@@ -263,6 +263,48 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Calcular estadísticas actuales (para snapshot) ====================
+  const calcularEstadisticasActuales = () => {
+    let totalCamas = 0;
+    let camasOcupadasReales = 0;
+    let camasBloqueadasAislamiento = 0;
+    let habitacionesActivas = 0;
+    let habitacionesAisladas = 0;
+    
+    habitaciones.forEach(hab => {
+      const ocup = ocupacion[hab.id];
+      if (ocup && ocup.tipo_habitacion === 'activa') {
+        habitacionesActivas += 1;
+        totalCamas += ocup.total_camas > 0 ? ocup.total_camas : 0;
+        
+        const ocupadasReales = getCamasOcupadasReales(ocup);
+        camasOcupadasReales += ocupadasReales;
+        
+        const bloqueadas = getCamasNoUtilizadasPorAislamiento(ocup);
+        camasBloqueadasAislamiento += bloqueadas;
+        
+        if (esAislamientoPatologia(ocup)) {
+          habitacionesAisladas += 1;
+        }
+      }
+    });
+    
+    const camasOcupadasPracticas = camasOcupadasReales + camasBloqueadasAislamiento;
+    const porcentajePractico = totalCamas > 0 ? (camasOcupadasPracticas / totalCamas) * 100 : 0;
+    const camasDisponibles = Math.max(0, totalCamas - camasOcupadasPracticas);
+    
+    return {
+      totalCamas,
+      camasOcupadasReales,
+      camasBloqueadasAislamiento,
+      habitacionesActivas,
+      habitacionesAisladas,
+      camasOcupadasPracticas,
+      porcentajePractico,
+      camasDisponibles
+    };
+  };
+
   // ==================== Calcular estadísticas del piso ====================
   const calcularEstadisticas = () => {
     let totalCamas = 0;
@@ -320,9 +362,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         .order('fecha', { ascending: false })
         .order('actualizado_en', { ascending: false });
 
-      // Si es una fecha histórica específica, filtrar por esa fecha
+      // Si es una fecha histórica específica, traer todos los registros hasta esa fecha
       if (fechaSeleccionada !== hoy) {
-        query = query.eq('fecha', fechaSeleccionada);
+        query = query.lte('fecha', fechaSeleccionada);
       }
 
       const { data, error } = await query;
@@ -343,6 +385,46 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
+  // ==================== Guardar snapshot diario ====================
+  const guardarSnapshotDiario = async () => {
+    if (!pisoId || !ocupacion || Object.keys(ocupacion).length === 0) return;
+    
+    try {
+      const hoy = new Date().toISOString().split('T')[0];
+      
+      // Verificar si ya existe un snapshot para hoy
+      const { data: snapshotExistente } = await supabase
+        .from('log_recorridos')
+        .select('id')
+        .eq('piso_id', pisoId)
+        .eq('fecha', hoy)
+        .limit(1);
+      
+      if (snapshotExistente && snapshotExistente.length > 0) {
+        console.log('Snapshot diario ya existe para hoy');
+        return;
+      }
+      
+      // Calcular estadísticas actuales
+      const estadisticasActuales = calcularEstadisticasActuales();
+      
+      // Guardar snapshot del estado actual
+      await supabase
+        .from('log_recorridos')
+        .insert({
+          piso_id: pisoId,
+          fecha: hoy,
+          camas_ocupadas: estadisticasActuales.camasOcupadasReales,
+          camas_libres: estadisticasActuales.camasDisponibles,
+          fecha_registro: new Date().toISOString()
+        });
+      
+      console.log('Snapshot diario guardado exitosamente');
+    } catch (error) {
+      console.error('Error guardando snapshot diario:', error);
+    }
+  };
+
   // ==================== Cargar último recorrido ====================
   const cargarUltimoRecorrido = async () => {
     if (!pisoId) return;
@@ -357,7 +439,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       if (fechaSeleccionada === hoy) {
         query = query.order('fecha_registro', { ascending: false }).limit(1);
       } else {
-        query = query.eq('fecha', fechaSeleccionada).order('fecha_registro', { ascending: false }).limit(1);
+        query = query.eq('fecha_registro', fechaSeleccionada).order('fecha_registro', { ascending: false }).limit(1);
       }
 
       const { data, error } = await query;
@@ -832,8 +914,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       </div>
 
       {/* Estadísticas del piso actual - NUEVO DISEÑO */}
-      {estadisticas.totalCamas > 0 && (
-        <div className="bg-slate-800/50 p-3 mx-4 mt-2 rounded-lg">
+      <div className="bg-slate-800/50 p-3 mx-4 mt-2 rounded-lg">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div className="flex flex-col gap-2 text-sm">
               <div className="flex gap-4 flex-wrap">
@@ -859,7 +940,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             <div className="bg-green-500 h-2 rounded-full transition-all duration-500" style={{ width: `${estadisticas.porcentajePractico}%` }}></div>
           </div>
         </div>
-      )}
 
       <div 
         ref={containerRef}

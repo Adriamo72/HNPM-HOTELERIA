@@ -2,15 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-const RecorridosList = ({ esVisualizador = false }) => {
+const RecorridosList = ({ esVisualizador = false, fechaSeleccionada = null }) => {
   const [recorridos, setRecorridos] = useState([]);
   const [cargando, setCargando] = useState(true);
-  // Inicializar con la fecha actual en zona horaria local
-  const [filtroFecha, setFiltroFecha] = useState(() => {
-    const hoy = new Date();
-    return hoy.toISOString().split('T')[0];
-  });
-  const [filtroPiso, setFiltroPiso] = useState('');
   const [pisos, setPisos] = useState([]);
 
   // Función para convertir una fecha YYYY-MM-DD a rango UTC correcto
@@ -38,7 +32,7 @@ const RecorridosList = ({ esVisualizador = false }) => {
   useEffect(() => {
     cargarRecorridos();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroFecha, filtroPiso]);
+  }, [fechaSeleccionada]);
 
   const cargarPisos = async () => {
     const { data } = await supabase
@@ -51,7 +45,8 @@ const RecorridosList = ({ esVisualizador = false }) => {
   const cargarRecorridos = async () => {
     setCargando(true);
     
-    console.log('📅 Fecha seleccionada (local):', filtroFecha);
+    const fechaAUsar = fechaSeleccionada || new Date().toISOString().split('T')[0];
+    console.log('📅 Fecha seleccionada (local):', fechaAUsar);
     
     let query = supabase
       .from('log_recorridos')
@@ -61,18 +56,14 @@ const RecorridosList = ({ esVisualizador = false }) => {
       `)
       .order('fecha_registro', { ascending: false });
     
-    if (filtroFecha) {
+    if (fechaAUsar) {
       // Usar el rango correcto según zona horaria local
-      const { start, end } = getRangoFechasLocal(filtroFecha);
+      const { start, end } = getRangoFechasLocal(fechaAUsar);
       console.log('📅 Rango UTC:', { start, end });
       
       query = query
         .gte('fecha_registro', start)
         .lte('fecha_registro', end);
-    }
-    
-    if (filtroPiso) {
-      query = query.eq('piso_id', filtroPiso);
     }
     
     const { data, error } = await query.limit(200);
@@ -136,36 +127,6 @@ const RecorridosList = ({ esVisualizador = false }) => {
 
   return (
     <div className="space-y-6">
-      {/* Filtros */}
-      <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-slate-500 uppercase font-bold block mb-2">Filtrar por fecha</label>
-            <input
-              type="date"
-              value={filtroFecha}
-              onChange={(e) => setFiltroFecha(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
-            />
-            <p className="text-[10px] text-slate-500 mt-1">
-              ⚠️ Mostrando registros del día seleccionado (hora Argentina)
-            </p>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 uppercase font-bold block mb-2">Filtrar por sector</label>
-            <select
-              value={filtroPiso}
-              onChange={(e) => setFiltroPiso(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
-            >
-              <option value="">Todos los sectores</option>
-              {pisos.map(piso => (
-                <option key={piso.id} value={piso.id}>{piso.nombre_piso}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
 
       {/* Tabla de recorridos */}
       <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
