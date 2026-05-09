@@ -5,8 +5,7 @@ import { supabase } from '../supabaseClient';
 const RecorridosList = ({ esVisualizador = false, fechaSeleccionada = null }) => {
   const [recorridos, setRecorridos] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [pisos, setPisos] = useState([]);
-
+  
   // Función para convertir una fecha YYYY-MM-DD a rango UTC correcto
   const getRangoFechasLocal = (fechaStr) => {
     // Crear fecha en zona horaria local (Argentina UTC-3)
@@ -24,7 +23,6 @@ const RecorridosList = ({ esVisualizador = false, fechaSeleccionada = null }) =>
   };
 
   useEffect(() => {
-    cargarPisos();
     cargarRecorridos();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -34,14 +32,7 @@ const RecorridosList = ({ esVisualizador = false, fechaSeleccionada = null }) =>
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fechaSeleccionada]);
 
-  const cargarPisos = async () => {
-    const { data } = await supabase
-      .from('pisos')
-      .select('id, nombre_piso')
-      .order('nombre_piso');
-    setPisos(data || []);
-  };
-
+  
   const cargarRecorridos = async () => {
     setCargando(true);
     

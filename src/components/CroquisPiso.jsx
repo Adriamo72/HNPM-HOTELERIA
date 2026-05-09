@@ -385,46 +385,6 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
-  // ==================== Guardar snapshot diario ====================
-  const guardarSnapshotDiario = async () => {
-    if (!pisoId || !ocupacion || Object.keys(ocupacion).length === 0) return;
-    
-    try {
-      const hoy = new Date().toISOString().split('T')[0];
-      
-      // Verificar si ya existe un snapshot para hoy
-      const { data: snapshotExistente } = await supabase
-        .from('log_recorridos')
-        .select('id')
-        .eq('piso_id', pisoId)
-        .eq('fecha', hoy)
-        .limit(1);
-      
-      if (snapshotExistente && snapshotExistente.length > 0) {
-        console.log('Snapshot diario ya existe para hoy');
-        return;
-      }
-      
-      // Calcular estadísticas actuales
-      const estadisticasActuales = calcularEstadisticasActuales();
-      
-      // Guardar snapshot del estado actual
-      await supabase
-        .from('log_recorridos')
-        .insert({
-          piso_id: pisoId,
-          fecha: hoy,
-          camas_ocupadas: estadisticasActuales.camasOcupadasReales,
-          camas_libres: estadisticasActuales.camasDisponibles,
-          fecha_registro: new Date().toISOString()
-        });
-      
-      console.log('Snapshot diario guardado exitosamente');
-    } catch (error) {
-      console.error('Error guardando snapshot diario:', error);
-    }
-  };
-
   // ==================== Cargar último recorrido ====================
   const cargarUltimoRecorrido = async () => {
     if (!pisoId) return;
