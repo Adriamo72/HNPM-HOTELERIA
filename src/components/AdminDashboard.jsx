@@ -2,10 +2,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import bcrypt from 'bcryptjs';
+import { format } from 'date-fns';
+import DatePicker from 'react-datepicker';
+import { registerLocale, setDefaultLocale } from "react-datepicker";
+import es from 'date-fns/locale/es';
+import 'react-datepicker/dist/react-datepicker.css';
 import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
 import RecorridosList from './RecorridosList';
 import AsistenteIA from './AsistenteIA';
+
+registerLocale('es', es);
+setDefaultLocale('es');
 
 const AdminDashboard = () => {
   // Obtener perfil del usuario desde localStorage
@@ -2055,17 +2063,17 @@ const eliminarVisualizador = async (visId, usuario) => {
                   <option key={p.id} value={p.id}>{p.nombre_piso}</option>
                 ))}
               </select>
-              <input 
-                type="date" 
-                value={fechaSeleccionada}
-                onChange={(e) => { setFechaSeleccionada(e.target.value); setCroquisKey(prev => prev + 1); }}
-                className="flex-1 min-w-[130px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
-                style={{ 
-                  WebkitAppearance: 'none',
-                  MozAppearance: 'textfield'
-                }}
+              <DatePicker
                 locale="es"
-                weekStart="1"
+                className="flex-1 min-w-[130px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                selected={fechaSeleccionada ? new Date(fechaSeleccionada) : null}
+                onChange={(date) => { 
+                  const fechaStr = date ? date.toISOString().split('T')[0] : '';
+                  setFechaSeleccionada(fechaStr); 
+                  setCroquisKey(prev => prev + 1); 
+                }}
+                dateFormat="yyyy-MM-dd"
+                placeholderText="Seleccionar fecha"
               />
               <button
                 onClick={recargarCroquis}
