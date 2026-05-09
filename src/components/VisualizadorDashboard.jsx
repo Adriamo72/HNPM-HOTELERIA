@@ -1391,7 +1391,7 @@ const VisualizadorDashboard = () => {
             </div>
 
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase font-semibold text-slate-400">Total del día {fechaSeleccionada}: {rechazosFiltradosPorFecha.length}</span>
+              <span className="text-xs uppercase font-semibold text-slate-400">{rechazosFiltradosPorFecha.length} Rechazos en el dia {new Date(fechaSeleccionada).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
