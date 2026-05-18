@@ -333,11 +333,21 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
           <form onSubmit={handlePinLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-2">USUARIO</label>
+              <style>{`
+                .input-autofill-fix:-webkit-autofill,
+                .input-autofill-fix:-webkit-autofill:hover, 
+                .input-autofill-fix:-webkit-autofill:focus {
+                  font-size: 1rem !important; /* Forza el tamaño exacto de text-base */
+                  -webkit-text-fill-color: #ffffff !important; /* Mantiene tu texto blanco */
+                  box-shadow: 0 0 0px 1000px #1e293b inset !important; /* Mantiene el fondo slate-800 */
+                  transition: background-color 5000s ease-in-out 0s;
+                }
+              `}</style>
               <input
                 type="text"
                 value={usuario}
                 onChange={(e) => setUsuario(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-base outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white text-base outline-none focus:ring-2 focus:ring-blue-500 input-autofill-fix"
                 placeholder="usuario"
                 required
                 disabled={bloqueado}
