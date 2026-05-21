@@ -54,17 +54,17 @@ const VisualizadorDashboard = () => {
     const fechaArgentina = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
     return fechaArgentina.toISOString().split('T')[0];
   });
-  const [rechazosPacientes, setRechazosPacientes] = useState([]);
+  const [, setRechazosPacientes] = useState([]);
   const [rechazosLeidos, setRechazosLeidos] = useState([]);
   const [rechazosFiltradosPorFecha, setRechazosFiltradosPorFecha] = useState([]);
   const [mostrarModalInfo, setMostrarModalInfo] = useState(false);
   const [cargandoRechazos, setCargandoRechazos] = useState(false);
   const [errorRechazos, setErrorRechazos] = useState('');
-  const [rechazosEliminando, setRechazosEliminando] = useState([]);
   const [habitaciones, setHabitaciones] = useState([]);
   const [ocupacion, setOcupacion] = useState({});
   const [activeEstadosTab, setActiveEstadosTab] = useState('internacion');
   const [metricasData, setMetricasData] = useState([]);
+  const [rankingResponsablesMi, setRankingResponsablesMi] = useState([]);
   const [cargandoMetricas, setCargandoMetricas] = useState(false);
   const [filters, setFilters] = useState({
     piso: '',
@@ -85,7 +85,7 @@ const VisualizadorDashboard = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  
+
   // Recargar datos cuando se cambia a la pestaña monitor y no hay datos
   useEffect(() => {
     if (activeTab === 'monitor' && Object.keys(stockPañol).length === 0 && !cargandoMonitor) {
@@ -139,11 +139,11 @@ const VisualizadorDashboard = () => {
     const causa = row?.causa_rechazo || row?.causa || row?.motivo || row?.observacion || extraerDatoMail(cuerpoEmail, ['Motivo', 'Causa']) || 'Sin causa registrada';
     const responsableMi = row?.responsable_mi || row?.responsableMi || extraerDatoMail(cuerpoEmail, ['Responsable M.I', 'Responsable MI', 'Responsable']) || 'Sin dato';
     const diagnostico = row?.diagnostico || extraerDatoMail(cuerpoEmail, ['Diagnostico', 'Diagnóstico']) || 'Sin dato';
-    
+
     // Extraer hora de detección del email (formato: "Hora de detección: 14/04/2026 21:19:21")
     const horaDeteccionStr = extraerDatoMail(cuerpoEmail, ['Hora de detección']);
     let horaDeteccion = null;
-    
+
     if (horaDeteccionStr) {
       // Parsear formato "dd/MM/yyyy HH:mm:ss"
       const match = horaDeteccionStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
@@ -152,7 +152,7 @@ const VisualizadorDashboard = () => {
         horaDeteccion = new Date(`${anio}-${mes}-${dia}T${horas}:${minutos}:${segundos}`);
       }
     }
-    
+
     // Si no se puede extraer la hora, usar created_at como fallback
     const createdAt = horaDeteccion?.toISOString() || row?.created_at || row?.fecha || row?.fecha_rechazo || new Date().toISOString();
     const emailEnviado = Boolean(row?.email_enviado || row?.notificado_email || row?.email_notificado);
@@ -237,59 +237,6 @@ const VisualizadorDashboard = () => {
     guardarRechazosLeidosStorage([...rechazosLeidos, ...idsActuales]);
   };
 
-  const eliminarRechazoPaciente = async (rechazoId, nombreCompleto) => {
-    if (!window.confirm(`¿Eliminar el rechazo de "${nombreCompleto}"?\n\nEsta acción no se puede deshacer.`)) {
-      return;
-    }
-
-    try {
-      setRechazosEliminando(prev => [...prev, String(rechazoId)]);
-
-      const rechazoActual = rechazosPacientes.find(item => item.id === String(rechazoId));
-      const claveObjetivo = rechazoActual ? construirClaveRechazo(rechazoActual) : null;
-
-      let idsAEliminar = [String(rechazoId)];
-
-      if (claveObjetivo) {
-        const { data: filasRelacionadas, error: errorConsulta } = await supabase
-          .from('rechazos_pacientes')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(500);
-
-        if (errorConsulta) throw errorConsulta;
-
-        idsAEliminar = (filasRelacionadas || [])
-          .map(normalizarRechazo)
-          .filter(item => construirClaveRechazo(item) === claveObjetivo)
-          .map(item => item.id);
-
-        if (!idsAEliminar.length) {
-          idsAEliminar = [String(rechazoId)];
-        }
-      }
-
-      const { data: eliminados, error } = await supabase
-        .from('rechazos_pacientes')
-        .delete()
-        .select('id')
-        .in('id', idsAEliminar);
-
-      if (error) throw error;
-      if (!eliminados || eliminados.length === 0) {
-        throw new Error('Sin permisos para eliminar rechazos (RLS/policy)');
-      }
-
-      setRechazosPacientes(prev => prev.filter(item => construirClaveRechazo(item) !== claveObjetivo));
-      const idsEliminados = eliminados.map(item => String(item.id));
-      guardarRechazosLeidosStorage(rechazosLeidos.filter(id => !idsEliminados.includes(id)));
-    } catch (error) {
-      console.error('Error eliminando rechazo:', error);
-      mostrarSplash("Error al eliminar rechazo");
-    } finally {
-      setRechazosEliminando(prev => prev.filter(id => id !== String(rechazoId)));
-    }
-  };
 
   // ==================== RECARGAR DATOS CUANDO CAMBIA LA FECHA ====================
   useEffect(() => {
@@ -304,28 +251,28 @@ const VisualizadorDashboard = () => {
     cargarRechazosPacientes();
   }, [fechaSeleccionada, cargarRechazosPacientes]);
 
-  
+
   // ==================== CARGAR DATOS PRINCIPAL ====================
   const cargarDatos = async () => {
     setCargandoCroquis(true);
     setCargandoMonitor(true);
-    
+
     try {
       // Cargar pisos y habitaciones en paralelo
       const hoy = new Date().toISOString().split('T')[0];
-      
+
       // Construir consultas de ocupación con filtro de fecha si es histórico
       let queryOcupacion = supabase.from('ocupacion_habitaciones').select('*').order('actualizado_en', { ascending: false }).order('fecha', { ascending: false }).limit(10000);
       let queryReparacion = supabase.from('ocupacion_habitaciones').select('*').eq('tipo_habitacion', 'reparacion').order('actualizado_en', { ascending: false });
       let queryOtros = supabase.from('ocupacion_habitaciones').select('*').eq('tipo_habitacion', 'otros').order('actualizado_en', { ascending: false });
-      
+
       // Si es una fecha histórica, filtrar por esa fecha
       if (fechaSeleccionada !== hoy) {
         queryOcupacion = queryOcupacion.lte('fecha', fechaSeleccionada);
         queryReparacion = queryReparacion.lte('fecha', fechaSeleccionada);
         queryOtros = queryOtros.lte('fecha', fechaSeleccionada);
       }
-      
+
       const [resPisos, resHabs, resOcupacion, resReparacion, resOtros] = await Promise.all([
         supabase.from('pisos').select('*').order('nombre_piso'),
         supabase.from('habitaciones_especiales').select('*').order('nombre'),
@@ -343,13 +290,13 @@ const VisualizadorDashboard = () => {
       // Procesar ocupación - obtener el registro más reciente por habitación y por tipo
       const estadoPorHabitacion = {};
       const estadoPorHabitacionYTipo = {};
-      
+
       todosLosDatos.forEach(e => {
         // Mantener el registro más reciente por habitación (para tabs generales)
         if (!estadoPorHabitacion[e.habitacion_id]) {
           estadoPorHabitacion[e.habitacion_id] = e;
         }
-        
+
         // Mantener el registro más reciente por habitación y tipo (para tabs específicos)
         const clave = `${e.habitacion_id}_${e.tipo_habitacion}`;
         if (!estadoPorHabitacionYTipo[clave]) {
@@ -364,12 +311,12 @@ const VisualizadorDashboard = () => {
           ocupacionMap[String(e.habitacion_id)] = e;
         }
       });
-      
+
       // Guardar también el mapa por tipo para uso específico en tabs REPARACION y OTROS
       window.estadoPorHabitacionYTipo = estadoPorHabitacionYTipo;
-      
+
       setOcupacion(ocupacionMap);
-      
+
       // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
       if (resPisos.data && resPisos.data.length > 0) {
         setPisoSeleccionado(prev => {
@@ -382,19 +329,19 @@ const VisualizadorDashboard = () => {
           return pisoMasAlto.id;
         });
       }
-      
+
       // Cargar movimientos para monitor
       const { data: movs } = await supabase
         .from('movimientos_stock')
         .select(`
-          *, 
-          pisos(nombre_piso, id), 
-          pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), 
+          *,
+          pisos(nombre_piso, id),
+          pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre),
           enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)
         `)
         .order('created_at', { ascending: false })
         .limit(500);
-      
+
       // Cargar stocks — una sola consulta para todos los pisos e ítems
       const stockPañolMap = {};
       const stockUsoMap = {};
@@ -431,19 +378,19 @@ const VisualizadorDashboard = () => {
           stockLavaderoMap[nombrePiso][row.item] = row.stock_lavadero || 0;
         }
       }
-      
+
       const agrupados = movs ? movs.reduce((acc, curr) => {
         const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
         if (!acc[nombrePiso]) acc[nombrePiso] = [];
         acc[nombrePiso].push(curr);
         return acc;
       }, {}) : {};
-      
+
       setMovimientosAgrupados(agrupados);
       setStockPañol(stockPañolMap);
       setStockUso(stockUsoMap);
       setStockLavadero(stockLavaderoMap);
-      
+
       mostrarSplash("Datos actualizados correctamente");
     } catch (error) {
       console.error(error);
@@ -478,27 +425,36 @@ const VisualizadorDashboard = () => {
       const { data: todasHabitaciones } = await supabase
         .from('habitaciones_especiales')
         .select('id, piso_id, nombre');
-      
+
       if (!todasHabitaciones || todasHabitaciones.length === 0) {
         setMetricasData([]);
         return;
       }
-      
+
       const { data: rechazosHistoricos } = await supabase
         .from('rechazos_pacientes')
         .select('*')
         .gte('created_at', fechaInicioRechazos.toISOString())
         .order('created_at', { ascending: true })
         .limit(1000);
-      
+
       const rechazosPorFecha = {};
-      deduplicarRechazos((rechazosHistoricos || []).map(normalizarRechazo)).forEach(rechazo => {
+      const rechazosNormalizadosMetricas = deduplicarRechazos((rechazosHistoricos || []).map(normalizarRechazo));
+      rechazosNormalizadosMetricas.forEach(rechazo => {
         const fechaRechazo = rechazo.horaDeteccion || rechazo.createdAt;
         if (!fechaRechazo) return;
         const claveFecha = formatearFechaLocalISO(new Date(fechaRechazo));
         rechazosPorFecha[claveFecha] = (rechazosPorFecha[claveFecha] || 0) + 1;
       });
-      
+
+      const rankingResponsables = Object.entries(rechazosNormalizadosMetricas.reduce((acc, rechazo) => {
+        const responsable = (rechazo.responsableMi || 'Sin dato').trim() || 'Sin dato';
+        acc[responsable] = (acc[responsable] || 0) + 1;
+        return acc;
+      }, {}))
+        .map(([responsable, cantidad]) => ({ responsable, cantidad }))
+        .sort((a, b) => b.cantidad - a.cantidad || a.responsable.localeCompare(b.responsable));
+
       const diasMetricas = Array.from({ length: 30 }, (_, i) => {
         const fecha = new Date(fechaInicio);
         fecha.setDate(fecha.getDate() + i);
@@ -507,7 +463,7 @@ const VisualizadorDashboard = () => {
           fechaStr: formatearFechaLocalISO(fecha)
         };
       });
-      
+
       const ocupacionesPorDia = await Promise.all(diasMetricas.map(async ({ fechaStr }) => {
         const { data: ocupacionDia } = await supabase
           .from('ocupacion_habitaciones')
@@ -516,15 +472,15 @@ const VisualizadorDashboard = () => {
           .lte('fecha', fechaStr)
           .order('fecha', { ascending: false })
           .order('actualizado_en', { ascending: false });
-        
+
         return { fechaStr, ocupacionDia: ocupacionDia || [] };
       }));
-      
+
       const ocupacionesPorFecha = {};
       ocupacionesPorDia.forEach(({ fechaStr, ocupacionDia }) => {
         ocupacionesPorFecha[fechaStr] = ocupacionDia;
       });
-      
+
       const datosMensuales = diasMetricas.map(({ fechaActual, fechaStr }) => {
         const ocupacionDia = ocupacionesPorFecha[fechaStr] || [];
         const ocupacionMap = {};
@@ -533,11 +489,11 @@ const VisualizadorDashboard = () => {
             ocupacionMap[String(e.habitacion_id)] = e;
           }
         });
-        
+
         let totalCamasGlobal = 0;
         let camasOcupadasRealesGlobal = 0;
         let camasNoUtilizadasPorAislamientoGlobal = 0;
-        
+
         todasHabitaciones.forEach(hab => {
           const ocup = ocupacionMap[hab.id];
           if (ocup && ocup.tipo_habitacion === 'activa') {
@@ -546,10 +502,10 @@ const VisualizadorDashboard = () => {
             camasNoUtilizadasPorAislamientoGlobal += getCamasNoUtilizadasPorAislamiento(ocup);
           }
         });
-        
+
         const camasOcupadasPracticas = camasOcupadasRealesGlobal + camasNoUtilizadasPorAislamientoGlobal;
         const camasDisponiblesGlobal = Math.max(0, totalCamasGlobal - camasOcupadasPracticas);
-        
+
         return {
           fecha: fechaStr,
           fechaFormateada: fechaActual.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }),
@@ -559,8 +515,9 @@ const VisualizadorDashboard = () => {
           rechazados: rechazosPorFecha[fechaStr] || 0
         };
       });
-      
+
       setMetricasData(datosMensuales);
+      setRankingResponsablesMi(rankingResponsables);
     } catch (error) {
       console.error('Error cargando métricas históricas:', error);
     } finally {
@@ -608,7 +565,7 @@ const VisualizadorDashboard = () => {
     const resultado = habitaciones.filter(habitacion => {
       const ocu = ocupacion[String(habitacion.id)];
       const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-      
+
       // Aplicar filtros de texto
       if (filters.piso && !piso?.nombre_piso?.toLowerCase().includes(filters.piso.toLowerCase())) {
         return false;
@@ -619,7 +576,7 @@ const VisualizadorDashboard = () => {
       if (filters.novedades && ocu?.observaciones && !ocu.observaciones.toLowerCase().includes(filters.novedades.toLowerCase())) {
         return false;
       }
-      
+
       // Filtros específicos para internacion/ocupacion
       if (tipo === 'internacion' || tipo === 'ocupacion') {
         if (filters.camas_ocupadas && !String(ocu?.camas_ocupadas || 0).includes(filters.camas_ocupadas)) {
@@ -634,31 +591,31 @@ const VisualizadorDashboard = () => {
           if (filters.aislacion === 'NO' && tieneAislamiento) return false;
         }
       }
-      
+
       // Filtros específicos para disponible
       if (tipo === 'disponible') {
         const totalCamas = ocu?.total_camas || 0;
         const camasOcupadas = ocu?.camas_ocupadas || 0;
         const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
         let camasBloqueadas = 0;
-        
+
         if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
           camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
         }
-        
+
         const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
-        
+
         // Aplicar filtro de camas_disponibles si existe
         if (filters.camas_disponibles) {
           if (!String(camasDisponibles).includes(filters.camas_disponibles)) {
             return false;
           }
         }
-        
+
         // Solo habitaciones con camas disponibles > 0
         return camasDisponibles > 0;
       }
-      
+
       switch (tipo) {
         case 'ocupacion':
           // Solo habitaciones de internación que estén ocupadas
@@ -678,23 +635,23 @@ const VisualizadorDashboard = () => {
         case 'disponible':
           // Mostrar solo habitaciones de internación (activas) que tengan camas disponibles > 0
           if (!ocu || ocu.tipo_habitacion !== 'activa') return false;
-          
+
           const totalCamas = ocu.total_camas || 0;
           const camasOcupadas = ocu.camas_ocupadas || 0;
           const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
           let camasBloqueadas = 0;
-          
+
           if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
             camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
           }
-          
+
           const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
           return camasDisponibles > 0;
         default:
           return false;
       }
     });
-    
+
     return resultado;
   };
 
@@ -703,7 +660,7 @@ const VisualizadorDashboard = () => {
     let datosTabla = [];
     let titulo = '';
     let headers = ['PISO', 'HABITACIÓN'];
-    
+
     // Determinar columnas según el tipo de pestaña
     if (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') {
       headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN');
@@ -711,14 +668,14 @@ const VisualizadorDashboard = () => {
       headers.push('CAMAS DISPONIBLES');
     }
     headers.push('NOVEDADES');
-    
+
     switch(activeEstadosTab) {
       case 'internacion':
         titulo = 'Habitaciones de Internación';
         datosTabla = filtrarHabitacionesPorTipo('internacion').map(habitacion => {
           const ocu = ocupacion[String(habitacion.id)];
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-          
+
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
@@ -735,8 +692,8 @@ const VisualizadorDashboard = () => {
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
           const claveReparacion = `${habitacion.id}_reparacion`;
           const ocuReparacion = window.estadoPorHabitacionYTipo?.[claveReparacion];
-          
-                    
+
+
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
@@ -750,7 +707,7 @@ const VisualizadorDashboard = () => {
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
           const claveOtros = `${habitacion.id}_otros`;
           const ocuOtros = window.estadoPorHabitacionYTipo?.[claveOtros];
-          
+
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
@@ -763,7 +720,7 @@ const VisualizadorDashboard = () => {
         datosTabla = filtrarHabitacionesPorTipo('ocupacion').map(habitacion => {
           const ocu = ocupacion[String(habitacion.id)];
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-          
+
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
@@ -779,19 +736,19 @@ const VisualizadorDashboard = () => {
         datosTabla = filtrarHabitacionesPorTipo('disponible').map(habitacion => {
           const ocu = ocupacion[String(habitacion.id)];
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-          
+
           // Calcular camas disponibles
           const totalCamas = ocu?.total_camas || 0;
           const camasOcupadas = ocu?.camas_ocupadas || 0;
           const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
           let camasBloqueadas = 0;
-          
+
           if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
             camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
           }
-          
+
           const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
-          
+
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
@@ -805,7 +762,7 @@ const VisualizadorDashboard = () => {
         datosTabla = [];
         break;
     }
-    
+
     // Crear HTML para imprimir
     const fecha = new Date().toLocaleDateString('es-AR');
     const htmlContent = `
@@ -834,7 +791,7 @@ const VisualizadorDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              ${datosTabla.map(row => 
+              ${datosTabla.map(row =>
                 `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`
               ).join('')}
             </tbody>
@@ -842,12 +799,12 @@ const VisualizadorDashboard = () => {
         </body>
       </html>
     `;
-    
+
     // Abrir ventana de impresión
     const printWindow = window.open('', '_blank');
     printWindow.document.write(htmlContent);
     printWindow.document.close();
-    
+
     // Esperar a que cargue y mostrar diálogo de impresión
     printWindow.onload = () => {
       printWindow.print();
@@ -882,32 +839,32 @@ const VisualizadorDashboard = () => {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full">
-        <button 
-          onClick={() => setActiveTab('croquis')} 
+        <button
+          onClick={() => setActiveTab('croquis')}
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'croquis' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Hotelería
         </button>
-        <button 
-          onClick={() => setActiveTab('estados')} 
+        <button
+          onClick={() => setActiveTab('estados')}
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'estados' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Estados
         </button>
-        <button 
-          onClick={() => setActiveTab('metricas')} 
+        <button
+          onClick={() => setActiveTab('metricas')}
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'metricas' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Métricas
         </button>
-        <button 
-          onClick={() => setActiveTab('recorridos')} 
+        <button
+          onClick={() => setActiveTab('recorridos')}
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'recorridos' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Recorridos
         </button>
-        <button 
-          onClick={() => setActiveTab('monitor')} 
+        <button
+          onClick={() => setActiveTab('monitor')}
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'monitor' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Monitor
@@ -947,13 +904,13 @@ const VisualizadorDashboard = () => {
                   <option key={p.id} value={p.id}>{p.nombre_piso}</option>
                 ))}
               </select>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={fechaSeleccionada}
                 onChange={(e) => { setFechaSeleccionada(e.target.value); setCroquisKey(prev => prev + 1); }}
                 className="flex-1 min-w-[130px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
-              <button 
+              <button
                 onClick={refrescarDatos}
                 disabled={cargandoCroquis}
                 className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-1 px-3 py-2 rounded-xl hover:bg-slate-800"
@@ -965,7 +922,7 @@ const VisualizadorDashboard = () => {
               </button>
             </div>
           </div>
-          
+
           {cargandoCroquis ? (
             <SpinnerCarga mensaje="CARGANDO HABITACIONES..." />
           ) : pisoSeleccionado ? (
@@ -1006,32 +963,32 @@ const VisualizadorDashboard = () => {
 
           {/* Sub-tabs inside ESTADOS */}
           <div className="flex gap-1 mb-6 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full">
-            <button 
-              onClick={() => setActiveEstadosTab('internacion')} 
+            <button
+              onClick={() => setActiveEstadosTab('internacion')}
               className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'internacion' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
               Internación
             </button>
-            <button 
-              onClick={() => setActiveEstadosTab('reparacion')} 
+            <button
+              onClick={() => setActiveEstadosTab('reparacion')}
               className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'reparacion' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
               Reparación
             </button>
-            <button 
-              onClick={() => setActiveEstadosTab('otros')} 
+            <button
+              onClick={() => setActiveEstadosTab('otros')}
               className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'otros' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
               Otros
             </button>
-            <button 
-              onClick={() => setActiveEstadosTab('ocupacion')} 
+            <button
+              onClick={() => setActiveEstadosTab('ocupacion')}
               className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'ocupacion' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
               Ocupación
             </button>
-            <button 
-              onClick={() => setActiveEstadosTab('disponible')} 
+            <button
+              onClick={() => setActiveEstadosTab('disponible')}
               className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'disponible' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
               Disponible
@@ -1052,7 +1009,7 @@ const VisualizadorDashboard = () => {
                   </div>
                 </div>
               )}
-              
+
               {activeEstadosTab === 'reparacion' && (
                 <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
                   <div className="flex gap-6 justify-center flex-wrap">
@@ -1063,7 +1020,7 @@ const VisualizadorDashboard = () => {
                   </div>
                 </div>
               )}
-              
+
               {activeEstadosTab === 'otros' && (
                 <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
                   <div className="flex gap-6 justify-center flex-wrap">
@@ -1074,7 +1031,7 @@ const VisualizadorDashboard = () => {
                   </div>
                 </div>
               )}
-              
+
               {activeEstadosTab === 'disponible' && (
                 <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
                   <div className="flex gap-6 justify-center flex-wrap">
@@ -1106,8 +1063,8 @@ const VisualizadorDashboard = () => {
                   </div>
                 </div>
               )}
-              
-           
+
+
             {activeEstadosTab === 'ocupacion' && (() => {
               // ... (Cálculos de constantes se mantienen igual)
               const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
@@ -1132,13 +1089,13 @@ const VisualizadorDashboard = () => {
               return (
                 <div className="bg-slate-800/50 rounded-xl py-3 border border-slate-700/50 w-full mt-2">
                   <div className="flex w-full items-center">
-                    
+
                     {/* 1. HABITACIONES OCUPADAS */}
                     <div className="flex-1 flex flex-col items-center text-center">
                       <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">HABITACIONES OCUPADAS</p>
                       <p className="text-2xl font-black text-blue-400 mt-0.5">{filtrarHabitacionesPorTipo('ocupacion').length}</p>
                     </div>
-                    
+
                     {/* 2. HABITACIONES BLOQUEADAS */}
                     <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
                       <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">HABITACIONES BLOQUEADAS</p>
@@ -1149,19 +1106,19 @@ const VisualizadorDashboard = () => {
                         }, 0)}
                       </p>
                     </div>
-                    
+
                     {/* 3. CAMAS OCUPADAS */}
                     <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
                       <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider px-1">CAMAS OCUPADAS POR PACIENTES</p>
                       <p className="text-2xl font-black text-yellow-400 mt-0.5">{camasOcupadasActivas}</p>
                     </div>
-                    
+
                     {/* 4. CAMAS AISLACIÓN */}
                     <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
                       <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider px-1">CAMAS NO UTILIZADAS POR AISLACIÓN</p>
                       <p className="text-2xl font-black text-red-500 mt-0.5">{camasBloqueadasActivas}</p>
                     </div>
-                    
+
                     {/* 5. CAMAS DISPONIBLES */}
                     <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
                       <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES</p>
@@ -1281,7 +1238,7 @@ const VisualizadorDashboard = () => {
                   {filtrarHabitacionesPorTipo(activeEstadosTab).map(habitacion => {
                     const ocu = ocupacion[String(habitacion.id)];
                     const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-                    
+
                     return (
                       <tr key={habitacion.id} className="border-b border-slate-800 hover:bg-slate-800/50">
                         <td className="px-4 py-3 text-slate-200">{piso?.nombre_piso || 'Sin piso'}</td>
@@ -1293,11 +1250,11 @@ const VisualizadorDashboard = () => {
                               const camasOcupadas = ocu?.camas_ocupadas || 0;
                               const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
                               let camasBloqueadas = 0;
-                              
+
                               if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
                                 camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
                               }
-                              
+
                               const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
                               return String(camasDisponibles);
                             })()}
@@ -1352,7 +1309,7 @@ const VisualizadorDashboard = () => {
                   })}
                 </tbody>
               </table>
-              
+
               {filtrarHabitacionesPorTipo(activeEstadosTab).length === 0 && (
                 <div className="text-center py-8 text-slate-400">
                   No hay habitaciones para mostrar en esta categoría
@@ -1370,7 +1327,7 @@ const VisualizadorDashboard = () => {
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
               MÉTRICAS DE CAMAS
             </h2>
-            <button 
+            <button
               onClick={cargarMetricasHistoricas}
               disabled={cargandoMetricas}
               className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-800"
@@ -1391,46 +1348,46 @@ const VisualizadorDashboard = () => {
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart data={metricasData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
-                  <XAxis 
-                    dataKey="fechaFormateada" 
+                  <XAxis
+                    dataKey="fechaFormateada"
                     stroke="#94a3b8"
                     tick={{ fill: '#94a3b8', fontSize: 12 }}
                   />
-                  <YAxis 
+                  <YAxis
                     stroke="#94a3b8"
                     tick={{ fill: '#94a3b8', fontSize: 12 }}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1e293b', 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1e293b',
                       border: '1px solid #475569',
                       borderRadius: '8px',
                       color: '#f1f5f9'
                     }}
                   />
-                  <Legend 
+                  <Legend
                     wrapperStyle={{ color: '#94a3b8' }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="totalCamas" 
-                    stroke="#3b82f6" 
+                  <Line
+                    type="monotone"
+                    dataKey="totalCamas"
+                    stroke="#3b82f6"
                     strokeWidth={2}
                     name="TOTAL DE CAMAS"
                     dot={false}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="camasOcupadas" 
-                    stroke="#ef4444" 
+                  <Line
+                    type="monotone"
+                    dataKey="camasOcupadas"
+                    stroke="#ef4444"
                     strokeWidth={2}
                     name="CAMAS OCUPADAS POR PACIENTES"
                     dot={false}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="camasDisponibles" 
-                    stroke="#22c55e" 
+                  <Line
+                    type="monotone"
+                    dataKey="camasDisponibles"
+                    stroke="#22c55e"
                     strokeWidth={2}
                     name="CAMAS DISPONIBLES"
                     dot={false}
@@ -1446,40 +1403,56 @@ const VisualizadorDashboard = () => {
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={metricasData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
-                  <XAxis 
-                    dataKey="fechaFormateada" 
+                  <XAxis
+                    dataKey="fechaFormateada"
                     stroke="#94a3b8"
                     tick={{ fill: '#94a3b8', fontSize: 12 }}
                   />
-                  <YAxis 
+                  <YAxis
                     stroke="#94a3b8"
                     tick={{ fill: '#94a3b8', fontSize: 12 }}
                     allowDecimals={false}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1e293b', 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1e293b',
                       border: '1px solid #475569',
                       borderRadius: '8px',
                       color: '#f1f5f9'
                     }}
                   />
-                  <Legend 
+                  <Legend
                     wrapperStyle={{ color: '#94a3b8' }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="rechazados" 
-                    stroke="#f97316" 
+                  <Line
+                    type="monotone"
+                    dataKey="rechazados"
+                    stroke="#f97316"
                     strokeWidth={2}
                     name="RECHAZADOS"
                     dot={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
-              <p className="text-xs text-slate-500 mt-4 text-center">
+                            <p className="text-xs text-slate-500 mt-4 text-center">
                 Últimos 30 días
               </p>
+              <div className="mt-4 border-t border-slate-700 pt-4">
+                <p className="text-xs text-slate-400 font-black uppercase tracking-wider mb-3">
+                  Responsable M.I por cantidad de rechazos
+                </p>
+                {rankingResponsablesMi.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {rankingResponsablesMi.map(({ responsable, cantidad }) => (
+                      <div key={responsable} className="bg-slate-950/50 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-semibold">
+                        {responsable} <span className="text-orange-400">({cantidad})</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">Sin rechazos registrados en el período.</p>
+                )}
+              </div>
             </div>
             </>
           )}
@@ -1507,7 +1480,7 @@ const VisualizadorDashboard = () => {
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Monitor de Stock</h2>
             {/* Botón actualizar estilo RECORRIDOS */}
-            <button 
+            <button
               onClick={refrescarDatos}
               disabled={cargandoMonitor}
               className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-800"
@@ -1518,7 +1491,7 @@ const VisualizadorDashboard = () => {
               {cargandoMonitor ? 'Actualizando...' : 'Actualizar'}
             </button>
           </div>
-          
+
           {cargandoMonitor ? (
             <SpinnerCarga mensaje="CARGANDO MOVIMIENTOS..." />
           ) : (
@@ -1546,7 +1519,7 @@ const VisualizadorDashboard = () => {
                   <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800">
                     <span className="text-xl font-semibold text-green-400 uppercase tracking-wider">{nombrePiso}</span>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
                     <div className="bg-green-900/20 p-3 rounded-xl">
                       <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
@@ -1584,7 +1557,7 @@ const VisualizadorDashboard = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Historial de movimientos - Solo lectura, sin botón eliminar */}
                   <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
                     {movimientosAgrupados[nombrePiso]?.length > 0 ? (
@@ -1668,7 +1641,6 @@ const VisualizadorDashboard = () => {
               )}
 
               {!cargandoRechazos && !errorRechazos && rechazosFiltradosPorFecha.map((rechazo) => {
-                const eliminando = rechazosEliminando.includes(rechazo.id);
                 const nombreCompleto = `${rechazo.apellido || 'Sin apellido'}, ${rechazo.nombre || 'Sin nombre'}`;
 
                 return (
@@ -1679,8 +1651,8 @@ const VisualizadorDashboard = () => {
                           {nombreCompleto}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          {rechazo.horaDeteccion ? 
-                            `Hora de detección: ${rechazo.horaDeteccion.toLocaleString('es-AR', { 
+                          {rechazo.horaDeteccion ?
+                            `Hora de detección: ${rechazo.horaDeteccion.toLocaleString('es-AR', {
                               hour12: false,
                               hour: '2-digit',
                               minute: '2-digit',
@@ -1689,7 +1661,7 @@ const VisualizadorDashboard = () => {
                               month: '2-digit',
                               year: 'numeric'
                             })}` :
-                            new Date(rechazo.createdAt).toLocaleString('es-AR', { 
+                            new Date(rechazo.createdAt).toLocaleString('es-AR', {
                               hour12: false,
                               hour: '2-digit',
                               minute: '2-digit',
@@ -1700,16 +1672,6 @@ const VisualizadorDashboard = () => {
                             })
                           }
                         </p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <button
-                          type="button"
-                          onClick={() => eliminarRechazoPaciente(rechazo.id, nombreCompleto)}
-                          disabled={eliminando}
-                          className="bg-red-950/60 hover:bg-red-900/70 disabled:opacity-60 disabled:cursor-not-allowed text-red-200 text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border border-red-800"
-                        >
-                          {eliminando ? 'Eliminando...' : 'Eliminar'}
-                        </button>
                       </div>
                     </div>
 
