@@ -311,27 +311,28 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     try {
       const hoy = new Date().toISOString().split('T')[0];
       
-      // Obtener TODOS los registros de ocupación para las habitaciones del piso
-      // ordenados por fecha y actualizado_en para tener el más reciente primero
-      let query = supabase
-        .from('ocupacion_habitaciones')
-        .select('*, aislamiento_activo')
-        .in('habitacion_id', habitaciones.map(h => h.id))
-        .order('fecha', { ascending: false })
-        .order('actualizado_en', { ascending: false });
+      const consultas = habitaciones.map(async (habitacion) => {
+        let query = supabase
+          .from('ocupacion_habitaciones')
+          .select('*, aislamiento_activo')
+          .eq('habitacion_id', habitacion.id)
+          .order('fecha', { ascending: false })
+          .order('actualizado_en', { ascending: false })
+          .limit(1);
 
-      // Si es una fecha histórica específica, traer todos los registros hasta esa fecha
-      if (fechaSeleccionada !== hoy) {
-        query = query.lte('fecha', fechaSeleccionada);
-      }
+        if (fechaSeleccionada !== hoy) {
+          query = query.lte('fecha', fechaSeleccionada);
+        }
 
-      const { data, error } = await query;
+        const { data, error } = await query;
+        if (error) throw error;
+        return data?.[0] || null;
+      });
 
-      if (error) throw error;
+      const resultados = await Promise.all(consultas);
 
-      // Procesar ocupación - obtener solo el registro más reciente por habitación
       const ocupMap = {};
-      (data || []).forEach(occ => {
+      resultados.filter(Boolean).forEach(occ => {
         if (!ocupMap[occ.habitacion_id]) {
           ocupMap[occ.habitacion_id] = occ;
         }

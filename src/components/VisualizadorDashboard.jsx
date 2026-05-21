@@ -5,6 +5,35 @@ import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
 import RecorridosList from './RecorridosList';
 import AsistenteIA from './AsistenteIA';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+const esAislamientoPatologia = (ocup) =>
+  Boolean(ocup?.aislamiento_activo);
+
+const getCamasOcupadasReales = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadas = ocup?.camas_ocupadas || 0;
+  return Math.min(totalCamas, Math.max(0, camasOcupadas));
+};
+
+const getCamasNoUtilizadasPorAislamiento = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadasReales = getCamasOcupadasReales(ocup);
+  const aislamientoActivo = esAislamientoPatologia(ocup);
+
+  if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, totalCamas - camasOcupadasReales);
+};
+
+const formatearFechaLocalISO = (fecha) => {
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+};
 
 const VisualizadorDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
@@ -35,6 +64,8 @@ const VisualizadorDashboard = () => {
   const [habitaciones, setHabitaciones] = useState([]);
   const [ocupacion, setOcupacion] = useState({});
   const [activeEstadosTab, setActiveEstadosTab] = useState('internacion');
+  const [metricasData, setMetricasData] = useState([]);
+  const [cargandoMetricas, setCargandoMetricas] = useState(false);
   const [filters, setFilters] = useState({
     piso: '',
     habitacion: '',
@@ -437,6 +468,112 @@ const VisualizadorDashboard = () => {
   const totalGlobal = calcularTotalGlobal();
   const STOCK_CRITICO = 5;
 
+  const cargarMetricasHistoricas = useCallback(async () => {
+    setCargandoMetricas(true);
+    try {
+      const fechaInicio = new Date();
+      fechaInicio.setDate(fechaInicio.getDate() - 30);
+      const fechaInicioRechazos = new Date(fechaInicio);
+      fechaInicioRechazos.setHours(0, 0, 0, 0);
+      const { data: todasHabitaciones } = await supabase
+        .from('habitaciones_especiales')
+        .select('id, piso_id, nombre');
+      
+      if (!todasHabitaciones || todasHabitaciones.length === 0) {
+        setMetricasData([]);
+        return;
+      }
+      
+      const { data: rechazosHistoricos } = await supabase
+        .from('rechazos_pacientes')
+        .select('*')
+        .gte('created_at', fechaInicioRechazos.toISOString())
+        .order('created_at', { ascending: true })
+        .limit(1000);
+      
+      const rechazosPorFecha = {};
+      deduplicarRechazos((rechazosHistoricos || []).map(normalizarRechazo)).forEach(rechazo => {
+        const fechaRechazo = rechazo.horaDeteccion || rechazo.createdAt;
+        if (!fechaRechazo) return;
+        const claveFecha = formatearFechaLocalISO(new Date(fechaRechazo));
+        rechazosPorFecha[claveFecha] = (rechazosPorFecha[claveFecha] || 0) + 1;
+      });
+      
+      const diasMetricas = Array.from({ length: 30 }, (_, i) => {
+        const fecha = new Date(fechaInicio);
+        fecha.setDate(fecha.getDate() + i);
+        return {
+          fechaActual: fecha,
+          fechaStr: formatearFechaLocalISO(fecha)
+        };
+      });
+      
+      const ocupacionesPorDia = await Promise.all(diasMetricas.map(async ({ fechaStr }) => {
+        const { data: ocupacionDia } = await supabase
+          .from('ocupacion_habitaciones')
+          .select('*, aislamiento_activo')
+          .in('habitacion_id', todasHabitaciones.map(h => h.id))
+          .lte('fecha', fechaStr)
+          .order('fecha', { ascending: false })
+          .order('actualizado_en', { ascending: false });
+        
+        return { fechaStr, ocupacionDia: ocupacionDia || [] };
+      }));
+      
+      const ocupacionesPorFecha = {};
+      ocupacionesPorDia.forEach(({ fechaStr, ocupacionDia }) => {
+        ocupacionesPorFecha[fechaStr] = ocupacionDia;
+      });
+      
+      const datosMensuales = diasMetricas.map(({ fechaActual, fechaStr }) => {
+        const ocupacionDia = ocupacionesPorFecha[fechaStr] || [];
+        const ocupacionMap = {};
+        ocupacionDia.forEach(e => {
+          if (!ocupacionMap[String(e.habitacion_id)]) {
+            ocupacionMap[String(e.habitacion_id)] = e;
+          }
+        });
+        
+        let totalCamasGlobal = 0;
+        let camasOcupadasRealesGlobal = 0;
+        let camasNoUtilizadasPorAislamientoGlobal = 0;
+        
+        todasHabitaciones.forEach(hab => {
+          const ocup = ocupacionMap[hab.id];
+          if (ocup && ocup.tipo_habitacion === 'activa') {
+            totalCamasGlobal += ocup.total_camas || 0;
+            camasOcupadasRealesGlobal += getCamasOcupadasReales(ocup);
+            camasNoUtilizadasPorAislamientoGlobal += getCamasNoUtilizadasPorAislamiento(ocup);
+          }
+        });
+        
+        const camasOcupadasPracticas = camasOcupadasRealesGlobal + camasNoUtilizadasPorAislamientoGlobal;
+        const camasDisponiblesGlobal = Math.max(0, totalCamasGlobal - camasOcupadasPracticas);
+        
+        return {
+          fecha: fechaStr,
+          fechaFormateada: fechaActual.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }),
+          totalCamas: totalCamasGlobal,
+          camasOcupadas: camasOcupadasRealesGlobal,
+          camasDisponibles: camasDisponiblesGlobal,
+          rechazados: rechazosPorFecha[fechaStr] || 0
+        };
+      });
+      
+      setMetricasData(datosMensuales);
+    } catch (error) {
+      console.error('Error cargando métricas históricas:', error);
+    } finally {
+      setCargandoMetricas(false);
+    }
+  }, [deduplicarRechazos, normalizarRechazo]);
+
+  useEffect(() => {
+    if (activeTab === 'metricas' && metricasData.length === 0 && !cargandoMetricas) {
+      cargarMetricasHistoricas();
+    }
+  }, [activeTab, metricasData, cargandoMetricas, cargarMetricasHistoricas]);
+
   const formatearFechaGuardia = (fechaISO) => {
     const fecha = new Date(fechaISO);
     const opciones = { weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
@@ -756,6 +893,12 @@ const VisualizadorDashboard = () => {
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'estados' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Estados
+        </button>
+        <button 
+          onClick={() => setActiveTab('metricas')} 
+          className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'metricas' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Métricas
         </button>
         <button 
           onClick={() => setActiveTab('recorridos')} 
@@ -1217,6 +1360,129 @@ const VisualizadorDashboard = () => {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Panel METRICAS */}
+      {activeTab === 'metricas' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">
+              MÉTRICAS DE CAMAS
+            </h2>
+            <button 
+              onClick={cargarMetricasHistoricas}
+              disabled={cargandoMetricas}
+              className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-800"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {cargandoMetricas ? 'Actualizando...' : 'Actualizar'}
+            </button>
+          </div>
+
+          {cargandoMetricas ? (
+            <SpinnerCarga mensaje="CARGANDO MÉTRICAS..." />
+          ) : (
+            <>
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+              <h3 className="text-xl font-semibold text-white mb-6 text-center">CAMAS</h3>
+              <ResponsiveContainer width="100%" height={400}>
+                <LineChart data={metricasData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                  <XAxis 
+                    dataKey="fechaFormateada" 
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  />
+                  <YAxis 
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1e293b', 
+                      border: '1px solid #475569',
+                      borderRadius: '8px',
+                      color: '#f1f5f9'
+                    }}
+                  />
+                  <Legend 
+                    wrapperStyle={{ color: '#94a3b8' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="totalCamas" 
+                    stroke="#3b82f6" 
+                    strokeWidth={2}
+                    name="TOTAL DE CAMAS"
+                    dot={false}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="camasOcupadas" 
+                    stroke="#ef4444" 
+                    strokeWidth={2}
+                    name="CAMAS OCUPADAS POR PACIENTES"
+                    dot={false}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="camasDisponibles" 
+                    stroke="#22c55e" 
+                    strokeWidth={2}
+                    name="CAMAS DISPONIBLES"
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-slate-500 mt-4 text-center">
+                Últimos 30 días
+              </p>
+            </div>
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+              <h3 className="text-xl font-semibold text-white mb-6 text-center">RECHAZOS</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={metricasData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                  <XAxis 
+                    dataKey="fechaFormateada" 
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  />
+                  <YAxis 
+                    stroke="#94a3b8"
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1e293b', 
+                      border: '1px solid #475569',
+                      borderRadius: '8px',
+                      color: '#f1f5f9'
+                    }}
+                  />
+                  <Legend 
+                    wrapperStyle={{ color: '#94a3b8' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="rechazados" 
+                    stroke="#f97316" 
+                    strokeWidth={2}
+                    name="RECHAZADOS"
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-slate-500 mt-4 text-center">
+                Últimos 30 días
+              </p>
+            </div>
+            </>
+          )}
         </div>
       )}
 
