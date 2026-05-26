@@ -6,7 +6,35 @@ import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
 import RecorridosList from './RecorridosList';
 import AsistenteIA from './AsistenteIA';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
+const esAislamientoPatologia = (ocup) =>
+  Boolean(ocup?.aislamiento_activo);
+
+const getCamasOcupadasReales = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadas = ocup?.camas_ocupadas || 0;
+  return Math.min(totalCamas, Math.max(0, camasOcupadas));
+};
+
+const getCamasNoUtilizadasPorAislamiento = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadasReales = getCamasOcupadasReales(ocup);
+  const aislamientoActivo = esAislamientoPatologia(ocup);
+
+  if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, totalCamas - camasOcupadasReales);
+};
+
+const formatearFechaLocalISO = (fecha) => {
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+};
 
 const AdminDashboard = () => {
   // Obtener perfil del usuario desde localStorage
@@ -38,6 +66,9 @@ const AdminDashboard = () => {
   const [cargandoCroquis, setCargandoCroquis] = useState(false);
   const [cargandoMonitor, setCargandoMonitor] = useState(false);
   const [cargandoAdmin, setCargandoAdmin] = useState(false);
+  const [metricasData, setMetricasData] = useState([]);
+  const [rankingResponsablesMi, setRankingResponsablesMi] = useState([]);
+  const [cargandoMetricas, setCargandoMetricas] = useState(false);
   const [visualizadores, setVisualizadores] = useState([]);
   const [mostrarModalVisualizador, setMostrarModalVisualizador] = useState(false);
   const [nuevoVisualizador, setNuevoVisualizador] = useState({ usuario: '', pin: '', confirmarPin: '' });
@@ -113,6 +144,12 @@ const AdminDashboard = () => {
   const truncarTexto = (texto, largo = 28) => {
     if (!texto) return texto;
     return texto.length > largo ? `${texto.slice(0, largo - 1)}…` : texto;
+  };
+
+  const formatearFechaLocal = (fechaISO) => {
+    if (!fechaISO) return '';
+    const [year, month, day] = fechaISO.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
   const STOCK_CRITICO = 5;
@@ -3556,7 +3593,7 @@ const eliminarVisualizador = async (visId, usuario) => {
             </div>
 
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase font-semibold text-slate-400">{rechazosFiltradosPorFecha.length} Rechazos en el dia {new Date(fechaSeleccionada).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+              <span className="text-xs uppercase font-semibold text-slate-400">{rechazosFiltradosPorFecha.length} Rechazos en el dia {formatearFechaLocal(fechaSeleccionada)}</span>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
