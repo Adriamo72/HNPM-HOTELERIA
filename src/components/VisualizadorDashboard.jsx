@@ -35,6 +35,12 @@ const formatearFechaLocalISO = (fecha) => {
   return `${anio}-${mes}-${dia}`;
 };
 
+const formatearFechaLocal = (fechaISO) => {
+  if (!fechaISO) return '';
+  const [year, month, day] = fechaISO.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
 const VisualizadorDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
   const [pisos, setPisos] = useState([]);
@@ -1445,7 +1451,7 @@ const VisualizadorDashboard = () => {
                   <div className="flex flex-wrap gap-2">
                     {rankingResponsablesMi.map(({ responsable, cantidad }) => (
                       <div key={responsable} className="bg-slate-950/50 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-semibold">
-                        {responsable} <span className="text-orange-400">({cantidad})</span>
+                        Dr. {responsable} <span className="text-orange-400">({cantidad})</span>
                       </div>
                     ))}
                   </div>
@@ -1622,7 +1628,7 @@ const VisualizadorDashboard = () => {
             </div>
 
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase font-semibold text-slate-400">{rechazosFiltradosPorFecha.length} Rechazos en el dia {new Date(fechaSeleccionada).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+              <span className="text-xs uppercase font-semibold text-slate-400">{rechazosFiltradosPorFecha.length} Rechazos en el dia {formatearFechaLocal(fechaSeleccionada)}</span>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
