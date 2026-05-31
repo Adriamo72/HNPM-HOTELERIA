@@ -461,7 +461,7 @@ const VisualizadorDashboard = () => {
         .map(([responsable, cantidad]) => ({ responsable, cantidad }))
         .sort((a, b) => b.cantidad - a.cantidad || a.responsable.localeCompare(b.responsable));
 
-      const diasMetricas = Array.from({ length: 30 }, (_, i) => {
+      const diasMetricas = Array.from({ length: 31 }, (_, i) => {
         const fecha = new Date(fechaInicio);
         fecha.setDate(fecha.getDate() + i);
         return {
