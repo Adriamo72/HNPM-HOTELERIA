@@ -1765,8 +1765,14 @@ const eliminarVisualizador = async (visId, usuario) => {
       if (filters.habitacion && !habitacion.nombre?.toLowerCase().includes(filters.habitacion.toLowerCase())) {
         return false;
       }
-      if (filters.novedades && ocu?.observaciones && !ocu.observaciones.toLowerCase().includes(filters.novedades.toLowerCase())) {
-        return false;
+      if (filters.novedades) {
+        const normalizarTexto = (texto) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const observaciones = ocu?.observaciones || '';
+        const filtroNormalizado = normalizarTexto(filters.novedades);
+        const observacionesNormalizadas = normalizarTexto(observaciones);
+        if (!observacionesNormalizadas.includes(filtroNormalizado) || observaciones.toLowerCase() === 'sin novedades') {
+          return false;
+        }
       }
       
       // Filtros específicos para internacion/ocupacion
@@ -2177,6 +2183,18 @@ const eliminarVisualizador = async (visId, usuario) => {
                     <div>
                       <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL DE HABITACIONES DE INTERNACIÓN</p>
                       <p className="text-2xl font-black text-green-400">{filtrarHabitacionesPorTipo('internacion').length}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL DE CAMAS DE INTERNACIÓN</p>
+                      <p className="text-2xl font-black text-green-400">
+                        {(() => {
+                          const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
+                          return habitacionesActivas.reduce((total, hab) => {
+                            const ocu = ocupacion[String(hab.id)];
+                            return total + (ocu?.total_camas || 0);
+                          }, 0);
+                        })()}
+                      </p>
                     </div>
                   </div>
                 </div>

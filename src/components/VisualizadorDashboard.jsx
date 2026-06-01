@@ -579,8 +579,14 @@ const VisualizadorDashboard = () => {
       if (filters.habitacion && !habitacion.nombre?.toLowerCase().includes(filters.habitacion.toLowerCase())) {
         return false;
       }
-      if (filters.novedades && ocu?.observaciones && !ocu.observaciones.toLowerCase().includes(filters.novedades.toLowerCase())) {
-        return false;
+      if (filters.novedades) {
+        const normalizarTexto = (texto) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const observaciones = ocu?.observaciones || '';
+        const filtroNormalizado = normalizarTexto(filters.novedades);
+        const observacionesNormalizadas = normalizarTexto(observaciones);
+        if (!observacionesNormalizadas.includes(filtroNormalizado) || observaciones.toLowerCase() === 'sin novedades') {
+          return false;
+        }
       }
 
       // Filtros específicos para internacion/ocupacion
