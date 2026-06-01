@@ -1018,6 +1018,18 @@ const VisualizadorDashboard = () => {
                       <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL DE HABITACIONES DE INTERNACIÓN</p>
                       <p className="text-2xl font-black text-green-400">{filtrarHabitacionesPorTipo('internacion').length}</p>
                     </div>
+                    <div>
+                      <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL DE CAMAS DE INTERNACIÓN</p>
+                      <p className="text-2xl font-black text-green-400">
+                        {(() => {
+                          const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
+                          return habitacionesActivas.reduce((total, hab) => {
+                            const ocu = ocupacion[String(hab.id)];
+                            return total + (ocu?.total_camas || 0);
+                          }, 0);
+                        })()}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
