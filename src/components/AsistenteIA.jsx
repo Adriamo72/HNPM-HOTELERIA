@@ -192,11 +192,11 @@ const AsistenteIA = ({ pisos }) => {
       {abierto && (
         <div className="fixed bottom-24 right-4 z-50 w-[min(95vw,400px)] h-[min(80vh,520px)] bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
           <div className="flex items-center gap-3 px-4 py-3 bg-slate-800 border-b border-slate-700 flex-shrink-0">
-            <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-sm">🤖</div>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all ${cargando ? 'bg-yellow-500 animate-pulse' : datosListos ? 'bg-green-600' : 'bg-slate-600'}`}>🤖</div>
             <div className="flex-1">
-              <p className="text-white text-sm font-semibold">Asistente IA</p>
-              <p className="text-slate-400 text-xs">
-                {cargando ? 'Pensando...' : datosListos ? 'Con IA lista' : 'Conectando...'}
+              <p className="text-white text-sm font-semibold">Asistente HNPM</p>
+              <p className={`text-xs transition-colors ${cargando ? 'text-yellow-400' : datosListos ? 'text-green-400' : 'text-slate-400'}`}>
+                {cargando ? '⚙️ Analizando datos del hospital...' : datosListos ? '● En línea — Llama 3.3 70B' : '○ Conectando...'}
               </p>
             </div>
             <button onClick={cargarDatos} className="text-slate-400 hover:text-white transition-colors">
@@ -232,12 +232,22 @@ const AsistenteIA = ({ pisos }) => {
           </div>
 
           {mensajes.length <= 1 && (
-            <div className="px-3 pb-2 flex flex-wrap gap-1 flex-shrink-0">
-              {['¿Cuántas habitaciones de internación hay en el cuarto piso?', '¿Cuántas camas disponibles hay en el sexto piso?', '¿Cuánta ocupación hay en el hospital?', 'Estado de habitación 402?'].map((s, i) => (
-                <button key={i} onClick={() => enviarPregunta(s)} className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-full px-3 py-1 transition-colors text-left">
-                  {s}
-                </button>
-              ))}
+            <div className="px-3 pb-2 flex flex-col gap-2 flex-shrink-0">
+              <p className="text-xs text-slate-500 px-1">💡 Podés preguntarme sobre:</p>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  '¿Cuál es el piso más ocupado ahora?',
+                  '¿Cuántas camas libres hay en total?',
+                  '¿Qué habitaciones tienen aislamiento activo?',
+                  '¿Cuántos rechazos hubo recientemente?',
+                  'Comparame el piso 4 con el piso 6',
+                  '¿Cuántas camas están en reparación?',
+                ].map((s, i) => (
+                  <button key={i} onClick={() => enviarPregunta(s)} className="text-xs bg-slate-800 hover:bg-green-900 hover:border-green-700 text-slate-300 hover:text-green-300 border border-slate-600 rounded-full px-3 py-1 transition-all text-left">
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

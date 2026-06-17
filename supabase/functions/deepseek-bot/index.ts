@@ -13,233 +13,210 @@ serve(async (req) => {
   }
 
   try {
-    const { mensaje } = await req.json()
-    const textoLower = mensaje.toLowerCase()
+    const { mensaje, historial } = await req.json()
+
+    const groqApiKey = Deno.env.get('GROQ_API_KEY')
+    if (!groqApiKey) {
+      return new Response(
+        JSON.stringify({ respuesta: 'Error de configuración: falta la API key de Groq.', ok: false }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
-    
+
     // ============================================
-    // OBTENER TODAS LAS HABITACIONES CON SU ESTADO MÁS RECIENTE
+    // OBTENER DATOS REALES DEL HOSPITAL
     // ============================================
-    const { data: todasOcupaciones, error: errorOcupaciones } = await supabase
-      .from('ocupacion_habitaciones')
-      .select('*')
-      .order('actualizado_en', { ascending: false })
-    
-    if (errorOcupaciones) {
-      return new Response(
-        JSON.stringify({ respuesta: `Error: ${errorOcupaciones.message}`, ok: false }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-    
-    // DEDUPLICAR: quedarse con el registro más reciente por habitación
+    const [resOcupaciones, resHabitaciones, resPisos, resRechazos] = await Promise.all([
+      supabase.from('ocupacion_habitaciones').select('*').order('actualizado_en', { ascending: false }),
+      supabase.from('habitaciones_especiales').select('id, nombre, piso_id'),
+      supabase.from('pisos').select('id, nombre_piso'),
+      supabase.from('rechazos_pacientes').select('*').order('created_at', { ascending: false }).limit(50),
+    ])
+
+    // Deduplicar: quedarse con el estado más reciente por habitación
     const mapaUltimoEstado = new Map()
-    for (const registro of todasOcupaciones || []) {
-      if (!mapaUltimoEstado.has(registro.habitacion_id)) {
-        mapaUltimoEstado.set(registro.habitacion_id, registro)
+    for (const reg of resOcupaciones.data || []) {
+      if (!mapaUltimoEstado.has(reg.habitacion_id)) {
+        mapaUltimoEstado.set(reg.habitacion_id, reg)
       }
     }
-    
-    const ocupacionesRecientes = Array.from(mapaUltimoEstado.values())
-    
-    // Obtener nombres de habitaciones y pisos
-    const { data: habitacionesData } = await supabase
-      .from('habitaciones_especiales')
-      .select('id, nombre, piso_id')
-    
-    const { data: pisosData } = await supabase
-      .from('pisos')
-      .select('id, nombre_piso')
-    
-    const mapaHabitaciones = new Map()
-    for (const hab of habitacionesData || []) {
-      mapaHabitaciones.set(hab.id, { nombre: hab.nombre, piso_id: hab.piso_id })
+
+    const mapaHabs = new Map()
+    for (const h of resHabitaciones.data || []) {
+      mapaHabs.set(h.id, h)
     }
-    
+
     const mapaPisos = new Map()
-    for (const piso of pisosData || []) {
-      mapaPisos.set(piso.id, piso.nombre_piso)
+    for (const p of resPisos.data || []) {
+      mapaPisos.set(p.id, p.nombre_piso)
     }
-    
-    // Enriquecer ocupaciones con nombre de habitación y piso
-    const datosCompletos = ocupacionesRecientes.map(occ => {
-      const habitacion = mapaHabitaciones.get(occ.habitacion_id)
-      return {
-        ...occ,
-        habitacion_nombre: habitacion?.nombre || 'Desconocida',
-        piso_nombre: mapaPisos.get(habitacion?.piso_id) || 'Desconocido'
+
+    // Construir resumen estructurado por piso
+    const resumenPorPiso: Record<string, {
+      totalCamas: number
+      camasOcupadas: number
+      camasDisponibles: number
+      camasBloqueadas: number
+      habitaciones: Array<{
+        nombre: string
+        tipo: string
+        camas: number
+        ocupadas: number
+        aislamiento: boolean
+        servicio: string
+      }>
+    }> = {}
+
+    for (const [habId, occ] of mapaUltimoEstado.entries()) {
+      const hab = mapaHabs.get(habId)
+      if (!hab) continue
+      const pisoNombre = mapaPisos.get(hab.piso_id) || 'Sin piso'
+
+      if (!resumenPorPiso[pisoNombre]) {
+        resumenPorPiso[pisoNombre] = { totalCamas: 0, camasOcupadas: 0, camasDisponibles: 0, camasBloqueadas: 0, habitaciones: [] }
       }
-    }).filter(d => d.habitacion_nombre !== 'Desconocida')
-    
-    // ============================================
-    // 1. PREGUNTAS SOBRE HABITACIÓN ESPECÍFICA
-    // ============================================
-    let numeroHabitacion = null
-    let habitacionMatch = textoLower.match(/habitaci[oó]n\s*(\d+)/) || textoLower.match(/^(\d{3})$/)
-    
-    if (habitacionMatch) {
-      numeroHabitacion = habitacionMatch[1]
-      const habitacionData = datosCompletos.find(d => d.habitacion_nombre === numeroHabitacion)
-      
-      if (!habitacionData) {
-        return new Response(
-          JSON.stringify({ respuesta: `No encontré información para la habitación ${numeroHabitacion}.`, ok: true }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+
+      const total = occ.total_camas || 0
+      const ocupadas = Math.min(total, Math.max(0, occ.camas_ocupadas || 0))
+      const bloqueadas = (occ.aislamiento_activo && ocupadas > 0) ? Math.max(0, total - ocupadas) : 0
+
+      resumenPorPiso[pisoNombre].totalCamas += total
+      resumenPorPiso[pisoNombre].camasOcupadas += ocupadas
+      resumenPorPiso[pisoNombre].camasBloqueadas += bloqueadas
+
+      if (occ.tipo_habitacion === 'activa') {
+        resumenPorPiso[pisoNombre].camasDisponibles += Math.max(0, total - ocupadas - bloqueadas)
       }
-      
-      const ocupadas = habitacionData.camas_ocupadas || 0
-      const total = habitacionData.total_camas || 0
-      const libres = total - ocupadas
-      
-      let respuesta = `La habitación ${numeroHabitacion} está ${habitacionData.tipo_habitacion === 'reparacion' ? 'en reparación' : 'activa'} con ${ocupadas} de ${total} camas ocupadas (${libres} libres).`
-      if (habitacionData.aislamiento_activo) respuesta += ` Tiene aislamiento activo.`
-      if (habitacionData.observaciones) respuesta += ` Servicio: ${habitacionData.observaciones}.`
-      respuesta += ` Ubicada en ${habitacionData.piso_nombre}.`
-      
-      return new Response(
-        JSON.stringify({ respuesta, ok: true }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-    
-    // ============================================
-    // 2. HABITACIONES EN REPARACIÓN
-    // ============================================
-    if (textoLower.includes('reparacion') || textoLower.includes('reparación')) {
-      let pisoObjetivo: string | null = null
-      if (textoLower.includes('piso 6') || textoLower.includes('sexto piso')) pisoObjetivo = 'PISO 6'
-      if (textoLower.includes('piso 5') || textoLower.includes('quinto piso')) pisoObjetivo = 'PISO 5'
-      if (textoLower.includes('piso 4') || textoLower.includes('cuarto piso')) pisoObjetivo = 'PISO 4'
-      if (textoLower.includes('piso 3') || textoLower.includes('tercer piso')) pisoObjetivo = 'PISO 3'
-      if (textoLower.includes('piso 2') || textoLower.includes('segundo piso')) pisoObjetivo = 'PISO 2'
-      if (textoLower.includes('piso 1') || textoLower.includes('primer piso')) pisoObjetivo = 'PISO 1'
-      
-      const reparaciones = datosCompletos.filter(d => 
-        d.tipo_habitacion === 'reparacion' &&
-        (pisoObjetivo === null || d.piso_nombre === pisoObjetivo)
-      ).map(d => d.habitacion_nombre)
-      
-      if (reparaciones.length === 0) {
-        const respuesta = pisoObjetivo 
-          ? `No hay habitaciones en reparación en ${pisoObjetivo}.`
-          : `No hay habitaciones en reparación en el hospital.`
-        return new Response(
-          JSON.stringify({ respuesta, ok: true }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-      
-      const respuesta = pisoObjetivo
-        ? `Habitaciones en reparación en ${pisoObjetivo}: ${reparaciones.join(', ')}.`
-        : `Habitaciones en reparación en el hospital: ${reparaciones.join(', ')}.`
-      
-      return new Response(
-        JSON.stringify({ respuesta, ok: true }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-    
-    // ============================================
-    // 3. PREGUNTAS CON EXCLUSIONES
-    // ============================================
-    const tieneExclusion = textoLower.includes('exceptuando') || textoLower.includes('excluyendo') || textoLower.includes('sin contar') || textoLower.includes('menos')
-    
-    let pisosExcluidos: string[] = []
-    let serviciosExcluidos: string[] = []
-    
-    if (textoLower.includes('piso 2') || textoLower.includes('segundo piso')) pisosExcluidos.push('PISO 2')
-    if (textoLower.includes('uco')) serviciosExcluidos.push('UCO')
-    
-    let datosFiltrados = datosCompletos.filter(d => d.tipo_habitacion === 'activa')
-    
-    if (pisosExcluidos.length > 0) {
-      datosFiltrados = datosFiltrados.filter(d => !pisosExcluidos.includes(d.piso_nombre))
-    }
-    if (serviciosExcluidos.length > 0) {
-      datosFiltrados = datosFiltrados.filter(d => {
-        const servicio = (d.observaciones || '').toUpperCase()
-        return !serviciosExcluidos.some(s => servicio.includes(s))
+
+      resumenPorPiso[pisoNombre].habitaciones.push({
+        nombre: hab.nombre,
+        tipo: occ.tipo_habitacion === 'activa' ? 'INTERNACIÓN' : occ.tipo_habitacion === 'reparacion' ? 'EN REPARACIÓN' : 'OTROS',
+        camas: total,
+        ocupadas,
+        aislamiento: Boolean(occ.aislamiento_activo),
+        servicio: occ.observaciones || ''
       })
     }
-    
-    let totalCamas = 0
-    let totalPacientes = 0
-    let camasBloqueadas = 0
-    
-    for (const d of datosFiltrados) {
-      totalCamas += d.total_camas || 0
-      totalPacientes += d.camas_ocupadas || 0
-      if (d.aislamiento_activo && (d.camas_ocupadas || 0) > 0) {
-        camasBloqueadas += (d.total_camas || 0) - (d.camas_ocupadas || 0)
-      }
+
+    // Totales globales
+    let globalCamas = 0, globalOcupadas = 0, globalDisponibles = 0, globalBloqueadas = 0
+    for (const piso of Object.values(resumenPorPiso)) {
+      globalCamas += piso.totalCamas
+      globalOcupadas += piso.camasOcupadas
+      globalDisponibles += piso.camasDisponibles
+      globalBloqueadas += piso.camasBloqueadas
     }
-    
-    const camasDisponibles = totalCamas - totalPacientes - camasBloqueadas
-    const porcentaje = totalCamas > 0 ? Math.round((totalPacientes / totalCamas) * 100) : 0
-    
+
+    // Resumen de rechazos recientes
+    const rechazosRecientes = (resRechazos.data || []).slice(0, 10).map(r => ({
+      paciente: `${r.apellido || ''} ${r.nombre || ''}`.trim() || 'Sin nombre',
+      causa: r.causa_rechazo || r.causa || 'Sin causa',
+      obraSocial: r.obra_social || 'Sin dato',
+      fecha: r.created_at ? new Date(r.created_at).toLocaleDateString('es-AR') : 'Sin fecha'
+    }))
+
     // ============================================
-    // 4. PREGUNTAS POR PISO
+    // SYSTEM PROMPT CON CONTEXTO REAL
     // ============================================
-    let pisoEspecifico: string | null = null
-    if (textoLower.includes('piso 6') || textoLower.includes('sexto piso')) pisoEspecifico = 'PISO 6'
-    else if (textoLower.includes('piso 5') || textoLower.includes('quinto piso')) pisoEspecifico = 'PISO 5'
-    else if (textoLower.includes('piso 4') || textoLower.includes('cuarto piso')) pisoEspecifico = 'PISO 4'
-    else if (textoLower.includes('piso 3') || textoLower.includes('tercer piso')) pisoEspecifico = 'PISO 3'
-    else if (textoLower.includes('piso 2') || textoLower.includes('segundo piso')) pisoEspecifico = 'PISO 2'
-    else if (textoLower.includes('piso 1') || textoLower.includes('primer piso')) pisoEspecifico = 'PISO 1'
-    
-    if (pisoEspecifico && !tieneExclusion) {
-      const datosPiso = datosCompletos.filter(d => d.tipo_habitacion === 'activa' && d.piso_nombre === pisoEspecifico)
-      let camasPiso = 0
-      let pacientesPiso = 0
-      let bloqueadasPiso = 0
-      
-      for (const d of datosPiso) {
-        camasPiso += d.total_camas || 0
-        pacientesPiso += d.camas_ocupadas || 0
-        if (d.aislamiento_activo && (d.camas_ocupadas || 0) > 0) {
-          bloqueadasPiso += (d.total_camas || 0) - (d.camas_ocupadas || 0)
-        }
-      }
-      
-      const disponiblesPiso = camasPiso - pacientesPiso - bloqueadasPiso
-      const porcentajePiso = camasPiso > 0 ? Math.round((pacientesPiso / camasPiso) * 100) : 0
-      
-      const respuesta = `En ${pisoEspecifico} hay ${disponiblesPiso} camas disponibles. Total camas: ${camasPiso}. Ocupación: ${porcentajePiso}%.`
-      
+    const contextoPisos = Object.entries(resumenPorPiso)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([piso, datos]) => {
+        const habsDetalle = datos.habitaciones
+          .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }))
+          .map(h => {
+            let info = `  - Hab ${h.nombre}: ${h.tipo}`
+            if (h.tipo === 'INTERNACIÓN') {
+              info += `, ${h.camas} camas total, ${h.ocupadas} ocupadas`
+              if (h.aislamiento) info += ` [AISLAMIENTO ACTIVO]`
+              if (h.servicio) info += `, servicio: ${h.servicio}`
+            }
+            return info
+          }).join('\n')
+        return `**${piso}**: ${datos.totalCamas} camas totales, ${datos.camasOcupadas} ocupadas, ${datos.camasDisponibles} disponibles, ${datos.camasBloqueadas} bloqueadas por aislamiento\n${habsDetalle}`
+      }).join('\n\n')
+
+    const systemPrompt = `Sos el asistente de hotelería del Hospital Nacional Posadas (HNPM). Respondés preguntas sobre ocupación de camas, estado de habitaciones, rechazos de pacientes y métricas del hospital. Respondés en español rioplatense, de forma clara y concisa.
+
+DATOS ACTUALES DEL HOSPITAL (en tiempo real):
+- Total global: ${globalCamas} camas, ${globalOcupadas} ocupadas, ${globalDisponibles} disponibles, ${globalBloqueadas} bloqueadas por aislamiento
+- Ocupación global: ${globalCamas > 0 ? Math.round((globalOcupadas / globalCamas) * 100) : 0}%
+
+DETALLE POR PISO:
+${contextoPisos}
+
+RECHAZOS RECIENTES (últimos ${rechazosRecientes.length}):
+${rechazosRecientes.length > 0
+  ? rechazosRecientes.map(r => `- ${r.paciente} | ${r.obraSocial} | ${r.causa} | ${r.fecha}`).join('\n')
+  : '- Sin rechazos recientes'}
+
+INSTRUCCIONES:
+- Usá SIEMPRE los datos reales de arriba para responder. Nunca inventes números.
+- Si te preguntan por un piso específico, filtrá exactamente por ese piso en los datos.
+- Si te preguntan por una habitación específica, buscala en el detalle de habitaciones.
+- Podés calcular porcentajes, comparar pisos, detectar el piso más ocupado, etc.
+- Si una pregunta no tiene respuesta en los datos, decilo claramente.
+- Respondé de forma breve y directa. Usá negrita (**texto**) para resaltar números clave.`
+
+    // ============================================
+    // CONSTRUIR HISTORIAL DE CONVERSACIÓN
+    // ============================================
+    const mensajesHistorial = (historial || [])
+      .filter((m: { tipo: string; texto: string }) => m.tipo === 'user' || m.tipo === 'bot')
+      .slice(-6)
+      .map((m: { tipo: string; texto: string }) => ({
+        role: m.tipo === 'user' ? 'user' : 'assistant',
+        content: m.texto.slice(0, 300)
+      }))
+
+    const mensajesApi = [
+      { role: 'system', content: systemPrompt },
+      ...mensajesHistorial,
+      { role: 'user', content: mensaje }
+    ]
+
+    // ============================================
+    // LLAMAR A GROQ API (gratis)
+    // ============================================
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${groqApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: mensajesApi,
+        max_tokens: 512,
+        temperature: 0.2,
+      }),
+    })
+
+    if (!groqRes.ok) {
+      const errorText = await groqRes.text()
+      console.error('Groq API error:', groqRes.status, errorText)
       return new Response(
-        JSON.stringify({ respuesta, ok: true }),
+        JSON.stringify({ respuesta: 'Error al contactar la IA. Por favor, intentá de nuevo en unos segundos.', ok: false }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
-    
-    // ============================================
-    // 5. RESPUESTA GENERAL (con exclusiones si aplica)
-    // ============================================
-    let respuesta = `Hay ${camasDisponibles} camas disponibles`
-    
-    if (pisosExcluidos.length > 0) {
-      respuesta += ` (excluyendo ${pisosExcluidos.join(' y ')})`
-    }
-    if (serviciosExcluidos.length > 0) {
-      respuesta += ` (excluyendo ${serviciosExcluidos.join(' y ')})`
-    }
-    
-    respuesta += `. Total camas: ${totalCamas}. Ocupación: ${porcentaje}%. ${camasBloqueadas} camas bloqueadas por aislamiento.`
-    
+
+    const groqData = await groqRes.json()
+    const respuesta = groqData.choices?.[0]?.message?.content || 'No pude generar una respuesta.'
+
     return new Response(
       JSON.stringify({ respuesta, ok: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-    
+
   } catch (error) {
     console.error('Error:', error.message)
     return new Response(
-      JSON.stringify({ error: error.message, ok: false }),
+      JSON.stringify({ respuesta: 'Ocurrió un error interno. Por favor, intentá de nuevo.', ok: false }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
