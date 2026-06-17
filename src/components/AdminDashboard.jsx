@@ -8,6 +8,27 @@ import RecorridosList from './RecorridosList';
 import AsistenteIA from './AsistenteIA';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
+const formatearFechaLocalISO = (fecha) => {
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+};
+
+const getCamasOcupadasReales = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadas = ocup?.camas_ocupadas || 0;
+  return Math.min(totalCamas, Math.max(0, camasOcupadas));
+};
+
+const getCamasNoUtilizadasPorAislamiento = (ocup) => {
+  const totalCamas = ocup?.total_camas || 0;
+  const camasOcupadasReales = getCamasOcupadasReales(ocup);
+  const aislamientoActivo = Boolean(ocup?.aislamiento_activo);
+  if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return 0;
+  return Math.max(0, totalCamas - camasOcupadasReales);
+};
+
 const AdminDashboard = () => {
   // Obtener perfil del usuario desde localStorage
   const sesion = JSON.parse(localStorage.getItem('sesion_hnpm') || '{}');
@@ -127,27 +148,6 @@ const AdminDashboard = () => {
   const [rankingResponsablesMi, setRankingResponsablesMi] = useState([]);
   const [cargandoMetricas, setCargandoMetricas] = useState(false);
 
-  const formatearFechaLocalISO = (fecha) => {
-    const anio = fecha.getFullYear();
-    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-    const dia = String(fecha.getDate()).padStart(2, '0');
-    return `${anio}-${mes}-${dia}`;
-  };
-
-  const getCamasOcupadasReales = (ocup) => {
-    const totalCamas = ocup?.total_camas || 0;
-    const camasOcupadas = ocup?.camas_ocupadas || 0;
-    return Math.min(totalCamas, Math.max(0, camasOcupadas));
-  };
-
-  const getCamasNoUtilizadasPorAislamiento = (ocup) => {
-    const totalCamas = ocup?.total_camas || 0;
-    const camasOcupadasReales = getCamasOcupadasReales(ocup);
-    const aislamientoActivo = Boolean(ocup?.aislamiento_activo);
-    if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return 0;
-    return Math.max(0, totalCamas - camasOcupadasReales);
-  };
-
   // ==================== CARGAR DATOS PRINCIPAL ====================
   const cargarDatos = async (tipo = 'todos') => {
     if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(true);
@@ -260,115 +260,6 @@ const AdminDashboard = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, stockPañol, cargandoMonitor]);
-
-  const cargarMetricasHistoricas = useCallback(async () => {
-    setCargandoMetricas(true);
-    try {
-      const fechaInicio = new Date();
-      fechaInicio.setDate(fechaInicio.getDate() - 30);
-      const fechaInicioRechazos = new Date(fechaInicio);
-      fechaInicioRechazos.setHours(0, 0, 0, 0);
-      const { data: todasHabitaciones } = await supabase
-        .from('habitaciones_especiales')
-        .select('id, piso_id, nombre');
-
-      if (!todasHabitaciones || todasHabitaciones.length === 0) {
-        setMetricasData([]);
-        return;
-      }
-
-      const { data: rechazosHistoricos } = await supabase
-        .from('rechazos_pacientes')
-        .select('*')
-        .gte('created_at', fechaInicioRechazos.toISOString())
-        .order('created_at', { ascending: true })
-        .limit(1000);
-
-      const rechazosPorFecha = {};
-      const rechazosNormalizadosMetricas = deduplicarRechazos((rechazosHistoricos || []).map(normalizarRechazo));
-      rechazosNormalizadosMetricas.forEach(rechazo => {
-        const fechaRechazo = rechazo.horaDeteccion || rechazo.createdAt;
-        if (!fechaRechazo) return;
-        const claveFecha = formatearFechaLocalISO(new Date(fechaRechazo));
-        rechazosPorFecha[claveFecha] = (rechazosPorFecha[claveFecha] || 0) + 1;
-      });
-
-      const rankingResponsables = Object.entries(rechazosNormalizadosMetricas.reduce((acc, rechazo) => {
-        const responsable = (rechazo.responsableMi || 'Sin dato').trim() || 'Sin dato';
-        acc[responsable] = (acc[responsable] || 0) + 1;
-        return acc;
-      }, {}))
-        .map(([responsable, cantidad]) => ({ responsable, cantidad }))
-        .sort((a, b) => b.cantidad - a.cantidad || a.responsable.localeCompare(b.responsable));
-
-      const diasMetricas = Array.from({ length: 31 }, (_, i) => {
-        const fecha = new Date(fechaInicio);
-        fecha.setDate(fecha.getDate() + i);
-        return { fechaActual: fecha, fechaStr: formatearFechaLocalISO(fecha) };
-      });
-
-      const ocupacionesPorDia = await Promise.all(diasMetricas.map(async ({ fechaStr }) => {
-        const { data: ocupacionDia } = await supabase
-          .from('ocupacion_habitaciones')
-          .select('*, aislamiento_activo')
-          .in('habitacion_id', todasHabitaciones.map(h => h.id))
-          .lte('fecha', fechaStr)
-          .order('fecha', { ascending: false })
-          .order('actualizado_en', { ascending: false });
-        return { fechaStr, ocupacionDia: ocupacionDia || [] };
-      }));
-
-      const ocupacionesPorFecha = {};
-      ocupacionesPorDia.forEach(({ fechaStr, ocupacionDia }) => {
-        ocupacionesPorFecha[fechaStr] = ocupacionDia;
-      });
-
-      const datosMensuales = diasMetricas.map(({ fechaActual, fechaStr }) => {
-        const ocupacionDia = ocupacionesPorFecha[fechaStr] || [];
-        const ocupacionMap = {};
-        ocupacionDia.forEach(e => {
-          if (!ocupacionMap[String(e.habitacion_id)]) {
-            ocupacionMap[String(e.habitacion_id)] = e;
-          }
-        });
-        let totalCamasGlobal = 0;
-        let camasOcupadasRealesGlobal = 0;
-        let camasNoUtilizadasPorAislamientoGlobal = 0;
-        todasHabitaciones.forEach(hab => {
-          const ocup = ocupacionMap[hab.id];
-          if (ocup && ocup.tipo_habitacion === 'activa') {
-            totalCamasGlobal += ocup.total_camas || 0;
-            camasOcupadasRealesGlobal += getCamasOcupadasReales(ocup);
-            camasNoUtilizadasPorAislamientoGlobal += getCamasNoUtilizadasPorAislamiento(ocup);
-          }
-        });
-        const camasOcupadasPracticas = camasOcupadasRealesGlobal + camasNoUtilizadasPorAislamientoGlobal;
-        const camasDisponiblesGlobal = Math.max(0, totalCamasGlobal - camasOcupadasPracticas);
-        return {
-          fecha: fechaStr,
-          fechaFormateada: fechaActual.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }),
-          totalCamas: totalCamasGlobal,
-          camasOcupadas: camasOcupadasRealesGlobal,
-          camasDisponibles: camasDisponiblesGlobal,
-          rechazados: rechazosPorFecha[fechaStr] || 0
-        };
-      });
-
-      setMetricasData(datosMensuales);
-      setRankingResponsablesMi(rankingResponsables);
-    } catch (error) {
-      console.error('Error cargando métricas históricas:', error);
-    } finally {
-      setCargandoMetricas(false);
-    }
-  }, [deduplicarRechazos, normalizarRechazo]);
-
-  useEffect(() => {
-    if (activeTab === 'metricas' && metricasData.length === 0 && !cargandoMetricas) {
-      cargarMetricasHistoricas();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, metricasData, cargandoMetricas, cargarMetricasHistoricas]);
 
   // ==================== RECARGAR DATOS CUANDO CAMBIA LA FECHA ====================
   useEffect(() => {
@@ -716,6 +607,115 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
       return true;
     });
   }, []);
+
+  const cargarMetricasHistoricas = useCallback(async () => {
+    setCargandoMetricas(true);
+    try {
+      const fechaInicio = new Date();
+      fechaInicio.setDate(fechaInicio.getDate() - 30);
+      const fechaInicioRechazos = new Date(fechaInicio);
+      fechaInicioRechazos.setHours(0, 0, 0, 0);
+      const { data: todasHabitaciones } = await supabase
+        .from('habitaciones_especiales')
+        .select('id, piso_id, nombre');
+
+      if (!todasHabitaciones || todasHabitaciones.length === 0) {
+        setMetricasData([]);
+        return;
+      }
+
+      const { data: rechazosHistoricos } = await supabase
+        .from('rechazos_pacientes')
+        .select('*')
+        .gte('created_at', fechaInicioRechazos.toISOString())
+        .order('created_at', { ascending: true })
+        .limit(1000);
+
+      const rechazosPorFecha = {};
+      const rechazosNormalizadosMetricas = deduplicarRechazos((rechazosHistoricos || []).map(normalizarRechazo));
+      rechazosNormalizadosMetricas.forEach(rechazo => {
+        const fechaRechazo = rechazo.horaDeteccion || rechazo.createdAt;
+        if (!fechaRechazo) return;
+        const claveFecha = formatearFechaLocalISO(new Date(fechaRechazo));
+        rechazosPorFecha[claveFecha] = (rechazosPorFecha[claveFecha] || 0) + 1;
+      });
+
+      const rankingResponsables = Object.entries(rechazosNormalizadosMetricas.reduce((acc, rechazo) => {
+        const responsable = (rechazo.responsableMi || 'Sin dato').trim() || 'Sin dato';
+        acc[responsable] = (acc[responsable] || 0) + 1;
+        return acc;
+      }, {}))
+        .map(([responsable, cantidad]) => ({ responsable, cantidad }))
+        .sort((a, b) => b.cantidad - a.cantidad || a.responsable.localeCompare(b.responsable));
+
+      const diasMetricas = Array.from({ length: 31 }, (_, i) => {
+        const fecha = new Date(fechaInicio);
+        fecha.setDate(fecha.getDate() + i);
+        return { fechaActual: fecha, fechaStr: formatearFechaLocalISO(fecha) };
+      });
+
+      const ocupacionesPorDia = await Promise.all(diasMetricas.map(async ({ fechaStr }) => {
+        const { data: ocupacionDia } = await supabase
+          .from('ocupacion_habitaciones')
+          .select('*, aislamiento_activo')
+          .in('habitacion_id', todasHabitaciones.map(h => h.id))
+          .lte('fecha', fechaStr)
+          .order('fecha', { ascending: false })
+          .order('actualizado_en', { ascending: false });
+        return { fechaStr, ocupacionDia: ocupacionDia || [] };
+      }));
+
+      const ocupacionesPorFecha = {};
+      ocupacionesPorDia.forEach(({ fechaStr, ocupacionDia }) => {
+        ocupacionesPorFecha[fechaStr] = ocupacionDia;
+      });
+
+      const datosMensuales = diasMetricas.map(({ fechaActual, fechaStr }) => {
+        const ocupacionDia = ocupacionesPorFecha[fechaStr] || [];
+        const ocupacionMap = {};
+        ocupacionDia.forEach(e => {
+          if (!ocupacionMap[String(e.habitacion_id)]) {
+            ocupacionMap[String(e.habitacion_id)] = e;
+          }
+        });
+        let totalCamasGlobal = 0;
+        let camasOcupadasRealesGlobal = 0;
+        let camasNoUtilizadasPorAislamientoGlobal = 0;
+        todasHabitaciones.forEach(hab => {
+          const ocup = ocupacionMap[hab.id];
+          if (ocup && ocup.tipo_habitacion === 'activa') {
+            totalCamasGlobal += ocup.total_camas || 0;
+            camasOcupadasRealesGlobal += getCamasOcupadasReales(ocup);
+            camasNoUtilizadasPorAislamientoGlobal += getCamasNoUtilizadasPorAislamiento(ocup);
+          }
+        });
+        const camasOcupadasPracticas = camasOcupadasRealesGlobal + camasNoUtilizadasPorAislamientoGlobal;
+        const camasDisponiblesGlobal = Math.max(0, totalCamasGlobal - camasOcupadasPracticas);
+        return {
+          fecha: fechaStr,
+          fechaFormateada: fechaActual.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }),
+          totalCamas: totalCamasGlobal,
+          camasOcupadas: camasOcupadasRealesGlobal,
+          camasDisponibles: camasDisponiblesGlobal,
+          rechazados: rechazosPorFecha[fechaStr] || 0
+        };
+      });
+
+      setMetricasData(datosMensuales);
+      setRankingResponsablesMi(rankingResponsables);
+    } catch (error) {
+      console.error('Error cargando métricas históricas:', error);
+    } finally {
+      setCargandoMetricas(false);
+    }
+  }, [deduplicarRechazos, normalizarRechazo]);
+
+  useEffect(() => {
+    if (activeTab === 'metricas' && metricasData.length === 0 && !cargandoMetricas) {
+      cargarMetricasHistoricas();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, metricasData, cargandoMetricas, cargarMetricasHistoricas]);
 
   const cargarRechazosPacientes = useCallback(async () => {
     setCargandoRechazos(true);
