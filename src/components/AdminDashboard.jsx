@@ -3522,7 +3522,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>🟢 {sem.tiempo_verde_min} min → 🟡 {sem.tiempo_rojo_min} min → 🔴 ∞</span>
                       <button
-                        onClick={() => { const w = window.open('','','width=300,height=300'); w.document.write(`<html><body style='background:#000;display:flex;align-items:center;justify-content:center;height:100vh'><img src='https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}' /></body></html>`); }}
+                        onClick={() => descargarQR(`/semaforo?token=${sem.qr_token}`, `🚦 Semáforo - ${sem.nombre}`, `Sector: ${pisoNombre} | Verde ${sem.tiempo_verde_min} min → Amarillo ${sem.tiempo_rojo_min} min → Rojo ∞`)}
                         className="inline-flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg transition-all"
                       >
                         📱 Ver QR

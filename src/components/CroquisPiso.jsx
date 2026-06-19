@@ -75,6 +75,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [arrastrando, setArrastrando] = useState(false);
   const [puntoInicio, setPuntoInicio] = useState({ x: 0, y: 0 });
   const [habitacionArrastrada, setHabitacionArrastrada] = useState(null);
+  const [semaforoArrastrado, setSemaforoArrastrado] = useState(null);
   
   // Estado para forzar re-render de marcadores
   const [marcadoresKey, setMarcadoresKey] = useState(0);
@@ -693,6 +694,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   // ==================== Manejo de arrastre ====================
   const handleMouseDown = (e) => {
     if (!modoEdicion || modoMovimiento) return;
+
+    const semTarget = e.target.closest('.marcador-semaforo');
+    if (semTarget && semTarget.dataset.semaforoId) {
+      setSemaforoArrastrado(semTarget.dataset.semaforoId);
+      setArrastrando(true);
+      setPuntoInicio({ x: e.clientX, y: e.clientY });
+      e.stopPropagation();
+      return;
+    }
     
     const target = e.target.closest('.marcador-habitacion');
     if (target && target.dataset.habitacionId) {
@@ -709,6 +719,20 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
 
   const handleMouseMove = (e) => {
     if (!arrastrando) return;
+
+    if (semaforoArrastrado) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const imgElement = imageRef.current;
+      const scaleX = imgElement.naturalWidth / rect.width / zoom;
+      const scaleY = imgElement.naturalHeight / rect.height / zoom;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+      setCoordenadasSemaforos(prev => ({
+        ...prev,
+        [semaforoArrastrado]: { x, y }
+      }));
+      return;
+    }
     
     if (habitacionArrastrada) {
       const rect = containerRef.current.getBoundingClientRect();
@@ -732,7 +756,14 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   };
 
   const handleMouseUp = async () => {
-    if (arrastrando && habitacionArrastrada) {
+    if (arrastrando && semaforoArrastrado) {
+      const coord = coordenadasSemaforos[semaforoArrastrado];
+      if (coord) {
+        await guardarCoordenadaSemaforo(Number(semaforoArrastrado), coord.x, coord.y);
+        setMensaje(`✅ Semáforo reposicionado`);
+        setTimeout(() => setMensaje(''), 1500);
+      }
+    } else if (arrastrando && habitacionArrastrada) {
       const coord = coordenadas[habitacionArrastrada];
       if (coord) {
         await guardarCoordenada(habitacionArrastrada, coord.x, coord.y);
@@ -742,6 +773,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
     setArrastrando(false);
     setHabitacionArrastrada(null);
+    setSemaforoArrastrado(null);
   };
 
   // ==================== Editar habitación ====================
@@ -1030,7 +1062,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 return (
                   <div
                     key={`sem-${sem.id}`}
-                    className="absolute"
+                    data-semaforo-id={sem.id}
+                    className={`marcador-semaforo absolute ${modoEdicion ? 'cursor-grab active:cursor-grabbing' : ''}`}
                     style={{
                       left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                       top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
