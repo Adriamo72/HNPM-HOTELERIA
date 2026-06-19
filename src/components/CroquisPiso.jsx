@@ -1155,7 +1155,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           onClick={() => setTooltipSemaforo(null)}
         >
           <div
-            className="bg-slate-800 border-t border-slate-600 rounded-t-2xl p-5 shadow-2xl"
+            className="bg-slate-800 border-t border-slate-600 rounded-t-2xl p-3 shadow-2xl"
             style={{
               width: `${vp.width * vp.scale}px`,
               transform: `scale(${1 / vp.scale})`,
@@ -1163,27 +1163,27 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-start mb-3">
+            <div className="flex justify-between items-center mb-2">
               <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <div className={`w-5 h-5 rounded-full border border-black/30 ${tooltipSemaforo.estado === 'rojo' || tooltipSemaforo.estado === 'sin-datos' ? 'bg-red-500' : 'bg-gray-700'}`}></div>
-                  <div className={`w-5 h-5 rounded-full border border-black/30 ${tooltipSemaforo.estado === 'amarillo' ? 'bg-yellow-400' : 'bg-gray-700'}`}></div>
-                  <div className={`w-5 h-5 rounded-full border border-black/30 ${tooltipSemaforo.estado === 'verde' ? 'bg-green-500' : 'bg-gray-700'}`}></div>
+                <div className="flex flex-col gap-0.5">
+                  <div className={`w-4 h-4 rounded-full border border-black/30 ${tooltipSemaforo.estado === 'rojo' || tooltipSemaforo.estado === 'sin-datos' ? 'bg-red-500' : 'bg-gray-700'}`}></div>
+                  <div className={`w-4 h-4 rounded-full border border-black/30 ${tooltipSemaforo.estado === 'amarillo' ? 'bg-yellow-400' : 'bg-gray-700'}`}></div>
+                  <div className={`w-4 h-4 rounded-full border border-black/30 ${tooltipSemaforo.estado === 'verde' ? 'bg-green-500' : 'bg-gray-700'}`}></div>
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wider">Semáforo de limpieza</p>
-                  <h4 className="text-white font-bold text-lg">{tooltipSemaforo.sem.nombre}</h4>
+                  <h4 className="text-white font-bold text-base leading-tight">{tooltipSemaforo.sem.nombre}</h4>
                 </div>
               </div>
               <button
                 onClick={() => setTooltipSemaforo(null)}
-                className="w-8 h-8 bg-slate-700 rounded-full text-slate-300 text-xl font-bold flex items-center justify-center"
+                className="w-7 h-7 bg-slate-700 rounded-full text-slate-300 text-lg font-bold flex items-center justify-center"
               >×</button>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="bg-slate-700/50 rounded-xl p-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Estado</p>
-                <p className={`font-bold text-base ${
+            <div className="flex gap-2 text-sm">
+              <div className="bg-slate-700/50 rounded-lg px-3 py-2 flex-1">
+                <p className="text-[9px] text-slate-400 uppercase tracking-wider">Estado</p>
+                <p className={`font-bold text-sm ${
                   tooltipSemaforo.estado === 'verde' ? 'text-green-400' :
                   tooltipSemaforo.estado === 'amarillo' ? 'text-yellow-400' : 'text-red-400'
                 }`}>
@@ -1192,19 +1192,11 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                    tooltipSemaforo.estado === 'amarillo' ? '🟡 Revisar' : '🔴 Requiere limpieza'}
                 </p>
               </div>
-              <div className="bg-slate-700/50 rounded-xl p-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Último escaneo</p>
-                <p className="font-bold text-white">
+              <div className="bg-slate-700/50 rounded-lg px-3 py-2 flex-1">
+                <p className="text-[9px] text-slate-400 uppercase tracking-wider">Último escaneo</p>
+                <p className="font-bold text-white text-sm">
                   {tooltipSemaforo.mins === null ? 'Nunca' : `Hace ${tooltipSemaforo.mins} min`}
                 </p>
-              </div>
-              <div className="bg-slate-700/50 rounded-xl p-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Verde hasta</p>
-                <p className="font-bold text-green-400">{tooltipSemaforo.sem.tiempo_verde_min} min</p>
-              </div>
-              <div className="bg-slate-700/50 rounded-xl p-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Rojo desde</p>
-                <p className="font-bold text-red-400">{tooltipSemaforo.sem.tiempo_rojo_min} min</p>
               </div>
             </div>
           </div>
