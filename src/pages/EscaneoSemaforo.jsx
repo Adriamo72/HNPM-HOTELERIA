@@ -1,5 +1,6 @@
 // pages/EscaneoSemaforo.jsx
 import React, { useEffect, useState } from 'react';
+import { supabase } from '../supabaseClient';
 
 const EscaneoSemaforo = () => {
   const [estado, setEstado] = useState('cargando');
@@ -15,22 +16,39 @@ const EscaneoSemaforo = () => {
       return;
     }
 
-    const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
+    const registrar = async () => {
+      try {
+        const { data: semaforo, error } = await supabase
+          .from('semaforos')
+          .select('id, nombre')
+          .eq('qr_token', token)
+          .single();
 
-    fetch(`${SUPABASE_URL}/functions/v1/escanear-semaforo?token=${token}`, {
-      method: 'GET',
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok) {
-          setNombre(data.semaforo);
-          setHora(new Date(data.escaneado_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }));
-          setEstado('ok');
-        } else {
+        if (error || !semaforo) {
           setEstado('error');
+          return;
         }
-      })
-      .catch(() => setEstado('error'));
+
+        const ahora = new Date().toISOString();
+
+        await supabase
+          .from('semaforos')
+          .update({ ultimo_escaneo_at: ahora })
+          .eq('id', semaforo.id);
+
+        await supabase
+          .from('semaforo_escaneos')
+          .insert({ semaforo_id: semaforo.id, escaneado_at: ahora });
+
+        setNombre(semaforo.nombre);
+        setHora(new Date(ahora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }));
+        setEstado('ok');
+      } catch {
+        setEstado('error');
+      }
+    };
+
+    registrar();
   }, []);
 
   return (

@@ -3521,7 +3521,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>🟢 {sem.tiempo_verde_min} min → 🟡 {sem.tiempo_rojo_min} min → 🔴 ∞</span>
                       <button
-                        onClick={() => descargarQR(`/semaforo?token=${sem.qr_token}`, `🚦 Semáforo - ${sem.nombre}`, `Sector: ${pisoNombre} | Verde ${sem.tiempo_verde_min} min → Amarillo ${sem.tiempo_rojo_min} min → Rojo ∞`)}
+                        onClick={() => descargarQR(`/semaforo?token=${sem.qr_token}`, `Div. Maestranza - ${sem.nombre}`, `${pisoNombre}`)}
                         className="inline-flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg transition-all"
                       >
                         📱 Ver QR
