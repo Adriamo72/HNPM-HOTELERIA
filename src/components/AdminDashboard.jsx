@@ -105,7 +105,7 @@ const AdminDashboard = () => {
   const [semaforos, setSemaforos] = useState([]);
   const [mostrarModalSemaforo, setMostrarModalSemaforo] = useState(false);
   const [semaforoEditando, setSemaforoEditando] = useState(null);
-  const [nuevoSemaforo, setNuevoSemaforo] = useState({ nombre: '', piso_id: '', tiempo_verde_min: 15, tiempo_rojo_min: 30 });
+  const [nuevoSemaforo, setNuevoSemaforo] = useState({ nombre: '', piso_id: '', tiempo_verde_min: 15, tiempo_rojo_min: 30, pin: '' });
   const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
   const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
@@ -1809,11 +1809,16 @@ const eliminarVisualizador = async (visId, usuario) => {
       mostrarSplash('Complete nombre y piso');
       return;
     }
+    if (nuevoSemaforo.pin && !/^\d{4}$/.test(nuevoSemaforo.pin)) {
+      mostrarSplash('El PIN debe ser de 4 dígitos numéricos');
+      return;
+    }
     const payload = {
       nombre: nuevoSemaforo.nombre.trim(),
       piso_id: nuevoSemaforo.piso_id,
       tiempo_verde_min: Number(nuevoSemaforo.tiempo_verde_min) || 15,
       tiempo_rojo_min: Number(nuevoSemaforo.tiempo_rojo_min) || 30,
+      pin: nuevoSemaforo.pin || null,
     };
     if (semaforoEditando) {
       const { error } = await supabase.from('semaforos').update(payload).eq('id', semaforoEditando.id);
@@ -1824,7 +1829,7 @@ const eliminarVisualizador = async (visId, usuario) => {
     }
     setMostrarModalSemaforo(false);
     setSemaforoEditando(null);
-    setNuevoSemaforo({ nombre: '', piso_id: '', tiempo_verde_min: 15, tiempo_rojo_min: 30 });
+    setNuevoSemaforo({ nombre: '', piso_id: '', tiempo_verde_min: 15, tiempo_rojo_min: 30, pin: '' });
     cargarSemaforos();
   };
 
@@ -1838,7 +1843,7 @@ const eliminarVisualizador = async (visId, usuario) => {
 
   const abrirEditarSemaforo = (sem) => {
     setSemaforoEditando(sem);
-    setNuevoSemaforo({ nombre: sem.nombre, piso_id: sem.piso_id, tiempo_verde_min: sem.tiempo_verde_min, tiempo_rojo_min: sem.tiempo_rojo_min });
+    setNuevoSemaforo({ nombre: sem.nombre, piso_id: sem.piso_id, tiempo_verde_min: sem.tiempo_verde_min, tiempo_rojo_min: sem.tiempo_rojo_min, pin: sem.pin || '' });
     setMostrarModalSemaforo(true);
   };
 
@@ -3592,6 +3597,17 @@ const eliminarVisualizador = async (visId, usuario) => {
                 </div>
               </div>
               <p className="text-xs text-slate-500">🟢 verde {nuevoSemaforo.tiempo_verde_min} min → 🟡 amarillo {nuevoSemaforo.tiempo_rojo_min} min → 🔴 rojo (sin límite, se resetea al escanear el QR).</p>
+              <div>
+                <label className="text-xs text-slate-300 uppercase tracking-wider block mb-1">🔐 PIN de validación (4 dígitos)</label>
+                <input
+                  type="password" inputMode="numeric" maxLength={4} pattern="\d{4}"
+                  className="w-full bg-slate-800 p-3 rounded-xl border border-slate-600 text-base focus:ring-2 focus:ring-slate-400 outline-none text-white tracking-[0.4em] text-center font-mono"
+                  placeholder="••••"
+                  value={nuevoSemaforo.pin}
+                  onChange={e => setNuevoSemaforo({...nuevoSemaforo, pin: e.target.value.replace(/\D/g, '').slice(0,4)})}
+                />
+                <p className="text-[10px] text-slate-500 mt-1">El personal debe ingresarlo al escanear el QR. Dejalo vacío para no requerir PIN.</p>
+              </div>
               <button type="submit" className="w-full bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold uppercase tracking-wider transition-all">
                 {semaforoEditando ? '💾 Guardar cambios' : '✅ Crear semáforo'}
               </button>
