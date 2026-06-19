@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS semaforo_coordenadas (
   croquis_id UUID NOT NULL REFERENCES croquis_pisos(id) ON DELETE CASCADE,
   x NUMERIC NOT NULL,
   y NUMERIC NOT NULL,
+  escala NUMERIC NOT NULL DEFAULT 0.6,
   UNIQUE(semaforo_id, croquis_id)
 );
 

@@ -438,10 +438,13 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         setCoordenadas(coordsMap);
 
         const semCoordsMap = {};
+        let escalaDB = null;
         semCoords?.forEach(c => {
           semCoordsMap[c.semaforo_id] = { x: c.x, y: c.y };
+          if (c.escala && escalaDB === null) escalaDB = parseFloat(c.escala);
         });
         setCoordenadasSemaforos(semCoordsMap);
+        if (escalaDB !== null) setSemaforoScale(escalaDB);
         // Forzar re-render de marcadores
         setMarcadoresKey(prev => prev + 1);
       } else {
@@ -458,7 +461,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   };
 
   // ==================== Guardar coordenada semáforo ====================
-  const guardarCoordenadaSemaforo = async (semaforoId, x, y) => {
+  const guardarCoordenadaSemaforo = async (semaforoId, x, y, escala) => {
     if (!croquis) return;
     try {
       await supabase.from('semaforo_coordenadas').upsert({
@@ -466,6 +469,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         croquis_id: croquis.id,
         x: Math.round(x),
         y: Math.round(y),
+        escala: escala ?? semaforoScale,
       }, { onConflict: 'semaforo_id,croquis_id' });
       setCoordenadasSemaforos(prev => ({ ...prev, [semaforoId]: { x, y } }));
       setMarcadoresKey(prev => prev + 1);
@@ -1127,9 +1131,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
               {modoEdicion && semaforos.some(s => String(s.piso_id) === String(normalizedPisoId)) && (
                 <div className="flex items-center gap-1 text-xs text-slate-400">
                   <span>🚦 Tamaño:</span>
-                  <button onClick={() => { const v = Math.max(0.2, +(semaforoScale - 0.1).toFixed(1)); setSemaforoScale(v); localStorage.setItem(`semaforoScale_${pisoId}`, v); }} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">−</button>
+                  <button onClick={async () => { const v = Math.max(0.2, +(semaforoScale - 0.1).toFixed(1)); setSemaforoScale(v); localStorage.setItem(`semaforoScale_${pisoId}`, v); for (const [sid, coord] of Object.entries(coordenadasSemaforos)) { await guardarCoordenadaSemaforo(Number(sid), coord.x, coord.y, v); } }} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">−</button>
                   <span className="w-8 text-center font-mono">{Math.round(semaforoScale * 100)}%</span>
-                  <button onClick={() => { const v = Math.min(2.0, +(semaforoScale + 0.1).toFixed(1)); setSemaforoScale(v); localStorage.setItem(`semaforoScale_${pisoId}`, v); }} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">+</button>
+                  <button onClick={async () => { const v = Math.min(2.0, +(semaforoScale + 0.1).toFixed(1)); setSemaforoScale(v); localStorage.setItem(`semaforoScale_${pisoId}`, v); for (const [sid, coord] of Object.entries(coordenadasSemaforos)) { await guardarCoordenadaSemaforo(Number(sid), coord.x, coord.y, v); } }} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">+</button>
                 </div>
               )}
               <div className="text-xs text-slate-500">
