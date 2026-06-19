@@ -3498,7 +3498,6 @@ const eliminarVisualizador = async (visId, usuario) => {
                   : mins < sem.tiempo_rojo_min ? 'amarillo' : 'rojo';
                 const colorBadge = estado === 'verde' ? 'bg-green-500' : estado === 'amarillo' ? 'bg-yellow-500' : estado === 'rojo' ? 'bg-red-500' : 'bg-slate-600';
                 const textoEstado = estado === 'verde' ? `Verde (hace ${mins} min)` : estado === 'amarillo' ? `Amarillo (hace ${mins} min)` : estado === 'rojo' ? `🔴 Rojo (hace ${mins} min)` : 'Sin escaneos';
-                const qrUrl = `${window.location.origin}/semaforo?token=${sem.qr_token}`;
                 return (
                   <div key={sem.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col gap-3">
                     <div className="flex items-start justify-between">
