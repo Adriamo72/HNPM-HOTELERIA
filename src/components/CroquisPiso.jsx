@@ -36,7 +36,7 @@ const getCamasNoUtilizadasPorAislamiento = (ocup) => {
   return Math.max(0, totalCamas - camasOcupadasReales);
 };
 
-const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false, fechaConsulta, onFechaChange }) => {
+const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false, fechaConsulta, onFechaChange, semaforos = [] }) => {
   const normalizedPisoId = typeof pisoId === 'string' && pisoId.trim() !== '' && !Number.isNaN(Number(pisoId))
     ? Number(pisoId)
     : pisoId;
@@ -79,6 +79,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   // Estado para forzar re-render de marcadores
   const [marcadoresKey, setMarcadoresKey] = useState(0);
   const [tooltipHabitacion, setTooltipHabitacion] = useState(null);
+  const [coordenadasSemaforos, setCoordenadasSemaforos] = useState({});
+  const [semaforo_tick, setSemaforoTick] = useState(0);
   const [imgRenderedWidth, setImgRenderedWidth] = useState(600);
   const [vp, setVp] = useState({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, scale: 1 });
   
@@ -114,6 +116,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // ==================== Tick cada minuto para actualizar colores de semáforos ====================
+  useEffect(() => {
+    const interval = setInterval(() => setSemaforoTick(t => t + 1), 60000);
+    return () => clearInterval(interval);
   }, []);
 
   // ==================== RESETEAR COMPLETO cuando cambia el pisoId ====================
@@ -408,10 +416,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       if (croquisData) {
         setCroquis(croquisData);
         
-        const { data: coords, error: coordError } = await supabase
-          .from('habitacion_coordenadas')
-          .select('*')
-          .eq('croquis_id', croquisData.id);
+        const [{ data: coords, error: coordError }, { data: semCoords }] = await Promise.all([
+          supabase.from('habitacion_coordenadas').select('*').eq('croquis_id', croquisData.id),
+          supabase.from('semaforo_coordenadas').select('*').eq('croquis_id', croquisData.id),
+        ]);
         
         if (coordError) {
           console.error('Error cargando coordenadas:', coordError);
@@ -422,6 +430,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           coordsMap[c.habitacion_id] = { x: c.x, y: c.y, ancho: c.ancho, alto: c.alto };
         });
         setCoordenadas(coordsMap);
+
+        const semCoordsMap = {};
+        semCoords?.forEach(c => {
+          semCoordsMap[c.semaforo_id] = { x: c.x, y: c.y };
+        });
+        setCoordenadasSemaforos(semCoordsMap);
         // Forzar re-render de marcadores
         setMarcadoresKey(prev => prev + 1);
       } else {
@@ -434,6 +448,23 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     } finally {
       setCargando(false);
       setCargandoCoordenadas(false);
+    }
+  };
+
+  // ==================== Guardar coordenada semáforo ====================
+  const guardarCoordenadaSemaforo = async (semaforoId, x, y) => {
+    if (!croquis) return;
+    try {
+      await supabase.from('semaforo_coordenadas').upsert({
+        semaforo_id: semaforoId,
+        croquis_id: croquis.id,
+        x: Math.round(x),
+        y: Math.round(y),
+      }, { onConflict: 'semaforo_id,croquis_id' });
+      setCoordenadasSemaforos(prev => ({ ...prev, [semaforoId]: { x, y } }));
+      setMarcadoresKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Error guardando coordenada semáforo:', error);
     }
   };
 
@@ -536,7 +567,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     }
   };
 
-  // ==================== Click para posicionar habitación ====================
+  // ==================== Click para posicionar habitación o semáforo ====================
   const handleImageClick = async (e) => {
     if (!modoEdicion || modoMovimiento || arrastrando || !croquis) return;
     
@@ -547,24 +578,35 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
+
+    const semaforosPiso = semaforos.filter(s => String(s.piso_id) === String(normalizedPisoId));
+    const opcionesSemaforos = semaforosPiso.map(s => `S:${s.nombre}`).join('\n');
+    const opcionesHabs = habitaciones.map(h => `- ${h.nombre}`).join('\n');
     
-    const habitacionNombre = prompt(
-      `¿Qué habitación está en esta ubicación?\n\n` +
-      `Habitaciones disponibles:\n${habitaciones.map(h => `- ${h.nombre}`).join('\n')}\n\n` +
-      `Ingresa el nombre exacto:`
+    const eleccion = prompt(
+      `¿Qué vas a posicionar?\n\nHABITACIONES:\n${opcionesHabs}\n` +
+      (semaforosPiso.length > 0 ? `\nSEMÁFOROS (escribí exacto):\n${opcionesSemaforos}` : '') +
+      `\n\nIngresá el nombre exacto:`
     );
     
-    if (habitacionNombre) {
-      const hab = habitaciones.find(h => h.nombre === habitacionNombre.trim());
-      
-      if (hab) {
-        await guardarCoordenada(hab.id, x, y);
-        setMensaje(`✅ ${hab.nombre} posicionada`);
-        setTimeout(() => setMensaje(''), 1500);
-      } else {
-        setMensaje(`❌ No se encontró la habitación "${habitacionNombre}"`);
-        setTimeout(() => setMensaje(''), 2000);
-      }
+    if (!eleccion) return;
+
+    const semMatch = semaforosPiso.find(s => eleccion.trim() === `S:${s.nombre}` || eleccion.trim() === s.nombre);
+    if (semMatch) {
+      await guardarCoordenadaSemaforo(semMatch.id, x, y);
+      setMensaje(`✅ Semáforo "${semMatch.nombre}" posicionado`);
+      setTimeout(() => setMensaje(''), 1500);
+      return;
+    }
+
+    const hab = habitaciones.find(h => h.nombre === eleccion.trim());
+    if (hab) {
+      await guardarCoordenada(hab.id, x, y);
+      setMensaje(`✅ ${hab.nombre} posicionada`);
+      setTimeout(() => setMensaje(''), 1500);
+    } else {
+      setMensaje(`❌ No se encontró "${eleccion}"`);
+      setTimeout(() => setMensaje(''), 2000);
     }
   };
 
@@ -965,18 +1007,71 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 </div>
               );
             })}
+
+            {/* Marcadores de semáforos */}
+            {semaforos
+              .filter(s => String(s.piso_id) === String(normalizedPisoId))
+              .map(sem => {
+                const coord = coordenadasSemaforos[sem.id];
+                if (!coord) return null;
+                void semaforo_tick;
+                const mins = sem.ultimo_escaneo_at
+                  ? Math.floor((Date.now() - new Date(sem.ultimo_escaneo_at).getTime()) / 60000)
+                  : null;
+                const estado = mins === null ? 'sin-datos'
+                  : mins < sem.tiempo_amarillo_min ? 'verde'
+                  : mins < sem.tiempo_rojo_min ? 'amarillo' : 'rojo';
+                const topColor = estado === 'rojo' ? 'bg-red-500 animate-pulse' : 'bg-gray-700';
+                const midColor = estado === 'amarillo' ? 'bg-yellow-400' : 'bg-gray-700';
+                const botColor = estado === 'verde' ? 'bg-green-500 animate-pulse' : 'bg-gray-700';
+                const tituloEstado = estado === 'sin-datos' ? 'Sin escaneos aún'
+                  : `${estado.charAt(0).toUpperCase() + estado.slice(1)} — hace ${mins} min`;
+                const markerScale = Math.min(1, Math.max(0.42, (imgRenderedWidth * 0.028) / 38));
+                return (
+                  <div
+                    key={`sem-${sem.id}`}
+                    className="absolute"
+                    style={{
+                      left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
+                      top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
+                      transform: `translate(-50%, -50%) scale(${markerScale.toFixed(3)})`,
+                      transformOrigin: 'center center',
+                      zIndex: 20,
+                    }}
+                    title={`🚦 ${sem.nombre} — ${tituloEstado}`}
+                  >
+                    <div className="flex flex-col items-center bg-slate-900/90 border border-slate-600 rounded-lg px-1.5 py-1 shadow-xl gap-0.5" style={{ minWidth: '32px' }}>
+                      <div className={`w-5 h-5 rounded-full border border-black/30 shadow-inner ${topColor}`}></div>
+                      <div className={`w-5 h-5 rounded-full border border-black/30 shadow-inner ${midColor}`}></div>
+                      <div className={`w-5 h-5 rounded-full border border-black/30 shadow-inner ${botColor}`}></div>
+                      <span className="text-[8px] text-slate-300 font-bold leading-none mt-0.5 text-center w-full truncate">{sem.nombre}</span>
+                    </div>
+                  </div>
+                );
+              })
+            }
           </React.Fragment>
         </div>
       </div>
 
       <div className="p-3 border-t border-slate-700">
         <div className="flex flex-wrap justify-between items-center gap-2">
-          <div className="flex gap-4 text-xs">
+          <div className="flex gap-4 text-xs flex-wrap">
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div> Disponible</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Ocupada</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500"></div> Aislamiento</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div> Reparación</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-500"></div> Otros</span>
+            {semaforos.some(s => String(s.piso_id) === String(normalizedPisoId)) && (
+              <span className="flex items-center gap-1 border-l border-slate-700 pl-3">
+                <div className="flex flex-col gap-0.5">
+                  <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                  <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
+                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                </div>
+                Semáforo limpieza
+              </span>
+            )}
           </div>
           {!esVisualizador && (
             <div className="text-xs text-slate-500">

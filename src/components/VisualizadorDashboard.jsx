@@ -45,6 +45,7 @@ const VisualizadorDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
   const [pisos, setPisos] = useState([]);
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
+  const [semaforos, setSemaforos] = useState([]);
   const [movimientosAgrupados, setMovimientosAgrupados] = useState({});
   const [stockPañol, setStockPañol] = useState({});
   const [stockUso, setStockUso] = useState({});
@@ -279,15 +280,17 @@ const VisualizadorDashboard = () => {
         queryOtros = queryOtros.lte('fecha', fechaSeleccionada);
       }
 
-      const [resPisos, resHabs, resOcupacion, resReparacion, resOtros] = await Promise.all([
+      const [resPisos, resHabs, resOcupacion, resReparacion, resOtros, resSemaforos] = await Promise.all([
         supabase.from('pisos').select('*').order('nombre_piso'),
         supabase.from('habitaciones_especiales').select('*').order('nombre'),
         queryOcupacion,
         queryReparacion,
-        queryOtros
+        queryOtros,
+        supabase.from('semaforos').select('*').order('piso_id'),
       ]);
       setPisos(resPisos.data || []);
       setHabitacionesEspeciales(resHabs.data || []);
+      setSemaforos(resSemaforos.data || []);
       // Usar habitaciones_especiales como habitaciones principales
       setHabitaciones(resHabs.data || []);
       // Combinar todos los datos de ocupación
@@ -943,6 +946,7 @@ const VisualizadorDashboard = () => {
               pisoId={pisoSeleccionado}
               pisoNombre={pisos.find(p => String(p.id) === String(pisoSeleccionado))?.nombre_piso}
               habitaciones={habitacionesEspeciales.filter(h => String(h.piso_id) === String(pisoSeleccionado))}
+              semaforos={semaforos}
               esVisualizador={true}
               fechaConsulta={fechaSeleccionada}
               onFechaChange={setFechaSeleccionada}

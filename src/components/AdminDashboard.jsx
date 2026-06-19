@@ -102,6 +102,10 @@ const AdminDashboard = () => {
   const [pisoSeleccionado, setPisoSeleccionado] = useState('');
   const [habitacionStatus, setHabitacionStatus] = useState({});
   const [habitacionesAbiertas, setHabitacionesAbiertas] = useState({});
+  const [semaforos, setSemaforos] = useState([]);
+  const [mostrarModalSemaforo, setMostrarModalSemaforo] = useState(false);
+  const [semaforoEditando, setSemaforoEditando] = useState(null);
+  const [nuevoSemaforo, setNuevoSemaforo] = useState({ nombre: '', piso_id: '', tiempo_amarillo_min: 15, tiempo_rojo_min: 30 });
   const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
   const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
@@ -179,6 +183,8 @@ const AdminDashboard = () => {
             });
           }
           await cargarEstadoHabitaciones(resHabs.data || []);
+          const { data: semData } = await supabase.from('semaforos').select('*').order('piso_id');
+          setSemaforos(semData || []);
         }
 
         if (tipo === 'monitor' || tipo === 'todos') {
@@ -1791,6 +1797,51 @@ const eliminarVisualizador = async (visId, usuario) => {
     }
   };
 
+  // ==================== GESTIÓN DE SEMÁFOROS ====================
+  const cargarSemaforos = async () => {
+    const { data } = await supabase.from('semaforos').select('*').order('piso_id');
+    setSemaforos(data || []);
+  };
+
+  const guardarSemaforo = async (e) => {
+    e.preventDefault();
+    if (!nuevoSemaforo.nombre.trim() || !nuevoSemaforo.piso_id) {
+      mostrarSplash('Complete nombre y piso');
+      return;
+    }
+    const payload = {
+      nombre: nuevoSemaforo.nombre.trim(),
+      piso_id: Number(nuevoSemaforo.piso_id),
+      tiempo_amarillo_min: Number(nuevoSemaforo.tiempo_amarillo_min) || 15,
+      tiempo_rojo_min: Number(nuevoSemaforo.tiempo_rojo_min) || 30,
+    };
+    if (semaforoEditando) {
+      const { error } = await supabase.from('semaforos').update(payload).eq('id', semaforoEditando.id);
+      if (!error) { mostrarSplash('✅ Semáforo actualizado'); }
+    } else {
+      const { error } = await supabase.from('semaforos').insert([payload]);
+      if (!error) { mostrarSplash('✅ Semáforo creado'); }
+    }
+    setMostrarModalSemaforo(false);
+    setSemaforoEditando(null);
+    setNuevoSemaforo({ nombre: '', piso_id: '', tiempo_amarillo_min: 15, tiempo_rojo_min: 30 });
+    cargarSemaforos();
+  };
+
+  const eliminarSemaforo = async (id, nombre) => {
+    if (window.confirm(`¿Eliminar semáforo "${nombre}"?`)) {
+      await supabase.from('semaforos').delete().eq('id', id);
+      mostrarSplash('✅ Semáforo eliminado');
+      cargarSemaforos();
+    }
+  };
+
+  const abrirEditarSemaforo = (sem) => {
+    setSemaforoEditando(sem);
+    setNuevoSemaforo({ nombre: sem.nombre, piso_id: sem.piso_id, tiempo_amarillo_min: sem.tiempo_amarillo_min, tiempo_rojo_min: sem.tiempo_rojo_min });
+    setMostrarModalSemaforo(true);
+  };
+
   // ==================== GESTIÓN DE HABITACIONES ====================
   const agregarHabitacion = async (pisoId, pisoSlug) => {
     const nombre = prompt("Nombre de la Habitación (Ej: Medico Interno):");
@@ -2234,6 +2285,7 @@ const eliminarVisualizador = async (visId, usuario) => {
               pisoId={pisoSeleccionado}
               pisoNombre={pisos.find(p => String(p.id) === String(pisoSeleccionado))?.nombre_piso}
               habitaciones={habitacionesEspeciales.filter(h => String(h.piso_id) === String(pisoSeleccionado))}
+              semaforos={semaforos}
               esVisualizador={false}
               fechaConsulta={fechaSeleccionada}
               onFechaChange={setFechaSeleccionada}
@@ -3416,11 +3468,140 @@ const eliminarVisualizador = async (visId, usuario) => {
             )}
           </div>
         </section>
+
+        {/* Gestión de Semáforos de Limpieza */}
+        <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-500 uppercase tracking-wider">🚦 Semáforos de Limpieza</h3>
+              <p className="text-xs text-slate-500 mt-1">Indicadores de tiempo desde última limpieza. Verde → Amarillo → Rojo según tiempo configurado.</p>
+            </div>
+            <button
+              onClick={() => { setSemaforoEditando(null); setNuevoSemaforo({ nombre: '', piso_id: pisos[0]?.id || '', tiempo_amarillo_min: 15, tiempo_rojo_min: 30 }); setMostrarModalSemaforo(true); }}
+              className="bg-green-700 hover:bg-green-600 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
+            >
+              + Nuevo Semáforo
+            </button>
+          </div>
+
+          {semaforos.length === 0 ? (
+            <div className="text-center text-slate-500 text-sm py-6">📭 No hay semáforos. Creá el primero con el botón de arriba.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {semaforos.map(sem => {
+                const pisoNombre = pisos.find(p => p.id === sem.piso_id)?.nombre_piso || 'Piso desconocido';
+                const mins = sem.ultimo_escaneo_at
+                  ? Math.floor((Date.now() - new Date(sem.ultimo_escaneo_at).getTime()) / 60000)
+                  : null;
+                const estado = mins === null ? 'sin-datos'
+                  : mins < sem.tiempo_amarillo_min ? 'verde'
+                  : mins < sem.tiempo_rojo_min ? 'amarillo' : 'rojo';
+                const colorBadge = estado === 'verde' ? 'bg-green-500' : estado === 'amarillo' ? 'bg-yellow-500' : estado === 'rojo' ? 'bg-red-500' : 'bg-slate-600';
+                const textoEstado = estado === 'verde' ? `Verde (hace ${mins} min)` : estado === 'amarillo' ? `Amarillo (hace ${mins} min)` : estado === 'rojo' ? `Rojo (hace ${mins} min)` : 'Sin escaneos';
+                const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
+                const qrUrl = `${window.location.origin}/semaforo?token=${sem.qr_token}`;
+                return (
+                  <div key={sem.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col gap-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <div className={`w-4 h-4 rounded-full ${estado === 'rojo' ? 'bg-red-500' : 'bg-red-900/40'}`}></div>
+                          <div className={`w-4 h-4 rounded-full ${estado === 'amarillo' ? 'bg-yellow-400' : 'bg-yellow-900/40'}`}></div>
+                          <div className={`w-4 h-4 rounded-full ${estado === 'verde' ? 'bg-green-500 animate-pulse' : 'bg-green-900/40'}`}></div>
+                        </div>
+                        <div>
+                          <p className="text-white font-bold text-sm">{sem.nombre}</p>
+                          <p className="text-slate-500 text-xs">{pisoNombre}</p>
+                          <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-bold text-white ${colorBadge}`}>{textoEstado}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => abrirEditarSemaforo(sem)} className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg transition-all">✎ Editar</button>
+                        <button onClick={() => eliminarSemaforo(sem.id, sem.nombre)} className="text-xs bg-red-900/30 hover:bg-red-600 text-red-400 hover:text-white px-2 py-1 rounded-lg transition-all">✕</button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>🟡 {sem.tiempo_amarillo_min} min → 🔴 {sem.tiempo_rojo_min} min</span>
+                      <button
+                        onClick={() => { const w = window.open('','','width=300,height=300'); w.document.write(`<html><body style='background:#000;display:flex;align-items:center;justify-content:center;height:100vh'><img src='https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}' /></body></html>`); }}
+                        className="inline-flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg transition-all"
+                      >
+                        📱 Ver QR
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </>
     )}
   </div>
 )}
       
+      {/* Modal Semáforo */}
+      {mostrarModalSemaforo && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-green-800">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-white">🚦 {semaforoEditando ? 'Editar Semáforo' : 'Nuevo Semáforo'}</h3>
+              <button onClick={() => { setMostrarModalSemaforo(false); setSemaforoEditando(null); }} className="text-slate-500 hover:text-white text-2xl">×</button>
+            </div>
+            <form onSubmit={guardarSemaforo} className="space-y-4">
+              <div>
+                <label className="text-xs text-slate-400 uppercase tracking-wider block mb-1">Nombre del sector</label>
+                <input
+                  className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-green-500 outline-none text-white"
+                  placeholder="Ej: Pasillo Central, Baños 4to piso"
+                  value={nuevoSemaforo.nombre}
+                  onChange={e => setNuevoSemaforo({...nuevoSemaforo, nombre: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 uppercase tracking-wider block mb-1">Piso / Sector</label>
+                <select
+                  className="w-full bg-slate-800 p-3 rounded-xl border border-slate-700 text-base focus:ring-2 focus:ring-green-500 outline-none text-white"
+                  value={nuevoSemaforo.piso_id}
+                  onChange={e => setNuevoSemaforo({...nuevoSemaforo, piso_id: e.target.value})}
+                  required
+                >
+                  <option value="">Seleccioná un piso</option>
+                  {pisos.map(p => <option key={p.id} value={p.id}>{p.nombre_piso}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-yellow-400 uppercase tracking-wider block mb-1">🟡 Tiempo amarillo (min)</label>
+                  <input
+                    type="number" min="1" max="480"
+                    className="w-full bg-slate-800 p-3 rounded-xl border border-yellow-700/50 text-base focus:ring-2 focus:ring-yellow-500 outline-none text-white"
+                    value={nuevoSemaforo.tiempo_amarillo_min}
+                    onChange={e => setNuevoSemaforo({...nuevoSemaforo, tiempo_amarillo_min: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-red-400 uppercase tracking-wider block mb-1">🔴 Tiempo rojo (min)</label>
+                  <input
+                    type="number" min="1" max="480"
+                    className="w-full bg-slate-800 p-3 rounded-xl border border-red-700/50 text-base focus:ring-2 focus:ring-red-500 outline-none text-white"
+                    value={nuevoSemaforo.tiempo_rojo_min}
+                    onChange={e => setNuevoSemaforo({...nuevoSemaforo, tiempo_rojo_min: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">🟢 verde hasta los {nuevoSemaforo.tiempo_amarillo_min} min → 🟡 amarillo hasta los {nuevoSemaforo.tiempo_rojo_min} min → 🔴 rojo.</p>
+              <button type="submit" className="w-full bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold uppercase tracking-wider transition-all">
+                {semaforoEditando ? '💾 Guardar cambios' : '✅ Crear semáforo'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal para crear nuevo admin */}
       {mostrarModalAdmin && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">

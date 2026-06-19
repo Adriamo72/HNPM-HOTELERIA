@@ -4,6 +4,7 @@ import FormularioPiso from './components/FormularioPiso';
 import AdminDashboard from './components/AdminDashboard';
 import RecorridoOcupacion from './components/RecorridoOcupacion';
 import VisualizadorDashboard from './components/VisualizadorDashboard'; // Nuevo componente
+import EscaneoSemaforo from './pages/EscaneoSemaforo';
 
 function App() {
   const [usuarioLogueado, setUsuarioLogueado] = useState(null);
@@ -74,6 +75,11 @@ function App() {
       setSlugCompleto(slug);
       console.log("📌 Modo HABITACION (ropa blanca):", slug);
     } 
+    // Ruta para escaneo de semáforo de limpieza
+    else if (path.includes('/semaforo')) {
+      setModoAcceso('semaforo');
+      console.log("📌 Modo SEMÁFORO");
+    }
     // Ruta para autenticación (login con QR personal)
     else if (path.includes('/auth/')) {
       console.log("📌 Ruta de autenticación detectada");
@@ -116,6 +122,10 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  if (modoAcceso === 'semaforo') {
+    return <EscaneoSemaforo />;
   }
 
   if (!usuarioLogueado) {

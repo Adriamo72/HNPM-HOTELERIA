@@ -123,9 +123,24 @@ serve(async (req) => {
     // ============================================
     // SYSTEM PROMPT CON CONTEXTO REAL
     // ============================================
+
+    // Totales globales por tipo de habitación
+    let globalInternacion = 0, globalReparacion = 0, globalOtros = 0
+    for (const piso of Object.values(resumenPorPiso)) {
+      for (const h of piso.habitaciones) {
+        if (h.tipo === 'INTERNACIÓN') globalInternacion++
+        else if (h.tipo === 'EN REPARACIÓN') globalReparacion++
+        else globalOtros++
+      }
+    }
+
     const contextoPisos = Object.entries(resumenPorPiso)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([piso, datos]) => {
+        const internacion = datos.habitaciones.filter(h => h.tipo === 'INTERNACIÓN')
+        const reparacion = datos.habitaciones.filter(h => h.tipo === 'EN REPARACIÓN')
+        const otros = datos.habitaciones.filter(h => h.tipo === 'OTROS')
+
         const habsDetalle = datos.habitaciones
           .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }))
           .map(h => {
@@ -137,13 +152,21 @@ serve(async (req) => {
             }
             return info
           }).join('\n')
-        return `**${piso}**: ${datos.totalCamas} camas totales, ${datos.camasOcupadas} ocupadas, ${datos.camasDisponibles} disponibles, ${datos.camasBloqueadas} bloqueadas por aislamiento\n${habsDetalle}`
+
+        const resumenTipos = [
+          internacion.length > 0 ? `${internacion.length} de internación` : '',
+          reparacion.length > 0 ? `${reparacion.length} en reparación` : '',
+          otros.length > 0 ? `${otros.length} con otro destino` : '',
+        ].filter(Boolean).join(', ')
+
+        return `**${piso}** (${datos.habitaciones.length} habitaciones: ${resumenTipos}): ${datos.totalCamas} camas totales, ${datos.camasOcupadas} ocupadas, ${datos.camasDisponibles} disponibles, ${datos.camasBloqueadas} bloqueadas por aislamiento\n${habsDetalle}`
       }).join('\n\n')
 
     const systemPrompt = `Sos el asistente de hotelería del Hospital Nacional Posadas (HNPM). Respondés preguntas sobre ocupación de camas, estado de habitaciones, rechazos de pacientes y métricas del hospital. Respondés en español rioplatense, de forma clara y concisa.
 
 DATOS ACTUALES DEL HOSPITAL (en tiempo real):
-- Total global: ${globalCamas} camas, ${globalOcupadas} ocupadas, ${globalDisponibles} disponibles, ${globalBloqueadas} bloqueadas por aislamiento
+- Habitaciones totales: ${globalInternacion + globalReparacion + globalOtros} (${globalInternacion} de internación, ${globalReparacion} en reparación, ${globalOtros} con otro destino)
+- Camas totales: ${globalCamas} | Ocupadas: ${globalOcupadas} | Disponibles: ${globalDisponibles} | Bloqueadas por aislamiento: ${globalBloqueadas}
 - Ocupación global: ${globalCamas > 0 ? Math.round((globalOcupadas / globalCamas) * 100) : 0}%
 
 DETALLE POR PISO:
@@ -154,10 +177,19 @@ ${rechazosRecientes.length > 0
   ? rechazosRecientes.map(r => `- ${r.paciente} | ${r.obraSocial} | ${r.causa} | ${r.fecha}`).join('\n')
   : '- Sin rechazos recientes'}
 
+SISTEMA VISUAL DEL CROQUIS (colores de habitaciones en el mapa):
+- 🟡 **Amarillo**: habitación EN REPARACIÓN — fuera de servicio temporalmente
+- ⚫ **Gris**: habitación con OTRO DESTINO — no es de internación (ej: depósito, office, sala de procedimientos)
+- 🟢 **Verde parpadeante**: habitación de internación con CAMAS DISPONIBLES — tiene al menos una cama libre
+- 🔵 **Azul**: habitación de internación COMPLETA — todas las camas ocupadas, sin disponibilidad
+- 🔴 **Círculo rojo**: indica AISLAMIENTO ACTIVO — la habitación tiene un paciente en aislamiento, lo que bloquea las camas restantes aunque estén vacías físicamente
+
 INSTRUCCIONES:
 - Usá SIEMPRE los datos reales de arriba para responder. Nunca inventes números.
+- Para preguntas sobre tipos de habitación (internación, reparación, otros), usá los conteos explícitos del contexto.
 - Si te preguntan por un piso específico, filtrá exactamente por ese piso en los datos.
 - Si te preguntan por una habitación específica, buscala en el detalle de habitaciones.
+- Si te preguntan sobre colores o el sistema visual del croquis, explicá usando la leyenda de arriba.
 - Podés calcular porcentajes, comparar pisos, detectar el piso más ocupado, etc.
 - Si una pregunta no tiene respuesta en los datos, decilo claramente.
 - Respondé de forma breve y directa. Usá negrita (**texto**) para resaltar números clave.`
