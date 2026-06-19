@@ -82,6 +82,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [tooltipHabitacion, setTooltipHabitacion] = useState(null);
   const [coordenadasSemaforos, setCoordenadasSemaforos] = useState({});
   const [semaforo_tick, setSemaforoTick] = useState(0);
+  const [semaforoScale, setSemaforoScale] = useState(0.6);
   const [imgRenderedWidth, setImgRenderedWidth] = useState(600);
   const [vp, setVp] = useState({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, scale: 1 });
   
@@ -1053,12 +1054,14 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 const estado = mins === null ? 'sin-datos'
                   : mins < sem.tiempo_verde_min ? 'verde'
                   : mins < sem.tiempo_rojo_min ? 'amarillo' : 'rojo';
-                const topColor = estado === 'rojo' ? 'bg-red-500 animate-pulse' : 'bg-gray-700';
-                const midColor = estado === 'amarillo' ? 'bg-yellow-400' : 'bg-gray-700';
-                const botColor = estado === 'verde' ? 'bg-green-500 animate-pulse' : 'bg-gray-700';
-                const tituloEstado = estado === 'sin-datos' ? 'Sin escaneos aún'
+                const esRojo    = estado === 'rojo' || estado === 'sin-datos';
+                const esAmarillo = estado === 'amarillo';
+                const esVerde    = estado === 'verde';
+                const topColor = esRojo    ? 'bg-red-500 animate-pulse'    : 'bg-gray-800';
+                const midColor = esAmarillo ? 'bg-yellow-400'               : 'bg-gray-800';
+                const botColor = esVerde   ? 'bg-green-500 animate-pulse'  : 'bg-gray-800';
+                const tituloEstado = estado === 'sin-datos' ? 'Sin escaneos — requiere limpieza'
                   : `${estado.charAt(0).toUpperCase() + estado.slice(1)} — hace ${mins} min`;
-                const markerScale = Math.min(1, Math.max(0.42, (imgRenderedWidth * 0.028) / 38));
                 return (
                   <div
                     key={`sem-${sem.id}`}
@@ -1067,17 +1070,17 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                     style={{
                       left: `${(coord.x / (imageRef.current?.naturalWidth || 1)) * 100}%`,
                       top: `${(coord.y / (imageRef.current?.naturalHeight || 1)) * 100}%`,
-                      transform: `translate(-50%, -50%) scale(${markerScale.toFixed(3)})`,
+                      transform: `translate(-50%, -50%) scale(${semaforoScale.toFixed(2)})`,
                       transformOrigin: 'center center',
                       zIndex: 20,
                     }}
                     title={`🚦 ${sem.nombre} — ${tituloEstado}`}
                   >
-                    <div className="flex flex-col items-center bg-slate-900/90 border border-slate-600 rounded-lg px-1.5 py-1 shadow-xl gap-0.5" style={{ minWidth: '32px' }}>
-                      <div className={`w-5 h-5 rounded-full border border-black/30 shadow-inner ${topColor}`}></div>
-                      <div className={`w-5 h-5 rounded-full border border-black/30 shadow-inner ${midColor}`}></div>
-                      <div className={`w-5 h-5 rounded-full border border-black/30 shadow-inner ${botColor}`}></div>
-                      <span className="text-[8px] text-slate-300 font-bold leading-none mt-0.5 text-center w-full truncate">{sem.nombre}</span>
+                    <div className="flex flex-col items-center bg-slate-900 border border-slate-600 rounded-lg px-1 py-1 shadow-xl gap-0.5" style={{ width: '28px' }}>
+                      <div className={`w-4 h-4 rounded-full border border-black/40 shadow-inner ${topColor}`}></div>
+                      <div className={`w-4 h-4 rounded-full border border-black/40 shadow-inner ${midColor}`}></div>
+                      <div className={`w-4 h-4 rounded-full border border-black/40 shadow-inner ${botColor}`}></div>
+                      <span className="text-[7px] text-slate-400 font-bold leading-none mt-0.5 text-center w-full truncate">{sem.nombre}</span>
                     </div>
                   </div>
                 );
@@ -1107,8 +1110,18 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             )}
           </div>
           {!esVisualizador && (
-            <div className="text-xs text-slate-500">
-              {`🔍 Zoom: ${Math.round(zoom * 100)}% | 🖱️ ${modoMovimiento ? 'Arrastra marcadores' : (modoEdicion ? 'Click para posicionar' : 'Solo visualización')}`}
+            <div className="flex items-center gap-3 flex-wrap">
+              {modoEdicion && semaforos.some(s => String(s.piso_id) === String(normalizedPisoId)) && (
+                <div className="flex items-center gap-1 text-xs text-slate-400">
+                  <span>🚦 Tamaño:</span>
+                  <button onClick={() => setSemaforoScale(p => Math.max(0.2, +(p - 0.1).toFixed(1)))} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">−</button>
+                  <span className="w-8 text-center font-mono">{Math.round(semaforoScale * 100)}%</span>
+                  <button onClick={() => setSemaforoScale(p => Math.min(2.0, +(p + 0.1).toFixed(1)))} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">+</button>
+                </div>
+              )}
+              <div className="text-xs text-slate-500">
+                {`🔍 Zoom: ${Math.round(zoom * 100)}% | 🖱️ ${modoMovimiento ? 'Arrastra marcadores' : (modoEdicion ? 'Click para posicionar' : 'Solo visualización')}`}
+              </div>
             </div>
           )}
         </div>
