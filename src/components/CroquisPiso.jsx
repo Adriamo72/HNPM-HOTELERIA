@@ -82,7 +82,10 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [tooltipHabitacion, setTooltipHabitacion] = useState(null);
   const [coordenadasSemaforos, setCoordenadasSemaforos] = useState({});
   const [semaforo_tick, setSemaforoTick] = useState(0);
-  const [semaforoScale, setSemaforoScale] = useState(0.6);
+  const [semaforoScale, setSemaforoScale] = useState(() => {
+    const saved = localStorage.getItem(`semaforoScale_${pisoId}`);
+    return saved ? parseFloat(saved) : 0.6;
+  });
   const [tooltipSemaforo, setTooltipSemaforo] = useState(null);
   const [imgRenderedWidth, setImgRenderedWidth] = useState(600);
   const [vp, setVp] = useState({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, scale: 1 });
@@ -1124,9 +1127,9 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
               {modoEdicion && semaforos.some(s => String(s.piso_id) === String(normalizedPisoId)) && (
                 <div className="flex items-center gap-1 text-xs text-slate-400">
                   <span>🚦 Tamaño:</span>
-                  <button onClick={() => setSemaforoScale(p => Math.max(0.2, +(p - 0.1).toFixed(1)))} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">−</button>
+                  <button onClick={() => { const v = Math.max(0.2, +(semaforoScale - 0.1).toFixed(1)); setSemaforoScale(v); localStorage.setItem(`semaforoScale_${pisoId}`, v); }} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">−</button>
                   <span className="w-8 text-center font-mono">{Math.round(semaforoScale * 100)}%</span>
-                  <button onClick={() => setSemaforoScale(p => Math.min(2.0, +(p + 0.1).toFixed(1)))} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">+</button>
+                  <button onClick={() => { const v = Math.min(2.0, +(semaforoScale + 0.1).toFixed(1)); setSemaforoScale(v); localStorage.setItem(`semaforoScale_${pisoId}`, v); }} className="w-6 h-6 bg-slate-700 hover:bg-slate-600 rounded font-bold text-white leading-none">+</button>
                 </div>
               )}
               <div className="text-xs text-slate-500">
