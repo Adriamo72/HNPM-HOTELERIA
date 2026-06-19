@@ -1019,7 +1019,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                   ? Math.floor((Date.now() - new Date(sem.ultimo_escaneo_at).getTime()) / 60000)
                   : null;
                 const estado = mins === null ? 'sin-datos'
-                  : mins < sem.tiempo_amarillo_min ? 'verde'
+                  : mins < sem.tiempo_verde_min ? 'verde'
                   : mins < sem.tiempo_rojo_min ? 'amarillo' : 'rojo';
                 const topColor = estado === 'rojo' ? 'bg-red-500 animate-pulse' : 'bg-gray-700';
                 const midColor = estado === 'amarillo' ? 'bg-yellow-400' : 'bg-gray-700';

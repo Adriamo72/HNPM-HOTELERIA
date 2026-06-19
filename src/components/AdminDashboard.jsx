@@ -105,7 +105,7 @@ const AdminDashboard = () => {
   const [semaforos, setSemaforos] = useState([]);
   const [mostrarModalSemaforo, setMostrarModalSemaforo] = useState(false);
   const [semaforoEditando, setSemaforoEditando] = useState(null);
-  const [nuevoSemaforo, setNuevoSemaforo] = useState({ nombre: '', piso_id: '', tiempo_amarillo_min: 15, tiempo_rojo_min: 30 });
+  const [nuevoSemaforo, setNuevoSemaforo] = useState({ nombre: '', piso_id: '', tiempo_verde_min: 15, tiempo_rojo_min: 30 });
   const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
   const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
   const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
@@ -1811,8 +1811,8 @@ const eliminarVisualizador = async (visId, usuario) => {
     }
     const payload = {
       nombre: nuevoSemaforo.nombre.trim(),
-      piso_id: Number(nuevoSemaforo.piso_id),
-      tiempo_amarillo_min: Number(nuevoSemaforo.tiempo_amarillo_min) || 15,
+      piso_id: nuevoSemaforo.piso_id,
+      tiempo_verde_min: Number(nuevoSemaforo.tiempo_verde_min) || 15,
       tiempo_rojo_min: Number(nuevoSemaforo.tiempo_rojo_min) || 30,
     };
     if (semaforoEditando) {
@@ -1824,7 +1824,7 @@ const eliminarVisualizador = async (visId, usuario) => {
     }
     setMostrarModalSemaforo(false);
     setSemaforoEditando(null);
-    setNuevoSemaforo({ nombre: '', piso_id: '', tiempo_amarillo_min: 15, tiempo_rojo_min: 30 });
+    setNuevoSemaforo({ nombre: '', piso_id: '', tiempo_verde_min: 15, tiempo_rojo_min: 30 });
     cargarSemaforos();
   };
 
@@ -1838,7 +1838,7 @@ const eliminarVisualizador = async (visId, usuario) => {
 
   const abrirEditarSemaforo = (sem) => {
     setSemaforoEditando(sem);
-    setNuevoSemaforo({ nombre: sem.nombre, piso_id: sem.piso_id, tiempo_amarillo_min: sem.tiempo_amarillo_min, tiempo_rojo_min: sem.tiempo_rojo_min });
+    setNuevoSemaforo({ nombre: sem.nombre, piso_id: sem.piso_id, tiempo_verde_min: sem.tiempo_verde_min, tiempo_rojo_min: sem.tiempo_rojo_min });
     setMostrarModalSemaforo(true);
   };
 
@@ -3477,7 +3477,7 @@ const eliminarVisualizador = async (visId, usuario) => {
               <p className="text-xs text-slate-500 mt-1">Indicadores de tiempo desde última limpieza. Verde → Amarillo → Rojo según tiempo configurado.</p>
             </div>
             <button
-              onClick={() => { setSemaforoEditando(null); setNuevoSemaforo({ nombre: '', piso_id: pisos[0]?.id || '', tiempo_amarillo_min: 15, tiempo_rojo_min: 30 }); setMostrarModalSemaforo(true); }}
+              onClick={() => { setSemaforoEditando(null); setNuevoSemaforo({ nombre: '', piso_id: pisos[0]?.id || '', tiempo_verde_min: 15, tiempo_rojo_min: 30 }); setMostrarModalSemaforo(true); }}
               className="bg-green-700 hover:bg-green-600 px-4 py-2 rounded-xl text-sm font-black uppercase transition-all"
             >
               + Nuevo Semáforo
@@ -3494,10 +3494,10 @@ const eliminarVisualizador = async (visId, usuario) => {
                   ? Math.floor((Date.now() - new Date(sem.ultimo_escaneo_at).getTime()) / 60000)
                   : null;
                 const estado = mins === null ? 'sin-datos'
-                  : mins < sem.tiempo_amarillo_min ? 'verde'
+                  : mins < sem.tiempo_verde_min ? 'verde'
                   : mins < sem.tiempo_rojo_min ? 'amarillo' : 'rojo';
                 const colorBadge = estado === 'verde' ? 'bg-green-500' : estado === 'amarillo' ? 'bg-yellow-500' : estado === 'rojo' ? 'bg-red-500' : 'bg-slate-600';
-                const textoEstado = estado === 'verde' ? `Verde (hace ${mins} min)` : estado === 'amarillo' ? `Amarillo (hace ${mins} min)` : estado === 'rojo' ? `Rojo (hace ${mins} min)` : 'Sin escaneos';
+                const textoEstado = estado === 'verde' ? `Verde (hace ${mins} min)` : estado === 'amarillo' ? `Amarillo (hace ${mins} min)` : estado === 'rojo' ? `🔴 Rojo (hace ${mins} min)` : 'Sin escaneos';
                 const qrUrl = `${window.location.origin}/semaforo?token=${sem.qr_token}`;
                 return (
                   <div key={sem.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col gap-3">
@@ -3520,7 +3520,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>🟡 {sem.tiempo_amarillo_min} min → 🔴 {sem.tiempo_rojo_min} min</span>
+                      <span>🟢 {sem.tiempo_verde_min} min → 🟡 {sem.tiempo_rojo_min} min → 🔴 ∞</span>
                       <button
                         onClick={() => { const w = window.open('','','width=300,height=300'); w.document.write(`<html><body style='background:#000;display:flex;align-items:center;justify-content:center;height:100vh'><img src='https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}' /></body></html>`); }}
                         className="inline-flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg transition-all"
@@ -3572,27 +3572,27 @@ const eliminarVisualizador = async (visId, usuario) => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-yellow-400 uppercase tracking-wider block mb-1">🟡 Tiempo amarillo (min)</label>
+                  <label className="text-xs text-green-400 uppercase tracking-wider block mb-1">🟢 Tiempo verde (min)</label>
                   <input
                     type="number" min="1" max="480"
-                    className="w-full bg-slate-800 p-3 rounded-xl border border-yellow-700/50 text-base focus:ring-2 focus:ring-yellow-500 outline-none text-white"
-                    value={nuevoSemaforo.tiempo_amarillo_min}
-                    onChange={e => setNuevoSemaforo({...nuevoSemaforo, tiempo_amarillo_min: e.target.value})}
+                    className="w-full bg-slate-800 p-3 rounded-xl border border-green-700/50 text-base focus:ring-2 focus:ring-green-500 outline-none text-white"
+                    value={nuevoSemaforo.tiempo_verde_min}
+                    onChange={e => setNuevoSemaforo({...nuevoSemaforo, tiempo_verde_min: e.target.value})}
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-red-400 uppercase tracking-wider block mb-1">🔴 Tiempo rojo (min)</label>
+                  <label className="text-xs text-yellow-400 uppercase tracking-wider block mb-1">🟡 Tiempo amarillo (min)</label>
                   <input
                     type="number" min="1" max="480"
-                    className="w-full bg-slate-800 p-3 rounded-xl border border-red-700/50 text-base focus:ring-2 focus:ring-red-500 outline-none text-white"
+                    className="w-full bg-slate-800 p-3 rounded-xl border border-yellow-700/50 text-base focus:ring-2 focus:ring-yellow-500 outline-none text-white"
                     value={nuevoSemaforo.tiempo_rojo_min}
                     onChange={e => setNuevoSemaforo({...nuevoSemaforo, tiempo_rojo_min: e.target.value})}
                     required
                   />
                 </div>
               </div>
-              <p className="text-xs text-slate-500">🟢 verde hasta los {nuevoSemaforo.tiempo_amarillo_min} min → 🟡 amarillo hasta los {nuevoSemaforo.tiempo_rojo_min} min → 🔴 rojo.</p>
+              <p className="text-xs text-slate-500">🟢 verde {nuevoSemaforo.tiempo_verde_min} min → 🟡 amarillo {nuevoSemaforo.tiempo_rojo_min} min → 🔴 rojo (sin límite, se resetea al escanear el QR).</p>
               <button type="submit" className="w-full bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold uppercase tracking-wider transition-all">
                 {semaforoEditando ? '💾 Guardar cambios' : '✅ Crear semáforo'}
               </button>

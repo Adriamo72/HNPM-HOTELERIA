@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS semaforos (
   id BIGSERIAL PRIMARY KEY,
   piso_id UUID NOT NULL REFERENCES pisos(id) ON DELETE CASCADE,
   nombre TEXT NOT NULL,
-  tiempo_amarillo_min INTEGER NOT NULL DEFAULT 15,
+  tiempo_verde_min INTEGER NOT NULL DEFAULT 15,
   tiempo_rojo_min INTEGER NOT NULL DEFAULT 30,
   qr_token UUID NOT NULL DEFAULT gen_random_uuid(),
   ultimo_escaneo_at TIMESTAMPTZ NULL,
