@@ -83,6 +83,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const [coordenadasSemaforos, setCoordenadasSemaforos] = useState({});
   const [semaforo_tick, setSemaforoTick] = useState(0);
   const [semaforoScale, setSemaforoScale] = useState(0.6);
+  const [tooltipSemaforo, setTooltipSemaforo] = useState(null);
   const [imgRenderedWidth, setImgRenderedWidth] = useState(600);
   const [vp, setVp] = useState({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, scale: 1 });
   
@@ -813,7 +814,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   const handleMarkerClick = (e, hab, ocup, estilo) => {
     e.stopPropagation();
     if (modoEdicion) return;
+    setTooltipSemaforo(null);
     setTooltipHabitacion(prev => prev?.hab.id === hab.id ? null : { hab, ocup, estilo });
+  };
+
+  const handleSemaforoClick = (e, sem, estado, mins) => {
+    e.stopPropagation();
+    if (modoEdicion) return;
+    setTooltipHabitacion(null);
+    setTooltipSemaforo(prev => prev?.sem.id === sem.id ? null : { sem, estado, mins });
   };
 
   // ==================== Context menu (click derecho) ====================
@@ -1075,6 +1084,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                       zIndex: 20,
                     }}
                     title={`🚦 ${sem.nombre} — ${tituloEstado}`}
+                    onClick={(e) => handleSemaforoClick(e, sem, estado, mins)}
                   >
                     <div className="flex flex-col items-center bg-slate-900 border border-slate-600 rounded-lg px-1 py-1 shadow-xl gap-0.5" style={{ width: '28px' }}>
                       <div className={`w-4 h-4 rounded-full border border-black/40 shadow-inner ${topColor}`}></div>
@@ -1127,6 +1137,80 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         </div>
         {mensaje && <p className="text-center text-sm mt-2 text-blue-400">{mensaje}</p>}
       </div>
+
+      {/* Tooltip táctil semáforo */}
+      {tooltipSemaforo && ReactDOM.createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: vp.left,
+            top: vp.top,
+            width: vp.width,
+            height: vp.height,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'flex-end',
+            touchAction: 'none',
+          }}
+          onClick={() => setTooltipSemaforo(null)}
+        >
+          <div
+            className="bg-slate-800 border-t border-slate-600 rounded-t-2xl p-5 shadow-2xl"
+            style={{
+              width: `${vp.width * vp.scale}px`,
+              transform: `scale(${1 / vp.scale})`,
+              transformOrigin: 'bottom left',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-1">
+                  <div className={`w-5 h-5 rounded-full border border-black/30 ${tooltipSemaforo.estado === 'rojo' || tooltipSemaforo.estado === 'sin-datos' ? 'bg-red-500' : 'bg-gray-700'}`}></div>
+                  <div className={`w-5 h-5 rounded-full border border-black/30 ${tooltipSemaforo.estado === 'amarillo' ? 'bg-yellow-400' : 'bg-gray-700'}`}></div>
+                  <div className={`w-5 h-5 rounded-full border border-black/30 ${tooltipSemaforo.estado === 'verde' ? 'bg-green-500' : 'bg-gray-700'}`}></div>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Semáforo de limpieza</p>
+                  <h4 className="text-white font-bold text-lg">{tooltipSemaforo.sem.nombre}</h4>
+                </div>
+              </div>
+              <button
+                onClick={() => setTooltipSemaforo(null)}
+                className="w-8 h-8 bg-slate-700 rounded-full text-slate-300 text-xl font-bold flex items-center justify-center"
+              >×</button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="bg-slate-700/50 rounded-xl p-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Estado</p>
+                <p className={`font-bold text-base ${
+                  tooltipSemaforo.estado === 'verde' ? 'text-green-400' :
+                  tooltipSemaforo.estado === 'amarillo' ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  {tooltipSemaforo.estado === 'sin-datos' ? '🔴 Sin validar' :
+                   tooltipSemaforo.estado === 'verde' ? '🟢 Limpio' :
+                   tooltipSemaforo.estado === 'amarillo' ? '🟡 Revisar' : '🔴 Requiere limpieza'}
+                </p>
+              </div>
+              <div className="bg-slate-700/50 rounded-xl p-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Último escaneo</p>
+                <p className="font-bold text-white">
+                  {tooltipSemaforo.mins === null ? 'Nunca' : `Hace ${tooltipSemaforo.mins} min`}
+                </p>
+              </div>
+              <div className="bg-slate-700/50 rounded-xl p-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Verde hasta</p>
+                <p className="font-bold text-green-400">{tooltipSemaforo.sem.tiempo_verde_min} min</p>
+              </div>
+              <div className="bg-slate-700/50 rounded-xl p-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Rojo desde</p>
+                <p className="font-bold text-red-400">{tooltipSemaforo.sem.tiempo_rojo_min} min</p>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Tooltip táctil para móvil - renderizado via Portal, posicionado con VisualViewport para funcionar con pinch-zoom */}
       {tooltipHabitacion && ReactDOM.createPortal(
