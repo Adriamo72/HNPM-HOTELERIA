@@ -41,6 +41,20 @@ const formatearFechaLocal = (fechaISO) => {
   return new Date(year, month - 1, day).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+const ordenarPisos = (lista) => {
+  const prioridad = (nombre) => {
+    const n = nombre.toUpperCase().trim();
+    if (n.startsWith('PISO')) {
+      const num = parseInt(n.replace(/\D/g, ''), 10) || 0;
+      return num;
+    }
+    if (n.includes('PLANTA BAJA')) return -1;
+    if (n.includes('SUBSUELO')) return -2;
+    return -3;
+  };
+  return [...lista].sort((a, b) => prioridad(b.nombre_piso) - prioridad(a.nombre_piso));
+};
+
 const VisualizadorDashboard = () => {
   const [activeTab, setActiveTab] = useState('croquis');
   const [pisos, setPisos] = useState([]);
@@ -288,7 +302,8 @@ const VisualizadorDashboard = () => {
         queryOtros,
         supabase.from('semaforos').select('*').order('piso_id'),
       ]);
-      setPisos(resPisos.data || []);
+      const pisosOrdenados = ordenarPisos(resPisos.data || []);
+      setPisos(pisosOrdenados);
       setHabitacionesEspeciales(resHabs.data || []);
       setSemaforos(resSemaforos.data || []);
       // Usar habitaciones_especiales como habitaciones principales
@@ -327,16 +342,8 @@ const VisualizadorDashboard = () => {
       setOcupacion(ocupacionMap);
 
       // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
-      if (resPisos.data && resPisos.data.length > 0) {
-        setPisoSeleccionado(prev => {
-          if (prev) return prev;
-          const pisoMasAlto = resPisos.data.reduce((a, c) => {
-            const numA = parseInt(a.nombre_piso.replace(/\D/g, '')) || 0;
-            const numC = parseInt(c.nombre_piso.replace(/\D/g, '')) || 0;
-            return numC > numA ? c : a;
-          });
-          return pisoMasAlto.id;
-        });
+      if (pisosOrdenados.length > 0) {
+        setPisoSeleccionado(prev => (prev ? prev : pisosOrdenados[0].id));
       }
 
       // Cargar movimientos para monitor

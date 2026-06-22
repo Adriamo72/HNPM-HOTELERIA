@@ -146,6 +146,20 @@ const AdminDashboard = () => {
     return new Date(year, month - 1, day).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
+  const ordenarPisos = (lista) => {
+    const prioridad = (nombre) => {
+      const n = nombre.toUpperCase().trim();
+      if (n.startsWith('PISO')) {
+        const num = parseInt(n.replace(/\D/g, ''), 10) || 0;
+        return num; // piso alto arriba
+      }
+      if (n.includes('PLANTA BAJA')) return -1;
+      if (n.includes('SUBSUELO')) return -2;
+      return -3;
+    };
+    return [...lista].sort((a, b) => prioridad(b.nombre_piso) - prioridad(a.nombre_piso));
+  };
+
   const STOCK_CRITICO = 5;
   const [croquisKey, setCroquisKey] = useState(0);
   const [metricasData, setMetricasData] = useState([]);
@@ -164,23 +178,16 @@ const AdminDashboard = () => {
             supabase.from('habitaciones_especiales').select('*').order('nombre'),
             supabase.from('personal').select('*').order('apellido'),
           ]);
-          setPisos(resPisos.data || []);
+          const pisosOrdenados = ordenarPisos(resPisos.data || []);
+          setPisos(pisosOrdenados);
           setPersonal(resPers.data || []);
           // Usar habitaciones_especiales como habitaciones principales
           setHabitacionesEspeciales(resHabs.data || []);
           setHabitaciones(resHabs.data || []);
           await cargarEstadoHabitaciones(resHabs.data || []);
           // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
-          if (resPisos.data && resPisos.data.length > 0) {
-            setPisoSeleccionado(prev => {
-              if (prev) return prev;
-              const pisoMasAlto = resPisos.data.reduce((a, c) => {
-                const numA = parseInt(a.nombre_piso.replace(/\D/g, '')) || 0;
-                const numC = parseInt(c.nombre_piso.replace(/\D/g, '')) || 0;
-                return numC > numA ? c : a;
-              });
-              return pisoMasAlto.id;
-            });
+          if (pisosOrdenados.length > 0) {
+            setPisoSeleccionado(prev => (prev ? prev : pisosOrdenados[0].id));
           }
           await cargarEstadoHabitaciones(resHabs.data || []);
           const { data: semData } = await supabase.from('semaforos').select('*').order('piso_id');
@@ -189,7 +196,7 @@ const AdminDashboard = () => {
 
         if (tipo === 'monitor' || tipo === 'todos') {
           const resPisosMonitor = await supabase.from('pisos').select('*').order('nombre_piso');
-          const pisosMonitor = resPisosMonitor.data || [];
+          const pisosMonitor = ordenarPisos(resPisosMonitor.data || []);
 
           const pisoIds = pisosMonitor.map(p => p.id);
           const pisoNombrePorId = Object.fromEntries(pisosMonitor.map(p => [p.id, p.nombre_piso]));
@@ -939,7 +946,7 @@ const recargarAdmin = async () => {
     const resPisos = await supabase.from('pisos').select('*').order('nombre_piso');
     const resHabs = await supabase.from('habitaciones_especiales').select('*').order('nombre');
     
-    setPisos(resPisos.data || []);
+    setPisos(ordenarPisos(resPisos.data || []));
     setHabitacionesEspeciales(resHabs.data || []);
     
     // Recargar admins y visualizadores
