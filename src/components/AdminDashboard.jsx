@@ -1882,6 +1882,32 @@ const eliminarVisualizador = async (visId, usuario) => {
   };
 
   // ==================== GENERAR QR ====================
+  const descargarQRImagen = async (path, nombreArchivo) => {
+    const urlApp = `${window.location.origin}${path}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&format=png&data=${encodeURIComponent(urlApp)}`;
+    try {
+      const res = await fetch(qrUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${nombreArchivo}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      // Fallback por si falla CORS
+      const a = document.createElement('a');
+      a.href = qrUrl;
+      a.download = `${nombreArchivo}.png`;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  };
+
   const descargarQR = (path, titulo, textoAdicional = '') => {
   const urlApp = `${window.location.origin}${path}`; 
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlApp)}`;
@@ -3533,10 +3559,10 @@ const eliminarVisualizador = async (visId, usuario) => {
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>🟢 {sem.tiempo_verde_min} min → 🟡 {sem.tiempo_rojo_min} min → 🔴 ∞</span>
                       <button
-                        onClick={() => descargarQR(`/semaforo?token=${sem.qr_token}`, `Div. Maestranza - ${sem.nombre}`, `${pisoNombre}`)}
+                        onClick={() => descargarQRImagen(`/semaforo?token=${sem.qr_token}`, `QR_DivMaestranza_${sem.nombre.replace(/[^a-zA-Z0-9]/g, '_')}`)}
                         className="inline-flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg transition-all"
                       >
-                        📱 Ver QR
+                        📥 Descargar QR
                       </button>
                     </div>
                   </div>

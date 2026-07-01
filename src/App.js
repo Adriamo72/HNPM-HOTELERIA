@@ -90,6 +90,27 @@ function App() {
     }
   }, []);
 
+  // Controlador de migración de dominio institucional
+  useEffect(() => {
+    const esDominioViejo = window.location.hostname === 'hoteleria-hnpm.vercel.app';
+    const esPWAInstalada = window.matchMedia('(display-mode: standalone)').matches 
+      || window.navigator.standalone 
+      || document.referrer.includes('android-app://');
+
+    if (esDominioViejo) {
+      const nuevaRutaCompleta = 'https://hoteleria-hnpm.net.ar' + window.location.pathname + window.location.search;
+      if (esPWAInstalada) {
+        alert(
+          "¡Atención! Hotelería HNPM se actualizó al nuevo dominio (.net.ar).\n\n" +
+          "Al presionar Aceptar, lo redirigiremos al nuevo sitio para que puedas instalar la aplicación definitiva."
+        );
+        window.location.href = nuevaRutaCompleta;
+      } else {
+        window.location.href = nuevaRutaCompleta;
+      }
+    }
+  }, []);
+
   const manejarLogin = (usuario) => {
     console.log("✅ Usuario autenticado:", usuario.apellido);
     setUsuarioLogueado(usuario.dni);
