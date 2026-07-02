@@ -13,6 +13,8 @@ function App() {
   const [modoAcceso, setModoAcceso] = useState(null);
   const [slugCompleto, setSlugCompleto] = useState(null);
   const [cargandoSesion, setCargandoSesion] = useState(true);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [pwaInstalada, setPwaInstalada] = useState(false);
 
   // Verificar sesión guardada al cargar
   useEffect(() => {
@@ -110,6 +112,39 @@ function App() {
       }
     }
   }, []);
+
+  // Capturar evento de instalación PWA
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      setPwaInstalada(true);
+    };
+
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    setPwaInstalada(standalone);
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const instalarPWA = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setPwaInstalada(true);
+    }
+    setDeferredPrompt(null);
+  };
 
   const manejarLogin = (usuario) => {
     console.log("✅ Usuario autenticado:", usuario.apellido);
@@ -209,6 +244,17 @@ function App() {
           </div>
           
           <div className="flex gap-2 items-center">
+            {deferredPrompt && !pwaInstalada && (
+              <button
+                onClick={instalarPWA}
+                className="bg-blue-950/40 text-blue-400 border border-blue-900/50 px-3 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Instalar app
+              </button>
+            )}
             <button 
               onClick={cerrarSesion} 
               className="bg-red-950/40 text-red-400 border border-red-900/50 px-3 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-red-600 hover:text-white transition-all"

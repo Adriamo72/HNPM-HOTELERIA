@@ -1882,12 +1882,75 @@ const eliminarVisualizador = async (visId, usuario) => {
   };
 
   // ==================== GENERAR QR ====================
-  const descargarQRImagen = async (path, nombreArchivo) => {
+  const descargarQRImagen = async (path, nombreArchivo, titulo, lugar, piso) => {
     const urlApp = `${window.location.origin}${path}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&format=png&data=${encodeURIComponent(urlApp)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&format=png&data=${encodeURIComponent(urlApp)}`;
+
+    const cargarImagen = (src) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const ancho = 800;
+    const alto = 1050;
+    canvas.width = ancho;
+    canvas.height = alto;
+
+    // Fondo blanco
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, ancho, alto);
+
+    // Marco azul
+    ctx.strokeStyle = '#1e3a8a';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(20, 20, ancho - 40, alto - 40);
+
+    // Título
+    ctx.fillStyle = '#1e3a8a';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 48px Arial, sans-serif';
+    ctx.fillText(titulo.toUpperCase(), ancho / 2, 90);
+
+    // Lugar
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 36px Arial, sans-serif';
+    ctx.fillText(lugar.toUpperCase(), ancho / 2, 150);
+
+    // Piso
+    ctx.fillStyle = '#64748b';
+    ctx.font = '30px Arial, sans-serif';
+    ctx.fillText(piso, ancho / 2, 195);
+
+    // Cargar QR
     try {
-      const res = await fetch(qrUrl);
-      const blob = await res.blob();
+      const qrImg = await cargarImagen(qrUrl);
+      const qrSize = 500;
+      const qrX = (ancho - qrSize) / 2;
+      const qrY = 240;
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+    } catch {
+      // Dibujar QR mínimo si falla carga
+      ctx.fillStyle = '#000000';
+      ctx.fillRect((ancho - 500) / 2, 240, 500, 500);
+    }
+
+    // Footer
+    ctx.fillStyle = '#1e3a8a';
+    ctx.font = 'bold 28px Arial, sans-serif';
+    ctx.fillText('Dpto. Hotelería - HNPM', ancho / 2, 820);
+
+    ctx.fillStyle = '#475569';
+    ctx.font = '24px Arial, sans-serif';
+    ctx.fillText('Escanee este código QR para validar limpieza', ancho / 2, 865);
+
+    // Descargar
+    canvas.toBlob((blob) => {
+      if (!blob) return;
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -1896,16 +1959,7 @@ const eliminarVisualizador = async (visId, usuario) => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      // Fallback por si falla CORS
-      const a = document.createElement('a');
-      a.href = qrUrl;
-      a.download = `${nombreArchivo}.png`;
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
+    }, 'image/png');
   };
 
   const descargarQR = (path, titulo, textoAdicional = '') => {
@@ -3559,7 +3613,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>🟢 {sem.tiempo_verde_min} min → 🟡 {sem.tiempo_rojo_min} min → 🔴 ∞</span>
                       <button
-                        onClick={() => descargarQRImagen(`/semaforo?token=${sem.qr_token}`, `QR_DivMaestranza_${sem.nombre.replace(/[^a-zA-Z0-9]/g, '_')}`)}
+                        onClick={() => descargarQRImagen(`/semaforo?token=${sem.qr_token}`, `QR_DivMaestranza_${sem.nombre.replace(/[^a-zA-Z0-9]/g, '_')}`, 'Div. Maestranza', sem.nombre, pisoNombre)}
                         className="inline-flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg transition-all"
                       >
                         📥 Descargar QR
