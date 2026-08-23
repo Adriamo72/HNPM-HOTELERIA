@@ -23,6 +23,8 @@ serve(async (req) => {
       )
     }
 
+    const groqModel = Deno.env.get('GROQ_MODEL') || 'llama-3.1-8b-instant'
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -221,7 +223,7 @@ INSTRUCCIONES:
         'Authorization': `Bearer ${groqApiKey}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
+        model: groqModel,
         messages: mensajesApi,
         max_tokens: 512,
         temperature: 0.2,
