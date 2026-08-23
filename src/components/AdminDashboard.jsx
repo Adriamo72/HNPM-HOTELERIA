@@ -50,14 +50,8 @@ const AdminDashboard = () => {
   const [pisos, setPisos] = useState([]);
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [admins, setAdmins] = useState([]);
-  const [movimientosAgrupados, setMovimientosAgrupados] = useState({});
-  const [stockPañol, setStockPañol] = useState({});
-  const [stockUso, setStockUso] = useState({});
-  const [stockLavadero, setStockLavadero] = useState({});
-  const [auditoriaHabilitada, setAuditoriaHabilitada] = useState(false);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [cargandoCroquis, setCargandoCroquis] = useState(false);
-  const [cargandoMonitor, setCargandoMonitor] = useState(false);
   const [cargandoAdmin, setCargandoAdmin] = useState(false);
   const [visualizadores, setVisualizadores] = useState([]);
   const [mostrarModalVisualizador, setMostrarModalVisualizador] = useState(false);
@@ -96,7 +90,7 @@ const AdminDashboard = () => {
     apellido: '', 
     jerarquia: '', 
     celular: '', 
-    rol: 'pañolero' 
+    rol: 'encargado_piso' 
   });
   const [nuevoPiso, setNuevoPiso] = useState({ nombre_piso: '' });
   const [pisoSeleccionado, setPisoSeleccionado] = useState('');
@@ -108,11 +102,8 @@ const AdminDashboard = () => {
   const [nuevoSemaforo, setNuevoSemaforo] = useState({ nombre: '', piso_id: '', tiempo_verde_min: 15, tiempo_rojo_min: 30, pin: '' });
   const TIPO_MAP_DB = { INTERNACION: 'activa', 'EN REPARACION': 'reparacion', OTROS: 'otros' };
   const TIPO_MAP_UI = { activa: 'INTERNACION', reparacion: 'EN REPARACION', otros: 'OTROS' };
-  const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STORAGE_RECHAZOS_LEIDOS = 'rechazos_pacientes_leidos_admin';
   const ROLE_LABELS_TRIPULACION = {
-    pañolero: 'PAÑOLERO',
-    operador: 'OPERADOR',
     encargado_piso: 'ENCARGADO DE PISO',
     enfermero: 'ENCARGADO DE PISO',
   };
@@ -160,7 +151,6 @@ const AdminDashboard = () => {
     return [...lista].sort((a, b) => prioridad(b.nombre_piso) - prioridad(a.nombre_piso));
   };
 
-  const STOCK_CRITICO = 5;
   const [croquisKey, setCroquisKey] = useState(0);
   const [metricasData, setMetricasData] = useState([]);
   const [rankingResponsablesMi, setRankingResponsablesMi] = useState([]);
@@ -169,92 +159,35 @@ const AdminDashboard = () => {
   // ==================== CARGAR DATOS PRINCIPAL ====================
   const cargarDatos = async (tipo = 'todos') => {
     if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(true);
-    if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(true);
     if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(true);
-      try {
-        if (tipo === 'croquis' || tipo === 'todos') {
-          const [resPisos, resHabs, resPers] = await Promise.all([
-            supabase.from('pisos').select('*').order('nombre_piso'),
-            supabase.from('habitaciones_especiales').select('*').order('nombre'),
-            supabase.from('personal').select('*').order('apellido'),
-          ]);
-          const pisosOrdenados = ordenarPisos(resPisos.data || []);
-          setPisos(pisosOrdenados);
-          setPersonal(resPers.data || []);
-          // Usar habitaciones_especiales como habitaciones principales
-          setHabitacionesEspeciales(resHabs.data || []);
-          setHabitaciones(resHabs.data || []);
-          await cargarEstadoHabitaciones(resHabs.data || []);
-          // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
-          if (pisosOrdenados.length > 0) {
-            setPisoSeleccionado(prev => (prev ? prev : pisosOrdenados[0].id));
-          }
-          await cargarEstadoHabitaciones(resHabs.data || []);
-          const { data: semData } = await supabase.from('semaforos').select('*').order('piso_id');
-          setSemaforos(semData || []);
+    try {
+      if (tipo === 'croquis' || tipo === 'todos') {
+        const [resPisos, resHabs, resPers] = await Promise.all([
+          supabase.from('pisos').select('*').order('nombre_piso'),
+          supabase.from('habitaciones_especiales').select('*').order('nombre'),
+          supabase.from('personal').select('*').order('apellido'),
+        ]);
+        const pisosOrdenados = ordenarPisos(resPisos.data || []);
+        setPisos(pisosOrdenados);
+        setPersonal(resPers.data || []);
+        // Usar habitaciones_especiales como habitaciones principales
+        setHabitacionesEspeciales(resHabs.data || []);
+        setHabitaciones(resHabs.data || []);
+        await cargarEstadoHabitaciones(resHabs.data || []);
+        // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
+        if (pisosOrdenados.length > 0) {
+          setPisoSeleccionado(prev => (prev ? prev : pisosOrdenados[0].id));
         }
-
-        if (tipo === 'monitor' || tipo === 'todos') {
-          const resPisosMonitor = await supabase.from('pisos').select('*').order('nombre_piso');
-          const pisosMonitor = ordenarPisos(resPisosMonitor.data || []);
-
-          const pisoIds = pisosMonitor.map(p => p.id);
-          const pisoNombrePorId = Object.fromEntries(pisosMonitor.map(p => [p.id, p.nombre_piso]));
-
-          const [{ data: movs }, { data: todosLosStocks }] = await Promise.all([
-            supabase
-              .from('movimientos_stock')
-              .select('*, pisos(nombre_piso, id), pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre), enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)')
-              .order('created_at', { ascending: false })
-              .limit(500),
-            pisoIds.length > 0
-              ? supabase.from('stock_piso').select('piso_id, item, stock_pañol, stock_en_uso, stock_lavadero').in('piso_id', pisoIds).in('item', ITEMS_REQUERIDOS)
-              : Promise.resolve({ data: [] }),
-          ]);
-
-          const stockPañolMap = {};
-          const stockUsoMap = {};
-          const stockLavaderoMap = {};
-
-          for (const piso of pisosMonitor) {
-            stockPañolMap[piso.nombre_piso] = {};
-            stockUsoMap[piso.nombre_piso] = {};
-            stockLavaderoMap[piso.nombre_piso] = {};
-            for (const item of ITEMS_REQUERIDOS) {
-              stockPañolMap[piso.nombre_piso][item] = 0;
-              stockUsoMap[piso.nombre_piso][item] = 0;
-              stockLavaderoMap[piso.nombre_piso][item] = 0;
-            }
-          }
-
-          for (const row of (todosLosStocks || [])) {
-            const nombrePiso = pisoNombrePorId[row.piso_id];
-            if (!nombrePiso) continue;
-            stockPañolMap[nombrePiso][row.item] = row.stock_pañol || 0;
-            stockUsoMap[nombrePiso][row.item] = row.stock_en_uso || 0;
-            stockLavaderoMap[nombrePiso][row.item] = row.stock_lavadero || 0;
-          }
-
-          const agrupados = movs ? movs.reduce((acc, curr) => {
-            const nombrePiso = curr.pisos?.nombre_piso || 'Sector Desconocido';
-            if (!acc[nombrePiso]) acc[nombrePiso] = [];
-            acc[nombrePiso].push(curr);
-            return acc;
-          }, {}) : {};
-
-          setMovimientosAgrupados(agrupados);
-          setStockPañol(stockPañolMap);
-          setStockUso(stockUsoMap);
-          setStockLavadero(stockLavaderoMap);
-        }
-      } catch (error) {
-        console.error('Error cargando datos:', error);
-        mostrarSplash('Error al cargar datos');
-      } finally {
-        if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(false);
-        if (tipo === 'monitor' || tipo === 'todos') setCargandoMonitor(false);
-        if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(false);
+        const { data: semData } = await supabase.from('semaforos').select('*').order('piso_id');
+        setSemaforos(semData || []);
       }
+    } catch (error) {
+      console.error('Error cargando datos:', error);
+      mostrarSplash('Error al cargar datos');
+    } finally {
+      if (tipo === 'croquis' || tipo === 'todos') setCargandoCroquis(false);
+      if (tipo === 'admin' || tipo === 'todos') setCargandoAdmin(false);
+    }
   };
 
   useEffect(() => {
@@ -264,15 +197,6 @@ const AdminDashboard = () => {
     cargarRechazosPacientes();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  
-  // Recargar datos cuando se cambia a la pestaña historial y no hay datos
-  useEffect(() => {
-    if (activeTab === 'historial' && Object.keys(stockPañol).length === 0 && !cargandoMonitor) {
-      cargarDatos('monitor');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, stockPañol, cargandoMonitor]);
 
   // ==================== RECARGAR DATOS CUANDO CAMBIA LA FECHA ====================
   useEffect(() => {
@@ -857,64 +781,6 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
     actualizarBadgePwa();
   }, [cantidadRechazosDia]);
 
-  // ==================== FUNCIÓN PARA RECALCULAR STOCK DE UN PISO ====================
-  const recalcularStockPiso = async (pisoId) => {
-    try {
-      const { data: movimientos, error: mError } = await supabase
-        .from('movimientos_stock')
-        .select('*')
-        .eq('piso_id', pisoId)
-        .order('created_at', { ascending: true });
-      
-      if (mError) throw mError;
-      
-      const stocksIniciales = {};
-      ITEMS_REQUERIDOS.forEach(item => {
-        stocksIniciales[item] = { pañol: 0, uso: 0, lavadero: 0 };
-      });
-      
-      for (const mov of movimientos) {
-        const item = mov.item;
-        if (!stocksIniciales[item]) continue;
-        
-        if (mov.entregado_limpio > 0) {
-          stocksIniciales[item].pañol += mov.entregado_limpio;
-          stocksIniciales[item].lavadero = Math.max(0, stocksIniciales[item].lavadero - mov.entregado_limpio);
-        }
-        
-        if (mov.egreso_limpio > 0) {
-          stocksIniciales[item].pañol -= mov.egreso_limpio;
-          stocksIniciales[item].uso += mov.egreso_limpio;
-        }
-        
-        if (mov.retirado_sucio > 0) {
-          stocksIniciales[item].uso = Math.max(0, stocksIniciales[item].uso - mov.retirado_sucio);
-          stocksIniciales[item].lavadero += mov.retirado_sucio;
-        }
-      }
-      
-      for (const item of ITEMS_REQUERIDOS) {
-        const { error: upsertError } = await supabase
-          .from('stock_piso')
-          .upsert({
-            piso_id: pisoId,
-            item: item,
-            stock_pañol: Math.max(0, stocksIniciales[item]?.pañol || 0),
-            stock_en_uso: Math.max(0, stocksIniciales[item]?.uso || 0),
-            stock_lavadero: Math.max(0, stocksIniciales[item]?.lavadero || 0),
-            updated_at: new Date()
-          }, { onConflict: 'piso_id,item' });
-        
-        if (upsertError) console.error(`Error actualizando ${item}:`, upsertError);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error("Error recalculando stock:", error);
-      throw error;
-    }
-  };
-
 
 
   // ==================== GESTIÓN DE ADMINISTRADORES ====================
@@ -933,12 +799,10 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
   };
 
   // Funciones de recarga por pestaña
-// Funciones de recarga por pestaña
 const recargarCroquis = async () => {
   await cargarDatos('croquis');
   await cargarRechazosPacientes();
 };
-const recargarMonitor = () => cargarDatos('monitor');
 const recargarAdmin = async () => {
   setCargandoAdmin(true);
   try {
@@ -1669,38 +1533,6 @@ const eliminarVisualizador = async (visId, usuario) => {
   }
 };
 
-  // ==================== ELIMINAR MOVIMIENTO ====================
-  const eliminarMovimiento = async (id) => {
-    if (window.confirm("⚠️ ¿ELIMINAR REGISTRO?\n\nEl stock se recalculará automáticamente después de eliminar.")) {
-      mostrarSplash("🗑️ ELIMINANDO REGISTRO...");
-      
-      try {
-        const { data: movimiento, error: getError } = await supabase
-          .from('movimientos_stock')
-          .select('piso_id')
-          .eq('id', id)
-          .single();
-        
-        if (getError) throw getError;
-        
-        const { error: delError } = await supabase
-          .from('movimientos_stock')
-          .delete()
-          .eq('id', id);
-        
-        if (delError) throw delError;
-        
-        mostrarSplash("Recalculando stock...");
-        await recalcularStockPiso(movimiento.piso_id);
-        mostrarSplash("✅ Registro eliminado y stock actualizado");
-        cargarDatos();
-        
-      } catch (error) {
-        console.error("Error:", error);
-        mostrarSplash("❌ ERROR AL ELIMINAR");
-      }
-    }
-  };
 
   // ==================== ELIMINAR PISO ====================
   const eliminarPiso = async (pisoId, pisoNombre) => {
@@ -1708,8 +1540,6 @@ const eliminarVisualizador = async (visId, usuario) => {
       mostrarSplash("🗑️ ELIMINANDO PISO...");
       
       try {
-        await supabase.from('movimientos_stock').delete().eq('piso_id', pisoId);
-        await supabase.from('stock_piso').delete().eq('piso_id', pisoId);
         await supabase.from('habitaciones_especiales').delete().eq('piso_id', pisoId);
         await supabase.from('pisos').delete().eq('id', pisoId);
         
@@ -1730,7 +1560,7 @@ const eliminarVisualizador = async (visId, usuario) => {
       return;
     }
 
-    const rolesPermitidos = ['pañolero', 'operador', 'encargado_piso'];
+    const rolesPermitidos = ['encargado_piso', 'enfermero'];
     if (!rolesPermitidos.includes(nuevoMiembro.rol)) {
       mostrarSplash("❌ Rol no permitido en Tripulación");
       return;
@@ -1993,34 +1823,7 @@ const eliminarVisualizador = async (visId, usuario) => {
   win.document.close();
 };
 
-  // ==================== TOGGLE AUDITORÍA ====================
-  const toggleAuditoria = async () => {
-    const nuevoEstado = !auditoriaHabilitada;
-    await supabase.from('configuracion_sistema').upsert({ clave: 'MODO_AUDITORIA', valor: nuevoEstado.toString() });
-    setAuditoriaHabilitada(nuevoEstado);
-    mostrarSplash(nuevoEstado ? "🔴 AUDITORÍA ACTIVADA" : "🟢 AUDITORÍA CERRADA");
-  };
 
-  // ==================== CALCULAR TOTAL GLOBAL ====================
-  const calcularTotalGlobal = () => {
-    const total = {};
-    ITEMS_REQUERIDOS.forEach(item => total[item] = 0);
-    Object.keys(stockPañol).forEach(piso => {
-      ITEMS_REQUERIDOS.forEach(item => {
-        total[item] += (stockPañol[piso]?.[item] || 0) + (stockUso[piso]?.[item] || 0) + (stockLavadero[piso]?.[item] || 0);
-      });
-    });
-    return total;
-  };
-
-  const totalGlobal = calcularTotalGlobal();
-
-  // ==================== FORMATEAR FECHA ====================
-  const formatearFechaGuardia = (fechaISO) => {
-    const fecha = new Date(fechaISO);
-    const opciones = { weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    return fecha.toLocaleDateString('es-AR', opciones);
-  };
 
   // ==================== FUNCIONES PARA ESTADOS ====================
   const updateFilter = (column, value) => {
@@ -2287,12 +2090,6 @@ const eliminarVisualizador = async (visId, usuario) => {
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'metricas' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Métricas
-        </button>
-        <button 
-          onClick={() => setActiveTab('historial')} 
-          className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'historial' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          Monitor
         </button>
         <button 
           onClick={() => setActiveTab('admin')} 
@@ -2793,199 +2590,6 @@ const eliminarVisualizador = async (visId, usuario) => {
         </div>
       )}
 
-      {/* Panel HISTORIAL - Monitor de stock */}
-      {activeTab === 'historial' && (
-  <div className="space-y-8">
-    <div className="flex justify-between items-center">
-      <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Control de Activos</h2>
-      <button
-          onClick={recargarMonitor}
-          disabled={cargandoMonitor}
-          className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Actualizar
-        </button>
-    </div>
-    
-    {cargandoMonitor ? (
-      <SpinnerCarga mensaje="CARGANDO MOVIMIENTOS..." />
-    ) : (
-      <>
-        {/* Stock Total Consolidado */}
-        <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6">
-          <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4 text-center">
-            STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-            {ITEMS_REQUERIDOS.map(item => (
-              <div key={item} className="bg-slate-900/80 p-3 rounded-xl border border-blue-800/40 text-center">
-                <span className="text-[10px] text-slate-500 font-semibold uppercase block">{item}</span>
-                <span className={`text-2xl font-semibold ${totalGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>
-                  {totalGlobal[item] || 0}
-                </span>
-              </div>
-            ))}
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-green-900/20 p-3 rounded-xl border border-green-900/30">
-              <p className="text-xs font-semibold text-green-500 uppercase text-center">PAÑOL (Limpio disponible)</p>
-              <div className="grid grid-cols-4 gap-1 mt-2">
-                {ITEMS_REQUERIDOS.map(item => {
-                  let total = 0;
-                  Object.keys(stockPañol).forEach(piso => { total += stockPañol[piso]?.[item] || 0; });
-                  return (
-                    <div key={item} className="text-center">
-                      <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                      <span className={`text-base font-semibold ${total < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>{total}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="bg-yellow-900/20 p-3 rounded-xl border border-yellow-900/30">
-              <p className="text-xs font-semibold text-yellow-500 uppercase text-center">EN USO</p>
-              <div className="grid grid-cols-4 gap-1 mt-2">
-                {ITEMS_REQUERIDOS.map(item => {
-                  let total = 0;
-                  Object.keys(stockUso).forEach(piso => { total += stockUso[piso]?.[item] || 0; });
-                  return (
-                    <div key={item} className="text-center">
-                      <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                      <span className="text-base font-semibold text-yellow-400">{total}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="bg-red-900/20 p-3 rounded-xl border border-red-900/30">
-              <p className="text-xs font-semibold text-red-500 uppercase text-center">LAVADERO</p>
-              <div className="grid grid-cols-4 gap-1 mt-2">
-                {ITEMS_REQUERIDOS.map(item => {
-                  let total = 0;
-                  Object.keys(stockLavadero).forEach(piso => { total += stockLavadero[piso]?.[item] || 0; });
-                  return (
-                    <div key={item} className="text-center">
-                      <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                      <span className="text-base font-semibold text-red-400">{total}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Stock por Piso */}
-        {Object.keys(stockPañol).map((nombrePiso) => {
-          const totalPiso = {};
-          ITEMS_REQUERIDOS.forEach(item => {
-            totalPiso[item] = (stockPañol[nombrePiso]?.[item] || 0) + (stockUso[nombrePiso]?.[item] || 0) + (stockLavadero[nombrePiso]?.[item] || 0);
-          });
-          
-          return (
-            <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-              <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
-                <span className="text-xl font-semibold text-blue-400 uppercase tracking-wider">{nombrePiso}</span>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
-                <div className="bg-green-900/20 p-3 rounded-xl">
-                  <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
-                  <div className="grid grid-cols-4 gap-1 mt-2">
-                    {ITEMS_REQUERIDOS.map(item => (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className={`text-base font-semibold ${(stockPañol[nombrePiso]?.[item] || 0) < STOCK_CRITICO ? 'text-red-400' : 'text-green-400'}`}>
-                          {stockPañol[nombrePiso]?.[item] || 0}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-yellow-900/20 p-3 rounded-xl">
-                  <p className="text-sm font-semibold text-yellow-500 uppercase text-center">EN USO</p>
-                  <div className="grid grid-cols-4 gap-1 mt-2">
-                    {ITEMS_REQUERIDOS.map(item => (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-red-900/20 p-3 rounded-xl">
-                  <p className="text-sm font-semibold text-red-500 uppercase text-center">LAVADERO</p>
-                  <div className="grid grid-cols-4 gap-1 mt-2">
-                    {ITEMS_REQUERIDOS.map(item => (
-                      <div key={item} className="text-center">
-                        <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                        <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Historial de movimientos */}
-              <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
-                {movimientosAgrupados[nombrePiso]?.length > 0 ? (
-                  movimientosAgrupados[nombrePiso].map((m) => (
-                    <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 group hover:bg-slate-800 transition-all text-xs">
-                      <div className="w-[22%] shrink-0 flex items-center gap-2">
-                        <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
-                        <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
-                      </div>
-                      <div className="flex-1 flex items-center justify-around gap-2">
-                        <div className="text-center min-w-[50px]">
-                          <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
-                          <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
-                        </div>
-                        <div className="text-center min-w-[50px]">
-                          <span className="text-[9px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
-                          <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
-                        </div>
-                        <div className="text-center min-w-[50px]">
-                          <span className="text-[9px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
-                          <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
-                        </div>
-                      </div>
-                      <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
-                        {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
-                          <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
-                            📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
-                          </span>
-                        )}
-                        {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
-                        {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
-                        <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
-                        <button 
-                          onClick={() => eliminarMovimiento(m.id)} 
-                          className="p-1 bg-red-950/30 text-red-500 rounded border border-red-900/30 hover:bg-red-900/50 transition-all"
-                          title="Eliminar movimiento"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </>
-    )}
-  </div>
-)}
-
       {/* Panel METRICAS */}
       {activeTab === 'metricas' && (
         <div className="space-y-6">
@@ -3081,19 +2685,6 @@ const eliminarVisualizador = async (visId, usuario) => {
       <SpinnerCarga mensaje="CARGANDO CONFIGURACIÓN..." />
     ) : (
       <>
-        {/* Auditoría */}
-        <section className="bg-slate-900 p-6 rounded-2xl border border-yellow-600/30 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="text-center sm:text-left">
-            <h3 className="text-lg font-semibold uppercase text-yellow-500">🔐 Mando de Auditoría</h3>
-            <p className="text-xs text-slate-500 uppercase font-semibold">Ajuste manual de stock habilitado</p>
-          </div>
-          <button 
-            onClick={toggleAuditoria} 
-            className={`px-6 py-2.5 rounded-xl font-semibold text-sm uppercase transition-all ${auditoriaHabilitada ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-green-600 text-white hover:bg-green-500'}`}
-          >
-            {auditoriaHabilitada ? '🔴 Desactivar' : '🟢 Activar'}
-          </button>
-        </section>
 
         {/* Gestión de Administradores */}
         <section className="bg-slate-900 p-6 rounded-2xl border border-purple-800/30">

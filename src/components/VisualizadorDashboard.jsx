@@ -60,12 +60,7 @@ const VisualizadorDashboard = () => {
   const [pisos, setPisos] = useState([]);
   const [habitacionesEspeciales, setHabitacionesEspeciales] = useState([]);
   const [semaforos, setSemaforos] = useState([]);
-  const [movimientosAgrupados, setMovimientosAgrupados] = useState({});
-  const [stockPañol, setStockPañol] = useState({});
-  const [stockUso, setStockUso] = useState({});
-  const [stockLavadero, setStockLavadero] = useState({});
   const [cargandoCroquis, setCargandoCroquis] = useState(false);
-  const [cargandoMonitor, setCargandoMonitor] = useState(false);
   const [notificacion, setNotificacion] = useState({ visible: false, mensaje: '' });
   const [pisoSeleccionado, setPisoSeleccionado] = useState('');
   const [croquisKey, setCroquisKey] = useState(0);
@@ -97,7 +92,6 @@ const VisualizadorDashboard = () => {
     camas_disponibles: ''
   });
 
-  const ITEMS_REQUERIDOS = ['SABANAS', 'TOALLAS', 'TOALLONES', 'FRAZADAS', 'SALEAS HULE', 'SALEAS TELA', 'FUNDAS', 'CUBRECAMAS'];
   const STORAGE_RECHAZOS_LEIDOS = 'rechazos_pacientes_leidos_visualizador';
 
   useEffect(() => {
@@ -106,14 +100,6 @@ const VisualizadorDashboard = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
-  // Recargar datos cuando se cambia a la pestaña monitor y no hay datos
-  useEffect(() => {
-    if (activeTab === 'monitor' && Object.keys(stockPañol).length === 0 && !cargandoMonitor) {
-      cargarDatos();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, stockPañol, cargandoMonitor]);
 
   const mostrarSplash = (mensaje) => {
     setNotificacion({ visible: true, mensaje });
@@ -276,7 +262,6 @@ const VisualizadorDashboard = () => {
   // ==================== CARGAR DATOS PRINCIPAL ====================
   const cargarDatos = async () => {
     setCargandoCroquis(true);
-    setCargandoMonitor(true);
 
     try {
       // Cargar pisos y habitaciones en paralelo
@@ -346,90 +331,16 @@ const VisualizadorDashboard = () => {
         setPisoSeleccionado(prev => (prev ? prev : pisosOrdenados[0].id));
       }
 
-      // Cargar movimientos para monitor
-      const { data: movs } = await supabase
-        .from('movimientos_stock')
-        .select(`
-          *,
-          pisos(nombre_piso, id),
-          pañolero:personal!movimientos_stock_dni_pañolero_fkey(jerarquia, apellido, nombre),
-          enfermero:personal!movimientos_stock_dni_enfermero_fkey(jerarquia, apellido, nombre)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(500);
-
-      // Cargar stocks — una sola consulta para todos los pisos e ítems
-      const stockPañolMap = {};
-      const stockUsoMap = {};
-      const stockLavaderoMap = {};
-
-      if (resPisos.data && resPisos.data.length > 0) {
-        const pisoIds = resPisos.data.map(p => p.id);
-        const pisoNombrePorId = Object.fromEntries(resPisos.data.map(p => [p.id, p.nombre_piso]));
-
-        const { data: todosLosStocks } = await supabase
-          .from('stock_piso')
-          .select('piso_id, item, stock_pañol, stock_en_uso, stock_lavadero')
-          .in('piso_id', pisoIds)
-          .in('item', ITEMS_REQUERIDOS);
-
-        // Inicializar mapas con ceros
-        for (const piso of resPisos.data) {
-          stockPañolMap[piso.nombre_piso] = {};
-          stockUsoMap[piso.nombre_piso] = {};
-          stockLavaderoMap[piso.nombre_piso] = {};
-          for (const item of ITEMS_REQUERIDOS) {
-            stockPañolMap[piso.nombre_piso][item] = 0;
-            stockUsoMap[piso.nombre_piso][item] = 0;
-            stockLavaderoMap[piso.nombre_piso][item] = 0;
-          }
-        }
-
-        // Poblar con los datos reales
-        for (const row of (todosLosStocks || [])) {
-          const nombrePiso = pisoNombrePorId[row.piso_id];
-          if (!nombrePiso) continue;
-          stockPañolMap[nombrePiso][row.item] = row.stock_pañol || 0;
-          stockUsoMap[nombrePiso][row.item] = row.stock_en_uso || 0;
-          stockLavaderoMap[nombrePiso][row.item] = row.stock_lavadero || 0;
-        }
-      }
-
-      const agrupados = movs ? movs.reduce((acc, curr) => {
-        const nombrePiso = curr.pisos?.nombre_piso || "Sector Desconocido";
-        if (!acc[nombrePiso]) acc[nombrePiso] = [];
-        acc[nombrePiso].push(curr);
-        return acc;
-      }, {}) : {};
-
-      setMovimientosAgrupados(agrupados);
-      setStockPañol(stockPañolMap);
-      setStockUso(stockUsoMap);
-      setStockLavadero(stockLavaderoMap);
-
       mostrarSplash("Datos actualizados correctamente");
     } catch (error) {
       console.error(error);
       mostrarSplash("Error al sincronizar datos");
     } finally {
       setCargandoCroquis(false);
-      setCargandoMonitor(false);
     }
   };
 
-  const calcularTotalGlobal = () => {
-    const total = {};
-    ITEMS_REQUERIDOS.forEach(item => total[item] = 0);
-    Object.keys(stockPañol).forEach(piso => {
-      ITEMS_REQUERIDOS.forEach(item => {
-        total[item] += (stockPañol[piso]?.[item] || 0) + (stockUso[piso]?.[item] || 0) + (stockLavadero[piso]?.[item] || 0);
-      });
-    });
-    return total;
-  };
 
-  const totalGlobal = calcularTotalGlobal();
-  const STOCK_CRITICO = 5;
 
   const cargarMetricasHistoricas = useCallback(async () => {
     setCargandoMetricas(true);
@@ -547,11 +458,6 @@ const VisualizadorDashboard = () => {
     }
   }, [activeTab, metricasData, cargandoMetricas, cargarMetricasHistoricas]);
 
-  const formatearFechaGuardia = (fechaISO) => {
-    const fecha = new Date(fechaISO);
-    const opciones = { weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    return fecha.toLocaleDateString('es-AR', opciones);
-  };
 
   // Función para refrescar desde cualquier pestaña
   const refrescarDatos = async () => {
@@ -560,9 +466,6 @@ const VisualizadorDashboard = () => {
       await cargarDatos();
       await cargarRechazosPacientes();
       setCroquisKey(prev => prev + 1);
-    } else if (activeTab === 'monitor') {
-      await cargarDatos();
-      await cargarRechazosPacientes();
     }
   };
 
@@ -884,12 +787,6 @@ const VisualizadorDashboard = () => {
           className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'recorridos' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Recorridos
-        </button>
-        <button
-          onClick={() => setActiveTab('monitor')}
-          className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeTab === 'monitor' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          Monitor
         </button>
       </div>
 
@@ -1506,136 +1403,6 @@ const VisualizadorDashboard = () => {
             </p>
           </div>
           <RecorridosList esVisualizador={true} fechaSeleccionada={fechaSeleccionada} />
-        </div>
-      )}
-
-      {/* Panel MONITOR - Solo lectura */}
-      {activeTab === 'monitor' && (
-        <div className="space-y-8">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-white uppercase tracking-tighter">Monitor de Stock</h2>
-            {/* Botón actualizar estilo RECORRIDOS */}
-            <button
-              onClick={refrescarDatos}
-              disabled={cargandoMonitor}
-              className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-800"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              {cargandoMonitor ? 'Actualizando...' : 'Actualizar'}
-            </button>
-          </div>
-
-          {cargandoMonitor ? (
-            <SpinnerCarga mensaje="CARGANDO MOVIMIENTOS..." />
-          ) : (
-            <>
-              {/* Stock Total Consolidado */}
-              <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-6">
-                <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4 text-center">
-                  STOCK TOTAL REAL (Pañol + En Uso + Lavadero)
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-                  {ITEMS_REQUERIDOS.map(item => (
-                    <div key={item} className="bg-slate-900/80 p-3 rounded-xl border border-blue-800/40 text-center">
-                      <span className="text-[10px] text-slate-500 font-semibold uppercase block">{item}</span>
-                      <span className={`text-2xl font-semibold ${totalGlobal[item] < STOCK_CRITICO ? 'text-red-500' : 'text-blue-400'}`}>
-                        {totalGlobal[item] || 0}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Stock por Piso */}
-              {Object.keys(stockPañol).map((nombrePiso) => (
-                <div key={nombrePiso} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-                  <div className="bg-slate-800/40 px-6 py-3 border-b border-slate-800">
-                    <span className="text-xl font-semibold text-green-400 uppercase tracking-wider">{nombrePiso}</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/50 border-b border-slate-800">
-                    <div className="bg-green-900/20 p-3 rounded-xl">
-                      <p className="text-sm font-semibold text-green-500 uppercase text-center">PAÑOL</p>
-                      <div className="grid grid-cols-4 gap-1 mt-2">
-                        {ITEMS_REQUERIDOS.map(item => (
-                          <div key={item} className="text-center">
-                            <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                            <span className="text-base font-semibold text-green-400">
-                              {stockPañol[nombrePiso]?.[item] || 0}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="bg-yellow-900/20 p-3 rounded-xl">
-                      <p className="text-sm font-semibold text-yellow-500 uppercase text-center">EN USO</p>
-                      <div className="grid grid-cols-4 gap-1 mt-2">
-                        {ITEMS_REQUERIDOS.map(item => (
-                          <div key={item} className="text-center">
-                            <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                            <span className="text-sm font-semibold text-yellow-400">{stockUso[nombrePiso]?.[item] || 0}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="bg-red-900/20 p-3 rounded-xl">
-                      <p className="text-sm font-semibold text-red-500 uppercase text-center">LAVADERO</p>
-                      <div className="grid grid-cols-4 gap-1 mt-2">
-                        {ITEMS_REQUERIDOS.map(item => (
-                          <div key={item} className="text-center">
-                            <span className="text-[8px] text-slate-500 block">{item.substring(0, 8)}</span>
-                            <span className="text-sm font-semibold text-red-400">{stockLavadero[nombrePiso]?.[item] || 0}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Historial de movimientos - Solo lectura, sin botón eliminar */}
-                  <div className="p-2 space-y-1 max-h-[500px] overflow-y-auto bg-slate-950/20">
-                    {movimientosAgrupados[nombrePiso]?.length > 0 ? (
-                      movimientosAgrupados[nombrePiso].map((m) => (
-                        <div key={m.id} className="bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800/50 flex items-center gap-2 text-xs">
-                          <div className="w-[22%] shrink-0 flex items-center gap-2">
-                            <p className="font-semibold text-white text-[11px] uppercase">{m.item}</p>
-                            <p className="text-[10px] text-blue-500 font-semibold">{formatearFechaGuardia(m.created_at)}</p>
-                          </div>
-                          <div className="flex-1 flex items-center justify-around gap-2">
-                            <div className="text-center min-w-[50px]">
-                              <span className="text-[9px] text-green-500 font-semibold uppercase block">Lav→Pañol</span>
-                              <p className="text-sm font-semibold text-green-500">{m.entregado_limpio > 0 ? `+${m.entregado_limpio}` : '—'}</p>
-                            </div>
-                            <div className="text-center min-w-[50px]">
-                              <span className="text-[9px] text-orange-500 font-semibold uppercase block">Pañol→Uso</span>
-                              <p className="text-sm font-semibold text-orange-500">{m.egreso_limpio > 0 ? `-${m.egreso_limpio}` : '—'}</p>
-                            </div>
-                            <div className="text-center min-w-[50px]">
-                              <span className="text-[9px] text-red-500 font-semibold uppercase block">Uso→Lav</span>
-                              <p className="text-sm font-semibold text-red-500">{m.retirado_sucio > 0 ? m.retirado_sucio : '—'}</p>
-                            </div>
-                          </div>
-                          <div className="w-[28%] shrink-0 flex items-center justify-end gap-2">
-                            {m.novedades && m.novedades !== 'Sin novedades' && m.novedades !== 'Sin novedad' && (
-                              <span className="text-[9px] text-yellow-500 font-semibold truncate max-w-[100px]" title={m.novedades}>
-                                📝 {m.novedades.length > 12 ? m.novedades.substring(0, 12) + '...' : m.novedades}
-                              </span>
-                            )}
-                            {m.es_cambio_habitacion && <span className="text-[8px] bg-purple-900/50 px-1.5 py-0.5 rounded">HAB</span>}
-                            {m.novedades?.includes('Ajuste automático') && <span className="text-[8px] bg-orange-900/50 px-1.5 py-0.5 rounded">⚡</span>}
-                            <p className="text-[9px] text-slate-400 font-semibold uppercase truncate">{m.pañolero?.jerarquia} {m.pañolero?.apellido}</p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center text-slate-500 text-sm py-6">📭 Sin movimientos registrados en este sector</div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
         </div>
       )}
 
