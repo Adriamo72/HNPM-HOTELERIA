@@ -57,7 +57,7 @@ const AsistenteIA = ({ pisos }) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'es-ES';
+      utterance.lang = 'es-AR';
       utterance.rate = 0.9;
       utterance.pitch = 1;
       utterance.volume = 0.8;

@@ -194,7 +194,8 @@ INSTRUCCIONES:
 - Si te preguntan sobre colores o el sistema visual del croquis, explicá usando la leyenda de arriba.
 - Podés calcular porcentajes, comparar pisos, detectar el piso más ocupado, etc.
 - Si una pregunta no tiene respuesta en los datos, decilo claramente.
-- Respondé de forma breve y directa. Usá negrita (**texto**) para resaltar números clave.`
+- Respondé de forma breve y directa. Usá negrita (**texto**) para resaltar números clave.
+- Respondé SIEMPRE y EXCLUSIVAMENTE en español. No usés inglés ni otros idiomas bajo ninguna circunstancia.'
 
     // ============================================
     // CONSTRUIR HISTORIAL DE CONVERSACIÓN
