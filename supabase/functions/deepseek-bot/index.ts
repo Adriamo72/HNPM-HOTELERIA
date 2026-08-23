@@ -23,7 +23,7 @@ serve(async (req) => {
       )
     }
 
-    const groqModel = Deno.env.get('GROQ_MODEL') || 'llama-3.1-8b-instant'
+    const groqModel = Deno.env.get('GROQ_MODEL') || 'openai/gpt-oss-120b'
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -226,7 +226,7 @@ INSTRUCCIONES:
       body: JSON.stringify({
         model: groqModel,
         messages: mensajesApi,
-        max_tokens: 512,
+        max_tokens: 1024,
         temperature: 0.2,
       }),
     })
