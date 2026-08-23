@@ -173,7 +173,6 @@ const AdminDashboard = () => {
         // Usar habitaciones_especiales como habitaciones principales
         setHabitacionesEspeciales(resHabs.data || []);
         setHabitaciones(resHabs.data || []);
-        await cargarEstadoHabitaciones(resHabs.data || []);
         // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
         if (pisosOrdenados.length > 0) {
           setPisoSeleccionado(prev => (prev ? prev : pisosOrdenados[0].id));
@@ -2120,25 +2119,9 @@ const eliminarVisualizador = async (visId, usuario) => {
               </button>
               <select
                 value={pisoSeleccionado}
-                onChange={async (e) => {
-                  const nuevoPisoId = e.target.value;
-                  setCargandoCroquis(true);
-                  setPisoSeleccionado(nuevoPisoId);
-                  
-                  // Forzar recarga de habitaciones para ese piso
-                  const { data: nuevasHabitaciones } = await supabase
-                    .from('habitaciones_especiales')
-                    .select('*')
-                    .eq('piso_id', nuevoPisoId)
-                    .order('nombre');
-                  
-                  setHabitacionesEspeciales(prev => {
-                    const otras = prev.filter(h => h.piso_id !== nuevoPisoId);
-                    return [...otras, ...(nuevasHabitaciones || [])];
-                  });
-                  
+                onChange={(e) => {
+                  setPisoSeleccionado(e.target.value);
                   setCroquisKey(prev => prev + 1);
-                  setCargandoCroquis(false);
                 }}
                 className="flex-1 min-w-[120px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               >
