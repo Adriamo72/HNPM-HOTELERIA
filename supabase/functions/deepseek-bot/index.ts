@@ -232,7 +232,7 @@ INSTRUCCIONES:
       const errorText = await groqRes.text()
       console.error('Groq API error:', groqRes.status, errorText)
       return new Response(
-        JSON.stringify({ respuesta: 'Error al contactar la IA. Por favor, intentá de nuevo en unos segundos.', ok: false }),
+        JSON.stringify({ respuesta: `Error de Groq: ${groqRes.status} ${errorText || 'sin detalle'}`, ok: false }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
