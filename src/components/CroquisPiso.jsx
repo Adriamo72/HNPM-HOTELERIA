@@ -1046,6 +1046,18 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                   title={`${hab.nombre} - ${estilo.title}`}
                   onClick={(e) => handleMarkerClick(e, hab, ocup, estilo)}
                 >
+                  {modoEdicion && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        eliminarHabitacionPos(hab.id, hab.nombre);
+                      }}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 hover:bg-red-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center shadow-lg border-2 border-slate-900 z-50"
+                      title="Eliminar habitación del croquis"
+                    >
+                      ×
+                    </button>
+                  )}
                   {aislamientoActivo && (
                     <span className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-600 border border-red-300 text-[9px] leading-[14px] text-white font-black text-center shadow-lg">
                       !
