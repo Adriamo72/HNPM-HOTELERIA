@@ -998,10 +998,6 @@ const VisualizadorDashboard = () => {
             {activeEstadosTab === 'ocupacion' && (() => {
               // ... (Cálculos de constantes se mantienen igual)
               const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
-              const totalCamasActivas = habitacionesActivas.reduce((total, hab) => {
-                const ocu = ocupacion[String(hab.id)];
-                return total + (ocu?.total_camas || 0);
-              }, 0);
               const camasOcupadasActivas = habitacionesActivas.reduce((total, hab) => {
                 const ocu = ocupacion[String(hab.id)];
                 return total + (ocu?.camas_ocupadas || 0);
@@ -1014,7 +1010,31 @@ const VisualizadorDashboard = () => {
                 if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return total;
                 return total + Math.max(0, totalCamas - camasOcupadasReales);
               }, 0);
-              const camasDisponibles = totalCamasActivas - camasOcupadasActivas - camasBloqueadasActivas;
+
+              // Separar camas por área (abierta vs cerrada)
+              const camasDisponiblesAA = habitacionesActivas.reduce((total, hab) => {
+                const ocu = ocupacion[String(hab.id)];
+                if (ocu?.area_cerrada) return total; // Skip área cerrada
+                const totalCamas = ocu?.total_camas || 0;
+                const camasOcupadasReales = ocu?.camas_ocupadas || 0;
+                const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
+                const camasBloqueadas = (aislamientoActivo && camasOcupadasReales > 0 && totalCamas > 0)
+                  ? Math.max(0, totalCamas - camasOcupadasReales)
+                  : 0;
+                return total + Math.max(0, totalCamas - camasOcupadasReales - camasBloqueadas);
+              }, 0);
+
+              const camasDisponiblesAC = habitacionesActivas.reduce((total, hab) => {
+                const ocu = ocupacion[String(hab.id)];
+                if (!ocu?.area_cerrada) return total; // Skip área abierta
+                const totalCamas = ocu?.total_camas || 0;
+                const camasOcupadasReales = ocu?.camas_ocupadas || 0;
+                const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
+                const camasBloqueadas = (aislamientoActivo && camasOcupadasReales > 0 && totalCamas > 0)
+                  ? Math.max(0, totalCamas - camasOcupadasReales)
+                  : 0;
+                return total + Math.max(0, totalCamas - camasOcupadasReales - camasBloqueadas);
+              }, 0);
 
               return (
                 <div className="bg-slate-800/50 rounded-xl py-3 border border-slate-700/50 w-full mt-2">
@@ -1049,10 +1069,16 @@ const VisualizadorDashboard = () => {
                       <p className="text-2xl font-black text-red-500 mt-0.5">{camasBloqueadasActivas}</p>
                     </div>
 
-                    {/* 5. CAMAS DISPONIBLES */}
+                    {/* 5. CAMAS DISPONIBLES A.A. */}
                     <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
-                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES</p>
-                      <p className="text-2xl font-black text-emerald-300 mt-0.5">{camasDisponibles}</p>
+                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.A.</p>
+                      <p className="text-2xl font-black text-emerald-300 mt-0.5">{camasDisponiblesAA}</p>
+                    </div>
+
+                    {/* 6. CAMAS DISPONIBLES A.C. */}
+                    <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
+                      <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.C.</p>
+                      <p className="text-2xl font-black text-blue-300 mt-0.5">{camasDisponiblesAC}</p>
                     </div>
 
                   </div>

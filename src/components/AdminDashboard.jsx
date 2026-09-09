@@ -211,7 +211,7 @@ const AdminDashboard = () => {
       const next = { ...prev };
       habitacionesEspeciales.forEach(hab => {
         if (!next[hab.id]) {
-          next[hab.id] = { tipo: 'OTROS', camas: '1', texto: '' };
+          next[hab.id] = { tipo: 'OTROS', camas: '1', texto: '', area_cerrada: false };
         }
       });
       return next;
@@ -320,6 +320,7 @@ const AdminDashboard = () => {
           texto: tipo === 'OTROS' ? (estado?.observaciones || '') : '',
           observaciones: tipo === 'INTERNACION' ? (estado?.observaciones || '') : (tipo === 'EN REPARACION' ? (estado?.observaciones || '') : ''),
           camas_ocupadas: estado?.camas_ocupadas || 0,
+          area_cerrada: estado?.area_cerrada || false,
         };
       });
       setHabitacionStatus(prev => ({
@@ -381,6 +382,7 @@ const AdminDashboard = () => {
       total_camas: totalCamas,
       camas_ocupadas: camasOcupadas,
       observaciones: observaciones,
+      area_cerrada: config.area_cerrada || false,
       // informacion_ampliatoria eliminado - ahora usa observaciones
       actualizado_por: null,
       actualizado_en: new Date().toISOString()
@@ -2319,10 +2321,6 @@ const eliminarVisualizador = async (visId, usuario) => {
             {activeEstadosTab === 'ocupacion' && (() => {
               // ... (Cálculos de constantes se mantienen igual)
               const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
-              const totalCamasActivas = habitacionesActivas.reduce((total, hab) => {
-                const ocu = ocupacion[String(hab.id)];
-                return total + (ocu?.total_camas || 0);
-              }, 0);
               const camasOcupadasActivas = habitacionesActivas.reduce((total, hab) => {
                 const ocu = ocupacion[String(hab.id)];
                 return total + (ocu?.camas_ocupadas || 0);
@@ -2335,7 +2333,31 @@ const eliminarVisualizador = async (visId, usuario) => {
                 if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return total;
                 return total + Math.max(0, totalCamas - camasOcupadasReales);
               }, 0);
-              const camasDisponibles = totalCamasActivas - camasOcupadasActivas - camasBloqueadasActivas;
+
+              // Separar camas por área (abierta vs cerrada)
+              const camasDisponiblesAA = habitacionesActivas.reduce((total, hab) => {
+                const ocu = ocupacion[String(hab.id)];
+                if (ocu?.area_cerrada) return total; // Skip área cerrada
+                const totalCamas = ocu?.total_camas || 0;
+                const camasOcupadasReales = ocu?.camas_ocupadas || 0;
+                const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
+                const camasBloqueadas = (aislamientoActivo && camasOcupadasReales > 0 && totalCamas > 0)
+                  ? Math.max(0, totalCamas - camasOcupadasReales)
+                  : 0;
+                return total + Math.max(0, totalCamas - camasOcupadasReales - camasBloqueadas);
+              }, 0);
+
+              const camasDisponiblesAC = habitacionesActivas.reduce((total, hab) => {
+                const ocu = ocupacion[String(hab.id)];
+                if (!ocu?.area_cerrada) return total; // Skip área abierta
+                const totalCamas = ocu?.total_camas || 0;
+                const camasOcupadasReales = ocu?.camas_ocupadas || 0;
+                const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
+                const camasBloqueadas = (aislamientoActivo && camasOcupadasReales > 0 && totalCamas > 0)
+                  ? Math.max(0, totalCamas - camasOcupadasReales)
+                  : 0;
+                return total + Math.max(0, totalCamas - camasOcupadasReales - camasBloqueadas);
+              }, 0);
 
               return (
                 <div className="bg-slate-800/50 rounded-xl py-3 border border-slate-700/50 w-full mt-2">
@@ -2370,10 +2392,16 @@ const eliminarVisualizador = async (visId, usuario) => {
                       <p className="text-2xl font-black text-red-500 mt-0.5">{camasBloqueadasActivas}</p>
                     </div>
                     
-                    {/* 5. CAMAS DISPONIBLES */}
+                    {/* 5. CAMAS DISPONIBLES A.A. */}
                     <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
-                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES</p>
-                      <p className="text-2xl font-black text-emerald-300 mt-0.5">{camasDisponibles}</p>
+                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.A.</p>
+                      <p className="text-2xl font-black text-emerald-300 mt-0.5">{camasDisponiblesAA}</p>
+                    </div>
+
+                    {/* 6. CAMAS DISPONIBLES A.C. */}
+                    <div className="flex-1 flex flex-col items-center text-center border-l border-slate-700">
+                      <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.C.</p>
+                      <p className="text-2xl font-black text-blue-300 mt-0.5">{camasDisponiblesAC}</p>
                     </div>
 
                   </div>
@@ -2965,6 +2993,18 @@ const eliminarVisualizador = async (visId, usuario) => {
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2 ml-2">
+                                    <label className="inline-flex items-center gap-1 cursor-pointer" title="Área Cerrada">
+                                      <input
+                                        type="checkbox"
+                                        checked={config.area_cerrada || false}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          actualizarHabitacionStatus(hab.id, 'area_cerrada', e.target.checked);
+                                        }}
+                                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
+                                      />
+                                      <span className="text-[8px] font-bold uppercase text-slate-400">A.C.</span>
+                                    </label>
                                     <button
                                       onClick={(e) => { e.stopPropagation(); setHabitacionesAbiertas(prev => ({
                                         ...prev,
@@ -2975,7 +3015,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                                     >
                                       ⚙️
                                     </button>
-                                    <button 
+                                    <button
                                       onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }}
                                       className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
                                       title="Eliminar habitación"
