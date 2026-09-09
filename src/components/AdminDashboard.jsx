@@ -2908,18 +2908,6 @@ const eliminarVisualizador = async (visId, usuario) => {
                         🏥 QR Recorrido
                       </button>
                       <button 
-                        onClick={() => descargarQR(`/piso/${p.slug}`, `PAÑOL - ${p.nombre_piso}`)} 
-                        className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-blue-500 border border-blue-900/30 hover:bg-blue-900/30 transition-all"
-                      >
-                        🗄️ QR Pañol
-                      </button>
-                      <button 
-                        onClick={() => descargarQR(`/lavadero/${p.slug}`, `LAVADERO - ${p.nombre_piso}`)} 
-                        className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs font-semibold uppercase text-green-500 border border-green-900/30 hover:bg-green-900/30 transition-all"
-                      >
-                        🧺 QR Lavadero
-                      </button>
-                      <button 
                         onClick={() => eliminarPiso(p.id, p.nombre_piso)} 
                         className="text-red-500 font-semibold text-xl leading-none px-2 py-1 rounded-lg hover:bg-red-950/30 transition-all"
                       >
@@ -2971,22 +2959,6 @@ const eliminarVisualizador = async (visId, usuario) => {
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2">
                                         <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
-                                        {config.tipo === 'OTROS' && (
-                                        <button
-                                          onClick={(e) => { 
-                                            e.stopPropagation(); 
-                                            const textoAmpliatorio = config.texto?.trim() || 'Sector especial';
-                                            descargarQR(
-                                              `/habitacion/${hab.slug}`, 
-                                              `${hab.nombre} - ${p.nombre_piso}`,
-                                              `📝 ${textoAmpliatorio} - Ropa de cama y blancos`
-                                            ); 
-                                          }}
-                                          className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-1.5 py-0.5 rounded-lg text-[8px] font-semibold uppercase hover:bg-slate-600 transition-all"
-                                        >
-                                          🧺 Ropa
-                                        </button>
-                                      )}
                                       </div>
                                     <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate block mt-1`}>
                                       {truncarTexto(formatearResumenHabitacion(config), 28)}
@@ -3082,38 +3054,6 @@ const eliminarVisualizador = async (visId, usuario) => {
                                   )}
 
                                   <div className="flex flex-wrap gap-2 items-center">
-                                    {config.tipo === 'INTERNACION' && (
-                                      <button
-                                        onClick={() => descargarQR(`/ocupacion/${hab.slug}`, `OCUPACIÓN - ${hab.nombre} - ${p.nombre_piso}`)}
-                                        className="inline-flex items-center gap-2 bg-emerald-600/15 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase hover:bg-emerald-600/20 transition-all"
-                                        title="QR para registro de ocupación de pacientes"
-                                      >
-                                        🏥 QR Ocupación
-                                      </button>
-                                    )}
-
-                                    {config.tipo === 'OTROS' && (
-  <button
-    onClick={(e) => { 
-      e.stopPropagation(); 
-      const textoAmpliatorio = config.texto?.trim() || 'Sector especial';
-      descargarQR(
-        `/habitacion/${hab.slug}`, 
-        `${hab.nombre} - ${p.nombre_piso}`,
-        `📝 ${textoAmpliatorio} - Ropa de cama y blancos`
-      ); 
-    }}
-    className="inline-flex items-center gap-1 bg-slate-700/70 text-slate-200 border border-slate-500/30 px-1.5 py-0.5 rounded-lg text-[8px] font-semibold uppercase hover:bg-slate-600 transition-all"
-  >
-    🧺 Ropa
-  </button>
-)}
-
-                                    {config.tipo === 'EN REPARACION' && (
-                                      <span className="inline-flex items-center gap-2 bg-amber-600/20 text-amber-200 border border-amber-500/30 px-3 py-2 rounded-xl text-[10px] font-semibold uppercase">
-                                        🔧 En reparación
-                                      </span>
-                                    )}
                                   </div>
                                 </div>
                               </details>
