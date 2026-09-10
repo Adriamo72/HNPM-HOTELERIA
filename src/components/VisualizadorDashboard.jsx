@@ -602,6 +602,13 @@ const VisualizadorDashboard = () => {
           }
         }
 
+        // Aplicar filtro de area si existe
+        if (filters.area) {
+          const areaCerrada = Boolean(ocu?.area_cerrada);
+          if (filters.area === 'ABIERTA' && areaCerrada) return false;
+          if (filters.area === 'CERRADA' && !areaCerrada) return false;
+        }
+
         // Solo habitaciones con camas disponibles > 0
         return camasDisponibles > 0;
       }
@@ -655,7 +662,7 @@ const VisualizadorDashboard = () => {
     if (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') {
       headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN', 'AREA');
     } else if (activeEstadosTab === 'disponible') {
-      headers.push('CAMAS DISPONIBLES');
+      headers.push('CAMAS DISPONIBLES', 'AREA');
     }
     headers.push('NOVEDADES');
 
@@ -744,6 +751,7 @@ const VisualizadorDashboard = () => {
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
             String(camasDisponibles),
+            ocu?.area_cerrada ? 'CERRADA' : 'ABIERTA',
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -1236,6 +1244,36 @@ const VisualizadorDashboard = () => {
                         </div>
                       </th>
                     )}
+                    {activeEstadosTab === 'disponible' && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        AREA
+                        <div className="mt-1">
+                          <select
+                            value={filters.area || ''}
+                            onChange={(e) => updateFilter('area', e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                          >
+                            <option value="">Todas</option>
+                            <option value="ABIERTA">ABIERTA</option>
+                            <option value="CERRADA">CERRADA</option>
+                          </select>
+                        </div>
+                      </th>
+                    )}
+                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        CAMAS OCUPADAS
+                        <div className="mt-1">
+                          <input
+                            type="text"
+                            placeholder="Filtrar..."
+                            value={filters.camas_ocupadas || ''}
+                            onChange={(e) => updateFilter('camas_ocupadas', e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                          />
+                        </div>
+                      </th>
+                    )}
                     {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                         CAPACIDAD CAMAS
@@ -1320,6 +1358,15 @@ const VisualizadorDashboard = () => {
                               const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
                               return String(camasDisponibles);
                             })()}
+                          </td>
+                        )}
+                        {activeEstadosTab === 'disponible' && (
+                          <td className="px-4 py-3 text-slate-200">
+                            {ocu?.area_cerrada ? (
+                              <span className="text-blue-300 font-semibold">CERRADA</span>
+                            ) : (
+                              <span className="text-emerald-300">ABIERTA</span>
+                            )}
                           </td>
                         )}
                         {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (

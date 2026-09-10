@@ -1942,18 +1942,25 @@ const eliminarVisualizador = async (visId, usuario) => {
         const camasOcupadas = ocu?.camas_ocupadas || 0;
         const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
         let camasBloqueadas = 0;
-        
+
         if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
           camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
         }
-        
+
         const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
-        
+
         // Aplicar filtro de camas_disponibles si existe
         if (filters.camas_disponibles) {
           if (!String(camasDisponibles).includes(filters.camas_disponibles)) {
             return false;
           }
+        }
+
+        // Aplicar filtro de area si existe
+        if (filters.area) {
+          const areaCerrada = Boolean(ocu?.area_cerrada);
+          if (filters.area === 'ABIERTA' && areaCerrada) return false;
+          if (filters.area === 'CERRADA' && !areaCerrada) return false;
         }
         
         // Solo habitaciones con camas disponibles > 0
@@ -2006,6 +2013,8 @@ const eliminarVisualizador = async (visId, usuario) => {
     // Determinar columnas según el tipo de pestaña
     if (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') {
       headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN', 'AREA');
+    } else if (activeEstadosTab === 'disponible') {
+      headers.push('CAMAS DISPONIBLES', 'AREA');
     }
     headers.push('NOVEDADES');
     
@@ -2067,6 +2076,33 @@ const eliminarVisualizador = async (visId, usuario) => {
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
             Boolean(ocu?.aislamiento_activo) ? 'SI' : 'NO',
+            ocu?.observaciones || 'Sin novedades'
+          ];
+        });
+        break;
+      case 'disponible':
+        titulo = 'Habitaciones Disponibles';
+        datosTabla = filtrarHabitacionesPorTipo('disponible').map(habitacion => {
+          const ocu = ocupacion[String(habitacion.id)];
+          const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
+
+          // Calcular camas disponibles
+          const totalCamas = ocu?.total_camas || 0;
+          const camasOcupadas = ocu?.camas_ocupadas || 0;
+          const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
+          let camasBloqueadas = 0;
+
+          if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
+            camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
+          }
+
+          const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
+
+          return [
+            piso?.nombre_piso || 'Sin piso',
+            habitacion.nombre || 'Sin nombre',
+            String(camasDisponibles),
+            ocu?.area_cerrada ? 'CERRADA' : 'ABIERTA',
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -2559,6 +2595,22 @@ const eliminarVisualizador = async (visId, usuario) => {
                         </div>
                       </th>
                     )}
+                    {activeEstadosTab === 'disponible' && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        AREA
+                        <div className="mt-1">
+                          <select
+                            value={filters.area || ''}
+                            onChange={(e) => updateFilter('area', e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                          >
+                            <option value="">Todas</option>
+                            <option value="ABIERTA">ABIERTA</option>
+                            <option value="CERRADA">CERRADA</option>
+                          </select>
+                        </div>
+                      </th>
+                    )}
                     {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                         CAPACIDAD CAMAS
@@ -2641,14 +2693,23 @@ const eliminarVisualizador = async (visId, usuario) => {
                               const camasOcupadas = ocu?.camas_ocupadas || 0;
                               const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
                               let camasBloqueadas = 0;
-                              
+
                               if (aislamientoActivo && camasOcupadas > 0 && totalCamas > 0) {
                                 camasBloqueadas = Math.max(0, totalCamas - camasOcupadas);
                               }
-                              
+
                               const camasDisponibles = totalCamas - camasOcupadas - camasBloqueadas;
                               return String(camasDisponibles);
                             })()}
+                          </td>
+                        )}
+                        {activeEstadosTab === 'disponible' && (
+                          <td className="px-4 py-3 text-slate-200">
+                            {ocu?.area_cerrada ? (
+                              <span className="text-blue-300 font-semibold">CERRADA</span>
+                            ) : (
+                              <span className="text-emerald-300">ABIERTA</span>
+                            )}
                           </td>
                         )}
                         {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
