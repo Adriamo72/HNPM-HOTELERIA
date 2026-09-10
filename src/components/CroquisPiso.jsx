@@ -920,7 +920,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         
         {/* Estadísticas HNPM Globales */}
         <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center md:order-2 flex-1 md:flex-none">
-          <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mb-1">CAMAS</p>
+          <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mb-1">SITREP GENERAL DE CAMAS</p>
           <div className="flex gap-6 justify-center flex-wrap">
             <div>
               <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">Total HNPM</p>
@@ -966,13 +966,14 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       <div className="bg-slate-800/50 p-3 mx-4 mt-2 rounded-lg">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div className="flex flex-col gap-2 text-sm">
+              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Camas en Piso</p>
               <div className="flex gap-4 flex-wrap">
-                <span className="text-green-400">Camas en piso: {estadisticas.totalCamas}</span>
-                <span className="text-yellow-400">Camas ocupadas con pacientes: {estadisticas.camasOcupadasReales}</span>
-                <span className="text-red-500">Camas bloqueadas por aislamiento: {estadisticas.camasBloqueadasAislamiento}</span>
+                <span className="text-green-400">Total en Piso: {estadisticas.totalCamas}</span>
+                <span className="text-yellow-400">Con pacientes: {estadisticas.camasOcupadasReales}</span>
+                <span className="text-red-500">Bloq. por aislamiento: {estadisticas.camasBloqueadasAislamiento}</span>
                 <span className="text-emerald-300">Disponibles en piso A.A.: {estadisticas.camasDisponiblesAA}</span>
                 <span className="text-blue-300">Disponibles en piso A.C.: {estadisticas.camasDisponiblesAC}</span>
-                <span className="text-blue-400">Ocupación práctica: {estadisticas.porcentajePractico.toFixed(1)}%</span>
+                <span className="text-blue-400">Ocupación: {estadisticas.porcentajePractico.toFixed(1)}%</span>
               </div>
               {estadisticas.habitacionesActivas > 0 && (
                 <div className="text-sm text-red-500">
