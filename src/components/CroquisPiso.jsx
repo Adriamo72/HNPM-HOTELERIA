@@ -57,6 +57,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     camasOcupadasReales: 0,
     camasBloqueadasAislamiento: 0,
     camasDisponibles: 0,
+    camasDisponiblesAA: 0,
+    camasDisponiblesAC: 0,
     porcentajePractico: 0,
     habitacionesActivas: 0,
     habitacionesAisladas: 0,
@@ -66,6 +68,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     camasOcupadasReales: 0,
     camasNoUtilizadasPorAislamiento: 0,
     camasDisponibles: 0,
+    camasDisponiblesAA: 0,
+    camasDisponiblesAC: 0,
     porcentajePractico: 0,
   });
   
@@ -149,6 +153,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       camasOcupadasReales: 0,
       camasBloqueadasAislamiento: 0,
       camasDisponibles: 0,
+      camasDisponiblesAA: 0,
+      camasDisponiblesAC: 0,
       porcentajePractico: 0,
       habitacionesActivas: 0,
       habitacionesAisladas: 0,
@@ -216,6 +222,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           camasOcupadasReales: 0,
           camasNoUtilizadasPorAislamiento: 0,
           camasDisponibles: 0,
+          camasDisponiblesAA: 0,
+          camasDisponiblesAC: 0,
           porcentajePractico: 0,
         });
         return;
@@ -250,6 +258,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       let totalCamasGlobal = 0;
       let camasOcupadasRealesGlobal = 0;
       let camasNoUtilizadasPorAislamientoGlobal = 0;
+      let camasDisponiblesAAGlobal = 0;
+      let camasDisponiblesACGlobal = 0;
       
       todasHabitaciones.forEach(hab => {
         const ocup = ocupMap[hab.id];
@@ -257,6 +267,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           totalCamasGlobal += ocup.total_camas || 0;
           camasOcupadasRealesGlobal += getCamasOcupadasReales(ocup);
           camasNoUtilizadasPorAislamientoGlobal += getCamasNoUtilizadasPorAislamiento(ocup);
+          
+          const camasOcupadasPracticas = getCamasOcupadasReales(ocup) + getCamasNoUtilizadasPorAislamiento(ocup);
+          const camasDisponibles = Math.max(0, (ocup.total_camas || 0) - camasOcupadasPracticas);
+          
+          if (ocup.area_cerrada) {
+            camasDisponiblesACGlobal += camasDisponibles;
+          } else {
+            camasDisponiblesAAGlobal += camasDisponibles;
+          }
         }
       });
       
@@ -269,6 +288,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         camasOcupadasReales: camasOcupadasRealesGlobal,
         camasNoUtilizadasPorAislamiento: camasNoUtilizadasPorAislamientoGlobal,
         camasDisponibles: camasDisponiblesGlobal,
+        camasDisponiblesAA: camasDisponiblesAAGlobal,
+        camasDisponiblesAC: camasDisponiblesACGlobal,
         porcentajePractico: porcentajeGlobal,
       });
       
@@ -284,6 +305,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
     let camasBloqueadasAislamiento = 0;
     let habitacionesActivas = 0;
     let habitacionesAisladas = 0;
+    let camasDisponiblesAA = 0;
+    let camasDisponiblesAC = 0;
     
     habitaciones.forEach(hab => {
       const ocup = ocupacion[hab.id];
@@ -296,6 +319,15 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         
         const bloqueadas = getCamasNoUtilizadasPorAislamiento(ocup);
         camasBloqueadasAislamiento += bloqueadas;
+        
+        const camasOcupadasPracticas = ocupadasReales + bloqueadas;
+        const camasDisponibles = Math.max(0, (ocup.total_camas || 0) - camasOcupadasPracticas);
+        
+        if (ocup.area_cerrada) {
+          camasDisponiblesAC += camasDisponibles;
+        } else {
+          camasDisponiblesAA += camasDisponibles;
+        }
         
         if (esAislamientoPatologia(ocup)) {
           habitacionesAisladas += 1;
@@ -312,6 +344,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       camasOcupadasReales,
       camasBloqueadasAislamiento,
       camasDisponibles,
+      camasDisponiblesAA,
+      camasDisponiblesAC,
       porcentajePractico,
       habitacionesActivas,
       habitacionesAisladas,
@@ -904,8 +938,12 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
               <p className="text-2xl font-black text-blue-400">{estadisticasGlobales.porcentajePractico.toFixed(0)}%</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES</p>
-              <p className="text-2xl font-black text-emerald-300">{estadisticasGlobales.camasDisponibles}</p>
+              <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.A.</p>
+              <p className="text-2xl font-black text-emerald-300">{estadisticasGlobales.camasDisponiblesAA}</p>
+            </div>
+            <div className="border-l border-slate-700 pl-6">
+              <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.C.</p>
+              <p className="text-2xl font-black text-blue-300">{estadisticasGlobales.camasDisponiblesAC}</p>
             </div>
           </div>
         </div>
@@ -931,7 +969,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
                 <span className="text-green-400">Camas en piso: {estadisticas.totalCamas}</span>
                 <span className="text-yellow-400">Camas ocupadas con pacientes: {estadisticas.camasOcupadasReales}</span>
                 <span className="text-red-500">Camas bloqueadas por aislamiento: {estadisticas.camasBloqueadasAislamiento}</span>
-                <span className="text-emerald-300">Disponibles en piso: {estadisticas.camasDisponibles}</span>
+                <span className="text-emerald-300">Disponibles en piso A.A.: {estadisticas.camasDisponiblesAA}</span>
+                <span className="text-blue-300">Disponibles en piso A.C.: {estadisticas.camasDisponiblesAC}</span>
                 <span className="text-blue-400">Ocupación práctica: {estadisticas.porcentajePractico.toFixed(1)}%</span>
               </div>
               {estadisticas.habitacionesActivas > 0 && (

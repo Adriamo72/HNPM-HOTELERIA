@@ -2290,27 +2290,40 @@ const eliminarVisualizador = async (visId, usuario) => {
                 <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center">
                   <div className="flex gap-6 justify-center flex-wrap">
                     <div>
-                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">TOTAL DE CAMAS DISPONIBLES</p>
+                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.A.</p>
                       <p className="text-2xl font-black text-emerald-300">
                         {(() => {
                           const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
-                          const totalCamasActivas = habitacionesActivas.reduce((total, hab) => {
+                          return habitacionesActivas.reduce((total, hab) => {
                             const ocu = ocupacion[String(hab.id)];
-                            return total + (ocu?.total_camas || 0);
-                          }, 0);
-                          const camasOcupadasActivas = habitacionesActivas.reduce((total, hab) => {
-                            const ocu = ocupacion[String(hab.id)];
-                            return total + (ocu?.camas_ocupadas || 0);
-                          }, 0);
-                          const camasBloqueadasActivas = habitacionesActivas.reduce((total, hab) => {
-                            const ocu = ocupacion[String(hab.id)];
+                            if (ocu?.area_cerrada) return total;
                             const totalCamas = ocu?.total_camas || 0;
                             const camasOcupadasReales = ocu?.camas_ocupadas || 0;
                             const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
-                            if (!aislamientoActivo || camasOcupadasReales <= 0 || totalCamas <= 0) return total;
-                            return total + Math.max(0, totalCamas - camasOcupadasReales);
+                            const camasBloqueadas = (aislamientoActivo && camasOcupadasReales > 0 && totalCamas > 0)
+                              ? Math.max(0, totalCamas - camasOcupadasReales)
+                              : 0;
+                            return total + Math.max(0, totalCamas - camasOcupadasReales - camasBloqueadas);
                           }, 0);
-                          return totalCamasActivas - camasOcupadasActivas - camasBloqueadasActivas;
+                        })()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.C.</p>
+                      <p className="text-2xl font-black text-blue-300">
+                        {(() => {
+                          const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
+                          return habitacionesActivas.reduce((total, hab) => {
+                            const ocu = ocupacion[String(hab.id)];
+                            if (!ocu?.area_cerrada) return total;
+                            const totalCamas = ocu?.total_camas || 0;
+                            const camasOcupadasReales = ocu?.camas_ocupadas || 0;
+                            const aislamientoActivo = Boolean(ocu?.aislamiento_activo);
+                            const camasBloqueadas = (aislamientoActivo && camasOcupadasReales > 0 && totalCamas > 0)
+                              ? Math.max(0, totalCamas - camasOcupadasReales)
+                              : 0;
+                            return total + Math.max(0, totalCamas - camasOcupadasReales - camasBloqueadas);
+                          }, 0);
                         })()}
                       </p>
                     </div>
