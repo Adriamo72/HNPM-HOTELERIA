@@ -920,29 +920,30 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         
         {/* Estadísticas HNPM Globales */}
         <div className="bg-slate-800/50 rounded-xl px-4 py-2 text-center md:order-2 flex-1 md:flex-none">
+          <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mb-1">CAMAS</p>
           <div className="flex gap-6 justify-center flex-wrap">
             <div>
-              <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL DE CAMAS HNPM</p>
+              <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">Total HNPM</p>
               <p className="text-2xl font-black text-green-400">{estadisticasGlobales.totalCamas}</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">CAMAS OCUPADAS POR PACIENTES</p>
+              <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">Con Pacientes</p>
               <p className="text-2xl font-black text-yellow-400">{estadisticasGlobales.camasOcupadasReales}</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">CAMAS NO UTILIZADAS POR AISLACIÓN</p>
+              <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">Bloq. Aislamiento</p>
               <p className="text-2xl font-black text-red-500">{estadisticasGlobales.camasNoUtilizadasPorAislamiento}</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">OCUPACIÓN PRACTICA</p>
+              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Ocupación</p>
               <p className="text-2xl font-black text-blue-400">{estadisticasGlobales.porcentajePractico.toFixed(0)}%</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.A.</p>
+              <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">Disponibles Areas A.</p>
               <p className="text-2xl font-black text-emerald-300">{estadisticasGlobales.camasDisponiblesAA}</p>
             </div>
             <div className="border-l border-slate-700 pl-6">
-              <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wider">CAMAS DISPONIBLES A.C.</p>
+              <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wider">Disponibles Areas C.</p>
               <p className="text-2xl font-black text-blue-300">{estadisticasGlobales.camasDisponiblesAC}</p>
             </div>
           </div>
