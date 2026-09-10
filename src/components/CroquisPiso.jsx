@@ -694,18 +694,18 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         const fechaActualizacion = ocup.actualizado_en || ocup.created_at;
         const fechaObj = new Date(fechaActualizacion);
         fechaObj.setMinutes(fechaObj.getMinutes() - fechaObj.getTimezoneOffset());
-        const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+        const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
         const horaFormateada = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
-        
+
         const infoAmpliatoria = ocup.observaciones || 'Sin especialidad';
-        const areaCerrada = ocup.area_cerrada ? ' (A.C.)' : ' (A.A.)';
-        
+        const areaCerrada = ocup.area_cerrada ? '\nÁrea: Cerrada (A.C.)' : '\nÁrea: Abierta (A.A.)';
+
         let titleText = '';
         if (totalCamas === 0) {
-          titleText = `${infoAmpliatoria} - Sin camas${areaCerrada} - ${fechaFormateada} ${horaFormateada}`;
+          titleText = `${infoAmpliatoria}\nSin camas asignadas${areaCerrada}\nActualizado: ${fechaFormateada} ${horaFormateada} hs`;
         } else {
-          const detalleAislamiento = aislamientoActivo ? ' - Aislamiento' : '';
-          titleText = `${infoAmpliatoria} - ${camasOcupadas}/${totalCamas} (disp: ${camasDisponibles})${detalleAislamiento}${areaCerrada} - ${fechaFormateada} ${horaFormateada}`;
+          const detalleAislamiento = aislamientoActivo ? '\nAislamiento por patología activo' : '';
+          titleText = `${infoAmpliatoria}\nCamas ocupadas: ${camasOcupadas}/${totalCamas}\nCamas disponibles: ${camasDisponibles}${detalleAislamiento}${areaCerrada}\nActualizado: ${fechaFormateada} ${horaFormateada} hs`;
         }
         
         return {
