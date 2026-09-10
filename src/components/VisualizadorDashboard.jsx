@@ -794,7 +794,7 @@ const VisualizadorDashboard = () => {
       {activeTab === 'croquis' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-            <div className="flex flex-wrap gap-2 flex-1 justify-center">
+            <div className="flex flex-wrap gap-2 justify-center w-full sm:w-auto">
               <button
                 onClick={abrirModalInfo}
                 className="relative bg-red-600 hover:bg-red-500 text-white transition-colors text-sm flex items-center gap-1 px-3 py-2 rounded-xl"
@@ -813,7 +813,7 @@ const VisualizadorDashboard = () => {
                   setPisoSeleccionado(e.target.value);
                   setCroquisKey(prev => prev + 1);
                 }}
-                className="flex-1 min-w-[120px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                className="min-w-[120px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               >
                 <option value="">Seleccionar ...</option>
                 {pisos.map(p => (
@@ -824,7 +824,7 @@ const VisualizadorDashboard = () => {
                 type="date"
                 value={fechaSeleccionada}
                 onChange={(e) => { setFechaSeleccionada(e.target.value); setCroquisKey(prev => prev + 1); }}
-                className="flex-1 min-w-[130px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                className="min-w-[130px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
             </div>
             <button
