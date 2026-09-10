@@ -794,10 +794,7 @@ const VisualizadorDashboard = () => {
       {activeTab === 'croquis' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-            <h2 className="text-lg sm:text-2xl font-semibold text-white uppercase tracking-tighter">
-              MAPA DE SECTORES
-            </h2>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 flex-1 justify-center">
               <button
                 onClick={abrirModalInfo}
                 className="relative bg-red-600 hover:bg-red-500 text-white transition-colors text-sm flex items-center gap-1 px-3 py-2 rounded-xl"
@@ -829,17 +826,17 @@ const VisualizadorDashboard = () => {
                 onChange={(e) => { setFechaSeleccionada(e.target.value); setCroquisKey(prev => prev + 1); }}
                 className="flex-1 min-w-[130px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
-              <button
-                onClick={refrescarDatos}
-                disabled={cargandoCroquis}
-                className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-1 px-3 py-2 rounded-xl hover:bg-slate-800"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {cargandoCroquis ? 'Cargando...' : 'Actualizar'}
-              </button>
             </div>
+            <button
+              onClick={refrescarDatos}
+              disabled={cargandoCroquis}
+              className="text-slate-400 hover:text-white transition-colors text-sm flex items-center gap-1 px-3 py-2 rounded-xl hover:bg-slate-800"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {cargandoCroquis ? 'Cargando...' : 'Actualizar'}
+            </button>
           </div>
 
           {pisoSeleccionado ? (
