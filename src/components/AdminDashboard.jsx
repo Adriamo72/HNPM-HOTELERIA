@@ -1890,6 +1890,11 @@ const eliminarVisualizador = async (visId, usuario) => {
           if (filters.aislacion === 'SI' && !tieneAislamiento) return false;
           if (filters.aislacion === 'NO' && tieneAislamiento) return false;
         }
+        if (filters.area) {
+          const areaCerrada = Boolean(ocu?.area_cerrada);
+          if (filters.area === 'ABIERTA' && areaCerrada) return false;
+          if (filters.area === 'CERRADA' && !areaCerrada) return false;
+        }
       }
       
       // Filtros específicos para disponible
@@ -2531,11 +2536,6 @@ const eliminarVisualizador = async (visId, usuario) => {
                     )}
                     {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
-                        AREA
-                      </th>
-                    )}
-                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                         AISLACIÓN
                         <div className="mt-1">
                           <select
@@ -2546,6 +2546,22 @@ const eliminarVisualizador = async (visId, usuario) => {
                             <option value="">Todos</option>
                             <option value="SI">SI</option>
                             <option value="NO">NO</option>
+                          </select>
+                        </div>
+                      </th>
+                    )}
+                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        AREA
+                        <div className="mt-1">
+                          <select
+                            value={filters.area || ''}
+                            onChange={(e) => updateFilter('area', e.target.value)}
+                            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white w-full"
+                          >
+                            <option value="">Todas</option>
+                            <option value="ABIERTA">ABIERTA</option>
+                            <option value="CERRADA">CERRADA</option>
                           </select>
                         </div>
                       </th>
