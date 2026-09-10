@@ -694,17 +694,18 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
         const fechaActualizacion = ocup.actualizado_en || ocup.created_at;
         const fechaObj = new Date(fechaActualizacion);
         fechaObj.setMinutes(fechaObj.getMinutes() - fechaObj.getTimezoneOffset());
-        const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
+        const fechaFormateada = fechaObj.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
         const horaFormateada = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
         
         const infoAmpliatoria = ocup.observaciones || 'Sin especialidad';
+        const areaCerrada = ocup.area_cerrada ? ' (A.C.)' : ' (A.A.)';
         
         let titleText = '';
         if (totalCamas === 0) {
-          titleText = `${infoAmpliatoria}\nSin camas asignadas\n${fechaFormateada} ${horaFormateada} hs`;
+          titleText = `${infoAmpliatoria} - Sin camas${areaCerrada} - ${fechaFormateada} ${horaFormateada}`;
         } else {
-          const detalleAislamiento = aislamientoActivo ? '\nAislamiento por patología activo' : '';
-          titleText = `${infoAmpliatoria}\n${camasOcupadas}/${totalCamas} camas ocupadas, ${camasDisponibles} disponibles${detalleAislamiento}\n${fechaFormateada} ${horaFormateada} hs`;
+          const detalleAislamiento = aislamientoActivo ? ' - Aislamiento' : '';
+          titleText = `${infoAmpliatoria} - ${camasOcupadas}/${totalCamas} (disp: ${camasDisponibles})${detalleAislamiento}${areaCerrada} - ${fechaFormateada} ${horaFormateada}`;
         }
         
         return {
@@ -965,8 +966,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
       <div className="bg-slate-800/50 p-3 mx-4 mt-2 rounded-lg">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div className="flex flex-col gap-2 text-sm">
-              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Camas en Piso</p>
               <h3 className="text-xl font-bold text-blue-400">{pisoNombre}</h3>
+              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Camas en Piso</p>
               <div className="flex gap-4 flex-wrap">
                 <span className="text-green-400">Total en Piso: {estadisticas.totalCamas}</span>
                 <span className="text-yellow-400">Con pacientes: {estadisticas.camasOcupadasReales}</span>

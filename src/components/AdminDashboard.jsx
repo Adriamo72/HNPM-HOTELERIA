@@ -619,12 +619,29 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
         let totalCamasGlobal = 0;
         let camasOcupadasRealesGlobal = 0;
         let camasNoUtilizadasPorAislamientoGlobal = 0;
+        let camasOcupadasRealesAA = 0;
+        let camasOcupadasRealesAC = 0;
+        let camasDisponiblesAA = 0;
+        let camasDisponiblesAC = 0;
         todasHabitaciones.forEach(hab => {
           const ocup = ocupacionMap[hab.id];
           if (ocup && ocup.tipo_habitacion === 'activa') {
             totalCamasGlobal += ocup.total_camas || 0;
             camasOcupadasRealesGlobal += getCamasOcupadasReales(ocup);
             camasNoUtilizadasPorAislamientoGlobal += getCamasNoUtilizadasPorAislamiento(ocup);
+            
+            const camasOcupadasReales = getCamasOcupadasReales(ocup);
+            const camasBloqueadas = getCamasNoUtilizadasPorAislamiento(ocup);
+            const camasOcupadasPracticas = camasOcupadasReales + camasBloqueadas;
+            const camasDisponibles = Math.max(0, (ocup.total_camas || 0) - camasOcupadasPracticas);
+            
+            if (ocup.area_cerrada) {
+              camasOcupadasRealesAC += camasOcupadasReales;
+              camasDisponiblesAC += camasDisponibles;
+            } else {
+              camasOcupadasRealesAA += camasOcupadasReales;
+              camasDisponiblesAA += camasDisponibles;
+            }
           }
         });
         const camasOcupadasPracticas = camasOcupadasRealesGlobal + camasNoUtilizadasPorAislamientoGlobal;
@@ -635,6 +652,10 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
           totalCamas: totalCamasGlobal,
           camasOcupadas: camasOcupadasRealesGlobal,
           camasDisponibles: camasDisponiblesGlobal,
+          camasOcupadasAA: camasOcupadasRealesAA,
+          camasOcupadasAC: camasOcupadasRealesAC,
+          camasDisponiblesAA: camasDisponiblesAA,
+          camasDisponiblesAC: camasDisponiblesAC,
           rechazados: rechazosPorFecha[fechaStr] || 0
         };
       });
@@ -1940,7 +1961,7 @@ const eliminarVisualizador = async (visId, usuario) => {
     
     // Determinar columnas según el tipo de pestaña
     if (activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') {
-      headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN');
+      headers.push('CAMAS OCUPADAS', 'CAPACIDAD CAMAS', 'AISLACIÓN', 'AREA');
     }
     headers.push('NOVEDADES');
     
@@ -1950,13 +1971,14 @@ const eliminarVisualizador = async (visId, usuario) => {
         datosTabla = filtrarHabitacionesPorTipo('internacion').map(habitacion => {
           const ocu = ocupacion[String(habitacion.id)];
           const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
-          
+
           return [
             piso?.nombre_piso || 'Sin piso',
             habitacion.nombre || 'Sin nombre',
             ocu ? String(ocu.camas_ocupadas || 0) : '0',
             ocu ? String(ocu.total_camas || 0) : '0',
             Boolean(ocu?.aislamiento_activo) ? 'SI' : 'NO',
+            ocu?.area_cerrada ? 'CERRADA' : 'ABIERTA',
             ocu?.observaciones || 'Sin novedades'
           ];
         });
@@ -2246,12 +2268,26 @@ const eliminarVisualizador = async (visId, usuario) => {
                       <p className="text-2xl font-black text-green-400">{filtrarHabitacionesPorTipo('internacion').length}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">TOTAL DE CAMAS DE INTERNACIÓN</p>
-                      <p className="text-2xl font-black text-green-400">
+                      <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">Total de Camas en A.A.</p>
+                      <p className="text-2xl font-black text-emerald-300">
                         {(() => {
                           const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
                           return habitacionesActivas.reduce((total, hab) => {
                             const ocu = ocupacion[String(hab.id)];
+                            if (ocu?.area_cerrada) return total;
+                            return total + (ocu?.total_camas || 0);
+                          }, 0);
+                        })()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wider">Total de Camas en A.C.</p>
+                      <p className="text-2xl font-black text-blue-300">
+                        {(() => {
+                          const habitacionesActivas = filtrarHabitacionesPorTipo('internacion');
+                          return habitacionesActivas.reduce((total, hab) => {
+                            const ocu = ocupacion[String(hab.id)];
+                            if (!ocu?.area_cerrada) return total;
                             return total + (ocu?.total_camas || 0);
                           }, 0);
                         })()}
@@ -2495,6 +2531,11 @@ const eliminarVisualizador = async (visId, usuario) => {
                     )}
                     {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        AREA
+                      </th>
+                    )}
+                    {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                         AISLACIÓN
                         <div className="mt-1">
                           <select
@@ -2561,6 +2602,15 @@ const eliminarVisualizador = async (visId, usuario) => {
                               <span className="text-red-400 font-semibold">SI</span>
                             ) : (
                               <span className="text-green-400">NO</span>
+                            )}
+                          </td>
+                        )}
+                        {(activeEstadosTab === 'internacion' || activeEstadosTab === 'ocupacion') && (
+                          <td className="px-4 py-3 text-slate-200">
+                            {ocu?.area_cerrada ? (
+                              <span className="text-blue-300 font-semibold">CERRADA</span>
+                            ) : (
+                              <span className="text-emerald-300">ABIERTA</span>
                             )}
                           </td>
                         )}
@@ -2641,9 +2691,10 @@ const eliminarVisualizador = async (visId, usuario) => {
                   <YAxis stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 12 }} />
                   <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px', color: '#f1f5f9' }} />
                   <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                  <Line type="monotone" dataKey="totalCamas" stroke="#3b82f6" strokeWidth={2} name="TOTAL DE CAMAS" dot={false} />
-                  <Line type="monotone" dataKey="camasOcupadas" stroke="#ef4444" strokeWidth={2} name="CAMAS OCUPADAS POR PACIENTES" dot={false} />
-                  <Line type="monotone" dataKey="camasDisponibles" stroke="#22c55e" strokeWidth={2} name="CAMAS DISPONIBLES" dot={false} />
+                  <Line type="monotone" dataKey="camasDisponiblesAA" stroke="#22c55e" strokeWidth={2} name="Disponible A.A." dot={false} />
+                  <Line type="monotone" dataKey="camasDisponiblesAC" stroke="#3b82f6" strokeWidth={2} name="Disponible A.C." dot={false} />
+                  <Line type="monotone" dataKey="camasOcupadasAA" stroke="#f59e0b" strokeWidth={2} name="Ocupación Pacientes A.A." dot={false} />
+                  <Line type="monotone" dataKey="camasOcupadasAC" stroke="#ef4444" strokeWidth={2} name="Ocupación Pacientes A.C." dot={false} />
                 </LineChart>
               </ResponsiveContainer>
               <p className="text-xs text-slate-500 mt-4 text-center">Últimos 30 días</p>
