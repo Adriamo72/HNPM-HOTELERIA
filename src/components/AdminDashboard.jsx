@@ -6,7 +6,7 @@ import CroquisPiso from './CroquisPiso';
 import SpinnerCarga from './SpinnerCarga';
 import RecorridosList from './RecorridosList';
 import AsistenteIA from './AsistenteIA';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 
 const formatearFechaLocalISO = (fecha) => {
   const anio = fecha.getFullYear();
@@ -35,7 +35,7 @@ const AdminDashboard = () => {
   const perfilUsuario = sesion.usuario || null;
 
   const [activeTab, setActiveTab] = useState('croquis');
-  const [activeEstadosTab, setActiveEstadosTab] = useState('internacion');
+  const [activeEstadosTab, setActiveEstadosTab] = useState('disponible');
   const [filters, setFilters] = useState({
     piso: '',
     habitacion: '',
@@ -155,6 +155,8 @@ const AdminDashboard = () => {
   const [metricasData, setMetricasData] = useState([]);
   const [rankingResponsablesMi, setRankingResponsablesMi] = useState([]);
   const [cargandoMetricas, setCargandoMetricas] = useState(false);
+  const [datosAreas, setDatosAreas] = useState([]);
+  const [datosEspecialidades, setDatosEspecialidades] = useState([]);
 
   // ==================== CARGAR DATOS PRINCIPAL ====================
   const cargarDatos = async (tipo = 'todos') => {
@@ -662,12 +664,49 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
 
       setMetricasData(datosMensuales);
       setRankingResponsablesMi(rankingResponsables);
+
+      // Calcular datos de áreas para gráfico de torta (datos más recientes)
+      const ultimoDia = datosMensuales[datosMensuales.length - 1];
+      if (ultimoDia) {
+        const datosAreas = [
+          { name: 'Disponibles A.A.', value: ultimoDia.camasDisponiblesAA, color: '#22c55e' },
+          { name: 'Ocupadas A.A.', value: ultimoDia.camasOcupadasAA, color: '#f59e0b' },
+          { name: 'Disponibles A.C.', value: ultimoDia.camasDisponiblesAC, color: '#3b82f6' },
+          { name: 'Ocupadas A.C.', value: ultimoDia.camasOcupadasAC, color: '#ef4444' },
+        ];
+        setDatosAreas(datosAreas);
+      }
+
+      // Calcular datos por especialidades
+      const especialidadesMap = {};
+      todasHabitaciones.forEach(hab => {
+        const ocu = ocupacion[String(hab.id)];
+        if (ocu && ocu.tipo_habitacion === 'activa' && ocu.observaciones) {
+          const especialidad = ocu.observaciones.trim();
+          if (!especialidadesMap[especialidad]) {
+            especialidadesMap[especialidad] = { total: 0, ocupadas: 0 };
+          }
+          especialidadesMap[especialidad].total += ocu.total_camas || 0;
+          especialidadesMap[especialidad].ocupadas += getCamasOcupadasReales(ocu);
+        }
+      });
+
+      const datosEspecialidades = Object.entries(especialidadesMap)
+        .map(([especialidad, datos]) => ({
+          especialidad,
+          total: datos.total,
+          ocupadas: datos.ocupadas,
+          disponibles: datos.total - datos.ocupadas
+        }))
+        .sort((a, b) => b.total - a.total);
+      setDatosEspecialidades(datosEspecialidades);
+
     } catch (error) {
       console.error('Error cargando métricas históricas:', error);
     } finally {
       setCargandoMetricas(false);
     }
-  }, [deduplicarRechazos, normalizarRechazo]);
+  }, [deduplicarRechazos, normalizarRechazo, ocupacion]);
 
   useEffect(() => {
     if (activeTab === 'metricas' && metricasData.length === 0 && !cargandoMetricas) {
@@ -2230,6 +2269,18 @@ const eliminarVisualizador = async (visId, usuario) => {
           {/* Sub-tabs inside ESTADOS */}
           <div className="flex gap-1 mb-6 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full">
             <button 
+              onClick={() => setActiveEstadosTab('disponible')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'disponible' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Disponible
+            </button>
+            <button 
+              onClick={() => setActiveEstadosTab('ocupacion')} 
+              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'ocupacion' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Ocupación
+            </button>
+            <button 
               onClick={() => setActiveEstadosTab('internacion')} 
               className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'internacion' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
@@ -2246,18 +2297,6 @@ const eliminarVisualizador = async (visId, usuario) => {
               className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'otros' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
             >
               OTROS
-            </button>
-            <button 
-              onClick={() => setActiveEstadosTab('ocupacion')} 
-              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'ocupacion' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              Ocupación
-            </button>
-            <button 
-              onClick={() => setActiveEstadosTab('disponible')} 
-              className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold uppercase transition-all ${activeEstadosTab === 'disponible' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              Disponible
             </button>
           </div>
 
@@ -2698,8 +2737,75 @@ const eliminarVisualizador = async (visId, usuario) => {
             <SpinnerCarga mensaje="CARGANDO MÉTRICAS..." />
           ) : (
             <>
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-              <h3 className="text-xl font-semibold text-white mb-6 text-center">CAMAS</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+                <h3 className="text-xl font-semibold text-white mb-6 text-center">DISTRIBUCIÓN POR ÁREAS</h3>
+                <ResponsiveContainer width="100%" height={350}>
+                  <PieChart>
+                    <Pie
+                      data={datosAreas}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={120}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {datosAreas.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1e293b',
+                        border: '1px solid #475569',
+                        borderRadius: '8px',
+                        color: '#f1f5f9'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+                <h3 className="text-xl font-semibold text-white mb-6 text-center">OCUPACIÓN POR ESPECIALIDAD</h3>
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={datosEspecialidades}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                    <XAxis
+                      dataKey="especialidad"
+                      stroke="#94a3b8"
+                      tick={{ fill: '#94a3b8', fontSize: 10 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                    />
+                    <YAxis
+                      stroke="#94a3b8"
+                      tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1e293b',
+                        border: '1px solid #475569',
+                        borderRadius: '8px',
+                        color: '#f1f5f9'
+                      }}
+                    />
+                    <Legend
+                      wrapperStyle={{ color: '#94a3b8' }}
+                    />
+                    <Bar dataKey="total" fill="#3b82f6" name="Total Camas" />
+                    <Bar dataKey="ocupadas" fill="#ef4444" name="Ocupadas" />
+                    <Bar dataKey="disponibles" fill="#22c55e" name="Disponibles" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 mt-6">
+              <h3 className="text-xl font-semibold text-white mb-6 text-center">EVOLUCIÓN DE CAMAS</h3>
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart data={metricasData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
