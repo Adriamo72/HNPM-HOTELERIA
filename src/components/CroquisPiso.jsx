@@ -910,9 +910,8 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
   return (
     <div className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-700">
       {/* Header con estadísticas HNPM */}
-      <div className="flex flex-col md:flex-row justify-center md:justify-between items-center p-4 border-b border-slate-700 gap-3">
+      <div className="flex flex-col md:flex-row justify-center md:justify-between items-center p-4 border-b border-slate-700/50 gap-3" style={{ borderBottomWidth: '0.5px' }}>
         <div className="md:order-1">
-          <h3 className="text-xl font-bold text-blue-400">{pisoNombre}</h3>
           {!esVisualizador && (
             <p className="text-xs text-slate-500">{modoEdicion ? (modoMovimiento ? '🖱️ Modo Movimiento' : '✎ Modo Edición') : '👁️ Modo Visualización'}</p>
           )}
@@ -967,6 +966,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div className="flex flex-col gap-2 text-sm">
               <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Camas en Piso</p>
+              <h3 className="text-xl font-bold text-blue-400">{pisoNombre}</h3>
               <div className="flex gap-4 flex-wrap">
                 <span className="text-green-400">Total en Piso: {estadisticas.totalCamas}</span>
                 <span className="text-yellow-400">Con pacientes: {estadisticas.camasOcupadasReales}</span>
@@ -991,6 +991,7 @@ const CroquisPiso = ({ pisoId, pisoNombre, habitaciones, esVisualizador = false,
             <div className="bg-green-500 h-2 rounded-full transition-all duration-500" style={{ width: `${estadisticas.porcentajePractico}%` }}></div>
           </div>
         </div>
+        <div className="mx-4 mt-2 border-b border-slate-700/30" style={{ borderBottomWidth: '0.5px' }}></div>
 
       <div 
         ref={containerRef}
