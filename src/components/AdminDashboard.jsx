@@ -202,6 +202,10 @@ const AdminDashboard = () => {
         // Usar habitaciones_especiales como habitaciones principales
         setHabitacionesEspeciales(resHabs.data || []);
         setHabitaciones(resHabs.data || []);
+
+        // Cargar estado de habitaciones
+        await cargarEstadoHabitaciones(resHabs.data || []);
+
         // Seleccionar automáticamente el piso más alto solo si no hay uno ya seleccionado
         if (pisosOrdenados.length > 0) {
           setPisoSeleccionado(prev => (prev ? prev : pisosOrdenados[0].id));
