@@ -1903,7 +1903,7 @@ const eliminarVisualizador = async (visId, usuario) => {
   };
 
   const filtrarHabitacionesPorTipo = (tipo) => {
-    return habitacionesEspeciales.filter(habitacion => {
+    const resultado = habitacionesEspeciales.filter(habitacion => {
       const ocu = ocupacion[String(habitacion.id)];
       const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
       
@@ -2010,6 +2010,7 @@ const eliminarVisualizador = async (visId, usuario) => {
           return false;
       }
     });
+    return resultado;
   };
 
   const generarPDFHabitaciones = () => {
