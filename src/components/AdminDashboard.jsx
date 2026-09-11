@@ -3236,8 +3236,8 @@ const eliminarVisualizador = async (visId, usuario) => {
                                       {truncarTexto(formatearResumenHabitacion(config), 28)}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-2 ml-2">
-                                    <label className="inline-flex items-center gap-1 cursor-pointer" title="Área Cerrada">
+                                  <div className="flex items-center gap-1.5 ml-2">
+                                    <label className="inline-flex items-center gap-1.5 cursor-pointer px-2 py-1 rounded-lg hover:bg-slate-800/50 transition-all" title="Área Cerrada">
                                       <input
                                         type="checkbox"
                                         checked={config.area_cerrada || false}
@@ -3245,7 +3245,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                                           e.stopPropagation();
                                           actualizarHabitacionStatus(hab.id, 'area_cerrada', e.target.checked);
                                         }}
-                                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
+                                        className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
                                       />
                                       <span className="text-[8px] font-bold uppercase text-slate-400">A.C.</span>
                                     </label>
@@ -3254,14 +3254,14 @@ const eliminarVisualizador = async (visId, usuario) => {
                                         ...prev,
                                         [hab.id]: !prev[hab.id]
                                       })); }}
-                                      className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all"
+                                      className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800/80 text-slate-200 border border-slate-600/40 hover:bg-slate-700 transition-all"
                                       title="Ver configuración"
                                     >
                                       ⚙️
                                     </button>
                                     <button
                                       onClick={(e) => { e.stopPropagation(); eliminarHabitacion(hab.id, hab.nombre); }}
-                                      className="text-red-500 font-semibold text-base px-2 py-1 rounded hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
+                                      className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-red-500 font-semibold text-sm hover:bg-red-950/30 transition-all opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
                                       title="Eliminar habitación"
                                     >
                                       ×
