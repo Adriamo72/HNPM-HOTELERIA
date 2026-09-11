@@ -522,6 +522,7 @@ const VisualizadorDashboard = () => {
     } finally {
       setCargandoMetricas(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deduplicarRechazos, normalizarRechazo, ocupacion]);
 
   useEffect(() => {
