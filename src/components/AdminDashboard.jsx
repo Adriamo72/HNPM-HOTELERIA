@@ -873,8 +873,10 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
 
   // Funciones de recarga por pestaña
 const recargarCroquis = async () => {
+  setCargandoCroquis(true);
   await cargarDatos('croquis');
   await cargarRechazosPacientes();
+  setCroquisKey(prev => prev + 1);
 };
 const recargarAdmin = async () => {
   setCargandoAdmin(true);
@@ -2262,7 +2264,7 @@ const eliminarVisualizador = async (visId, usuario) => {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              Actualizar
+              {cargandoCroquis ? 'Cargando...' : 'Actualizar'}
             </button>
           </div>
           
