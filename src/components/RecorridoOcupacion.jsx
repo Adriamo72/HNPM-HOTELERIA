@@ -52,7 +52,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
       const habitacionIds = habitacionesData.map(h => h.id);
       const { data: ocupacionesData, error: ocupError } = await supabase
         .from('ocupacion_habitaciones')
-        .select('habitacion_id, tipo_habitacion, total_camas, camas_ocupadas, observaciones, aislamiento_activo, fecha, actualizado_en')
+        .select('habitacion_id, tipo_habitacion, total_camas, camas_ocupadas, observaciones, aislamiento_activo, area_cerrada, fecha, actualizado_en')
         .in('habitacion_id', habitacionIds)
         .order('fecha', { ascending: false })
         .order('actualizado_en', { ascending: false });
@@ -78,11 +78,13 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
             id: hab.id,
             nombre: hab.nombre,
             total_camas: ocupReciente.total_camas,  // Respetar valor 0 si está configurado
-            observaciones: (ocupReciente.observaciones || '').trim()
+            observaciones: (ocupReciente.observaciones || '').trim(),
+            area_cerrada: Boolean(ocupReciente.area_cerrada)  // Mantener valor de área cerrada
           });
           ocupState[hab.id] = {
             camas_ocupadas: ocupReciente.camas_ocupadas || 0,
-            aislamiento: Boolean(ocupReciente.aislamiento_activo)
+            aislamiento: Boolean(ocupReciente.aislamiento_activo),
+            area_cerrada: Boolean(ocupReciente.area_cerrada)  // Mantener valor de área cerrada
           };
         }
       }
@@ -222,6 +224,7 @@ const RecorridoOcupacion = ({ perfilUsuario, slugPiso }) => {
         camas_ocupadas: ocupaciones[hab.id]?.camas_ocupadas || 0,
         observaciones: observacionesAGuardar,
         aislamiento_activo: Boolean(ocupaciones[hab.id]?.aislamiento),
+        area_cerrada: Boolean(hab.area_cerrada),  // Mantener valor de área cerrada establecido por ADMIN
         actualizado_por: perfilUsuario?.dni,
         actualizado_en: timestampActual
       };
