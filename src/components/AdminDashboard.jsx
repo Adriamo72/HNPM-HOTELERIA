@@ -1466,7 +1466,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                   <div class="datos">
                     <div class="jerarquia">${personal.jerarquia || 'OPERADOR'}</div>
                     <div class="nombre">${personal.apellido}, ${personal.nombre}</div>
-                    <div class="rol">${personal.rol?.toUpperCase() || 'PAÑOLERO'}</div>
+                    <div class="rol">${personal.rol?.toUpperCase() || 'OPERADOR'}</div>
                   </div>
                   
                   <div class="footer">
@@ -1645,7 +1645,7 @@ const eliminarVisualizador = async (visId, usuario) => {
 
     const { error } = await supabase.from('personal').insert([personalToInsert]);
     if (!error) {
-      setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'pañolero' });
+      setNuevoMiembro({ dni: '', nombre: '', apellido: '', jerarquia: '', celular: '', rol: 'operador' });
       mostrarSplash("✅ Personal registrado");
       setMostrarModalPersonal(false);
       cargarDatos();
@@ -3805,7 +3805,6 @@ const eliminarVisualizador = async (visId, usuario) => {
                 value={nuevoMiembro.rol} 
                 onChange={e => setNuevoMiembro({...nuevoMiembro, rol: e.target.value})}
               >
-                <option value="pañolero">Pañolero</option>
                 <option value="operador">Operador</option>
                 <option value="encargado_piso">Encargado de Piso</option>
               </select>

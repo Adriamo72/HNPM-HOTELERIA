@@ -21,7 +21,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     };
   }, []);
 
-  // Escaneo de QR para operadores (pañoleros) y accesos directos
+  // Escaneo de QR para operadores y accesos directos
   const handleScanSuccess = async (decodedText) => {
     if (verificando) return;
     
@@ -63,13 +63,13 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
           return;
         }
         
-        // Solo pañoleros pueden acceder por QR
+        // Solo operadores pueden acceder por QR
         if (usuario.rol === 'ADMIN') {
           setError("ACCESO NO AUTORIZADO - Use panel de administración");
           setVerificando(false);
           return;
         }
-        
+
         if (usuario.rol === 'visualizador') {
           setError("ACCESO NO AUTORIZADO - Use acceso con PIN");
           setVerificando(false);
@@ -387,7 +387,7 @@ const LoginConQR = ({ onLoginSuccess, modoAcceso }) => {
     );
   }
 
-  // Pantalla para accesos específicos (desde QR de sector: recorrido, pañol, lavadero, habitación)
+  // Pantalla para accesos específicos (desde QR de sector: recorrido)
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 flex items-center justify-center p-6">
       <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-6 max-w-md w-full text-center shadow-2xl border border-blue-900/30">

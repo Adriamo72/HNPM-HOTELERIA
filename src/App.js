@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import LoginConQR from './components/LoginConQR';
-import FormularioPiso from './components/FormularioPiso';
 import AdminDashboard from './components/AdminDashboard';
 import RecorridoOcupacion from './components/RecorridoOcupacion';
-import VisualizadorDashboard from './components/VisualizadorDashboard'; // Nuevo componente
+import VisualizadorDashboard from './components/VisualizadorDashboard';
 import EscaneoSemaforo from './pages/EscaneoSemaforo';
 
 function App() {
@@ -25,13 +24,13 @@ function App() {
         if (new Date(sesion.expira) > new Date()) {
           setUsuarioLogueado(sesion.usuario.dni);
           setDatosUsuario(sesion.usuario);
-          // Determinar rol - AGREGADO ROL VISUALIZADOR
+          // Determinar rol
           if (sesion.usuario.rol === 'ADMIN' || sesion.usuario.dni === '22976371') {
             setRol('admin');
           } else if (sesion.usuario.rol === 'visualizador') {
             setRol('visualizador');
           } else {
-            setRol('pañolero');
+            setRol('operador');
           }
         } else {
           localStorage.removeItem('sesion_hnpm');
@@ -55,28 +54,7 @@ function App() {
       setModoAcceso('recorrido');
       setSlugCompleto(slug);
       console.log("📌 Modo RECORRIDO OCUPACIÓN:", slug);
-    } 
-    // Ruta para ropa blanca - piso
-    else if (path.includes('/piso/')) {
-      const slug = path.split('/piso/')[1];
-      setModoAcceso('piso');
-      setSlugCompleto(slug);
-      console.log("📌 Modo PISO (pañol):", slug);
-    } 
-    // Ruta para ropa blanca - lavadero
-    else if (path.includes('/lavadero/')) {
-      const slug = path.split('/lavadero/')[1];
-      setModoAcceso('lavadero');
-      setSlugCompleto(slug);
-      console.log("📌 Modo LAVADERO:", slug);
-    } 
-    // Ruta para ropa blanca - habitación especial
-    else if (path.includes('/habitacion/')) {
-      const slug = path.split('/habitacion/')[1];
-      setModoAcceso('habitacion');
-      setSlugCompleto(slug);
-      console.log("📌 Modo HABITACION (ropa blanca):", slug);
-    } 
+    }
     // Ruta para escaneo de semáforo de limpieza
     else if (path.includes('/semaforo')) {
       setModoAcceso('semaforo');
@@ -150,13 +128,13 @@ function App() {
     console.log("✅ Usuario autenticado:", usuario.apellido);
     setUsuarioLogueado(usuario.dni);
     setDatosUsuario(usuario);
-    // Determinar rol - AGREGADO ROL VISUALIZADOR
+    // Determinar rol
     if (usuario.rol === 'ADMIN' || usuario.dni === '22976371') {
       setRol('admin');
     } else if (usuario.rol === 'visualizador') {
       setRol('visualizador');
     } else {
-      setRol('pañolero');
+      setRol('operador');
     }
   };
 
@@ -217,24 +195,6 @@ function App() {
                 <p className="text-xs font-bold text-white">{slugCompleto?.replace(/-/g, ' ').toUpperCase() || 'PISO'}</p>
               </>
             )}
-            {modoAcceso === 'piso' && (
-              <>
-                <p className="text-[8px] text-blue-400 uppercase tracking-wider">Pañol</p>
-                <p className="text-xs font-bold text-white">{slugCompleto?.replace(/-/g, ' ').toUpperCase() || 'SECTOR'}</p>
-              </>
-            )}
-            {modoAcceso === 'lavadero' && (
-              <>
-                <p className="text-[8px] text-green-400 uppercase tracking-wider">Lavadero</p>
-                <p className="text-xs font-bold text-white">{slugCompleto?.replace(/-/g, ' ').toUpperCase() || 'SECTOR'}</p>
-              </>
-            )}
-            {modoAcceso === 'habitacion' && (
-              <>
-                <p className="text-[8px] text-yellow-400 uppercase tracking-wider">Habitación</p>
-                <p className="text-xs font-bold text-white">{slugCompleto?.replace(/-/g, ' ').toUpperCase() || 'HAB'}</p>
-              </>
-            )}
             {!modoAcceso && rol === 'admin' && (
               <p className="text-xs font-bold text-red-400">ADMIN</p>
             )}
@@ -264,24 +224,18 @@ function App() {
           </div>
         </header>
 
-        {/* Main Content - Actualizado para incluir visualizador */}
+        {/* Main Content */}
         <main className="flex-grow">
           {rol === 'admin' ? (
             <AdminDashboard />
           ) : rol === 'visualizador' ? (
             <VisualizadorDashboard />
           ) : modoAcceso === 'recorrido' ? (
-            <RecorridoOcupacion 
+            <RecorridoOcupacion
               perfilUsuario={datosUsuario}
               slugPiso={slugCompleto}
             />
-          ) : (
-            <FormularioPiso 
-              perfilUsuario={datosUsuario} 
-              slugPiso={slugCompleto}
-              modoAcceso={modoAcceso}
-            />
-          )}
+          ) : null}
         </main>
         
         {/* Footer */}
