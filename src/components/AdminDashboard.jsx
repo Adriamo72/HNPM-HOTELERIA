@@ -29,6 +29,31 @@ const getCamasNoUtilizadasPorAislamiento = (ocup) => {
   return Math.max(0, totalCamas - camasOcupadasReales);
 };
 
+const calcularDatosEspecialidadesActuales = (habitaciones, ocupacion) => {
+  const especialidadesMap = {};
+
+  habitaciones.forEach(hab => {
+    const ocu = ocupacion[String(hab.id)];
+    if (ocu && ocu.tipo_habitacion === 'activa' && ocu.observaciones) {
+      const especialidad = ocu.observaciones.trim();
+      if (!especialidadesMap[especialidad]) {
+        especialidadesMap[especialidad] = { total: 0, ocupadas: 0 };
+      }
+      especialidadesMap[especialidad].total += ocu.total_camas || 0;
+      especialidadesMap[especialidad].ocupadas += getCamasOcupadasReales(ocu);
+    }
+  });
+
+  return Object.entries(especialidadesMap)
+    .map(([especialidad, datos]) => ({
+      especialidad,
+      total: datos.total,
+      ocupadas: datos.ocupadas,
+      disponibles: datos.total - datos.ocupadas
+    }))
+    .sort((a, b) => b.total - a.total);
+};
+
 const AdminDashboard = () => {
   // Obtener perfil del usuario desde localStorage
   const sesion = JSON.parse(localStorage.getItem('sesion_hnpm') || '{}');
@@ -199,13 +224,14 @@ const AdminDashboard = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ==================== RECARGAR DATOS CUANDO CAMBIA LA FECHA ====================
+  // ==================== CALCULAR DATOS DE ESPECIALIDADES ACTUALES ====================
   useEffect(() => {
-    if (habitacionesEspeciales.length > 0) {
-      cargarEstadoHabitaciones(habitacionesEspeciales);
+    if (habitacionesEspeciales.length > 0 && Object.keys(ocupacion).length > 0) {
+      const datosEspecialidades = calcularDatosEspecialidadesActuales(habitacionesEspeciales, ocupacion);
+      setDatosEspecialidades(datosEspecialidades);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fechaSeleccionada, habitacionesEspeciales]);
+  }, [habitacionesEspeciales, ocupacion]);
 
   useEffect(() => {
     if (!habitacionesEspeciales.length) return;
@@ -676,30 +702,6 @@ const limpiarHistorialAntiguo = async (habitacionId = null) => {
         ];
         setDatosAreas(datosAreas);
       }
-
-      // Calcular datos por especialidades
-      const especialidadesMap = {};
-      todasHabitaciones.forEach(hab => {
-        const ocu = ocupacion[String(hab.id)];
-        if (ocu && ocu.tipo_habitacion === 'activa' && ocu.observaciones) {
-          const especialidad = ocu.observaciones.trim();
-          if (!especialidadesMap[especialidad]) {
-            especialidadesMap[especialidad] = { total: 0, ocupadas: 0 };
-          }
-          especialidadesMap[especialidad].total += ocu.total_camas || 0;
-          especialidadesMap[especialidad].ocupadas += getCamasOcupadasReales(ocu);
-        }
-      });
-
-      const datosEspecialidades = Object.entries(especialidadesMap)
-        .map(([especialidad, datos]) => ({
-          especialidad,
-          total: datos.total,
-          ocupadas: datos.ocupadas,
-          disponibles: datos.total - datos.ocupadas
-        }))
-        .sort((a, b) => b.total - a.total);
-      setDatosEspecialidades(datosEspecialidades);
 
     } catch (error) {
       console.error('Error cargando métricas históricas:', error);
