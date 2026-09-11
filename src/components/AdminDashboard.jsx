@@ -1903,7 +1903,7 @@ const eliminarVisualizador = async (visId, usuario) => {
   };
 
   const filtrarHabitacionesPorTipo = (tipo) => {
-    return habitaciones.filter(habitacion => {
+    return habitacionesEspeciales.filter(habitacion => {
       const ocu = ocupacion[String(habitacion.id)];
       const piso = pisos.find(p => String(p.id) === String(habitacion.piso_id));
       
