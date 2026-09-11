@@ -36,10 +36,11 @@ const calcularDatosEspecialidadesActuales = (habitaciones, ocupacion) => {
     if (ocu && ocu.tipo_habitacion === 'activa' && ocu.observaciones) {
       const especialidad = ocu.observaciones.trim();
       if (!especialidadesMap[especialidad]) {
-        especialidadesMap[especialidad] = { total: 0, ocupadas: 0 };
+        especialidadesMap[especialidad] = { total: 0, ocupadas: 0, bloqueadas: 0 };
       }
       especialidadesMap[especialidad].total += ocu.total_camas || 0;
       especialidadesMap[especialidad].ocupadas += getCamasOcupadasReales(ocu);
+      especialidadesMap[especialidad].bloqueadas += getCamasNoUtilizadasPorAislamiento(ocu);
     }
   });
 
@@ -48,7 +49,8 @@ const calcularDatosEspecialidadesActuales = (habitaciones, ocupacion) => {
       especialidad,
       total: datos.total,
       ocupadas: datos.ocupadas,
-      disponibles: datos.total - datos.ocupadas
+      bloqueadas: datos.bloqueadas,
+      disponibles: Math.max(0, datos.total - datos.ocupadas - datos.bloqueadas)
     }))
     .sort((a, b) => b.total - a.total);
 };
@@ -1532,6 +1534,7 @@ const VisualizadorDashboard = () => {
                     />
                     <Bar dataKey="total" fill="#3b82f6" name="Total Camas" />
                     <Bar dataKey="ocupadas" fill="#ef4444" name="Ocupadas" />
+                    <Bar dataKey="bloqueadas" fill="#f59e0b" name="Bloqueadas por Aislamiento" />
                     <Bar dataKey="disponibles" fill="#22c55e" name="Disponibles" />
                   </BarChart>
                 </ResponsiveContainer>
