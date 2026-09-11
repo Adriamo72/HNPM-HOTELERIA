@@ -881,7 +881,10 @@ const recargarAdmin = async () => {
     
     setPisos(ordenarPisos(resPisos.data || []));
     setHabitacionesEspeciales(resHabs.data || []);
-    
+
+    // Recargar estado de habitaciones
+    await cargarEstadoHabitaciones(resHabs.data || []);
+
     // Recargar admins y visualizadores
     await cargarAdmins();
     await cargarVisualizadores();
