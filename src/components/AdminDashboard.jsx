@@ -3235,7 +3235,7 @@ const eliminarVisualizador = async (visId, usuario) => {
                               : 'text-slate-300';
 
                           return (
-                            <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[260px] max-w-[320px] w-full sm:w-[320px] ${statusBg}`}>
+                            <div key={hab.id} className={`rounded-lg border px-3 py-2 transition-all min-w-[280px] max-w-[340px] w-full sm:w-[340px] ${statusBg}`}>
                               <details
                                 className="group"
                                 open={!!habitacionesAbiertas[hab.id]}
@@ -3245,11 +3245,11 @@ const eliminarVisualizador = async (visId, usuario) => {
                                 }))}
                               >
                                 <summary className="flex items-center justify-between gap-3 cursor-pointer list-none">
-                                  <div className="flex-1">
+                                  <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <div className="text-sm font-semibold uppercase tracking-wider text-slate-300">{hab.nombre}</div>
+                                        <div className="text-sm font-semibold uppercase tracking-wider text-slate-300 min-w-0 truncate">{hab.nombre}</div>
                                       </div>
-                                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[240px] truncate block mt-1`}>
+                                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.2em] ${statusText} w-full max-w-[260px] truncate block mt-1`}>
                                       {truncarTexto(formatearResumenHabitacion(config), 28)}
                                     </span>
                                   </div>
