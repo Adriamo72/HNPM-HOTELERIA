@@ -340,6 +340,9 @@ const AdminDashboard = () => {
       // Guardar el mapa por tipo para uso específico en tabs REPARACION y OTROS
       window.estadoPorHabitacionYTipoAdmin = estadoPorHabitacionYTipo;
 
+      // Actualizar estado de ocupación para que se usen los datos más recientes
+      setOcupacion(estadoPorHabitacion);
+
       const next = {};
       habitaciones.forEach(hab => {
         const estado = estadoPorHabitacion[hab.id];
